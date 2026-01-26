@@ -5,8 +5,10 @@
  */
 
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
+import { pathToFileURL } from 'node:url'
 import type { LoadedRouteModule } from '../types.js'
 
 // ============================================================================
@@ -83,17 +85,32 @@ export async function loadRouteHandler(
 
     const code = result.outputFiles[0].text
 
-    // Import via data URL to get module exports
-    // Use a unique identifier to bust any potential module cache
+    // Write to temp file in a safe location within the project tree
+    // This ensures proper module resolution for external packages like @cloudwerk/core
+    // Data URLs don't support bare module specifiers in Node.js
+    // By placing the temp file in the project directory, node_modules is found
+    // We walk up to find a directory without special characters (like [id])
+    // to avoid URL encoding issues with dynamic import
     const cacheKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${cacheKey}`
+    const tempDir = findSafeTempDir(absolutePath)
+    const tempFile = path.join(tempDir, `.cloudwerk-route-${cacheKey}.mjs`)
+    fs.writeFileSync(tempFile, code)
 
-    const module = (await import(dataUrl)) as LoadedRouteModule
+    try {
+      const module = (await import(pathToFileURL(tempFile).href)) as LoadedRouteModule
 
-    // Cache the compiled module with its mtime
-    moduleCache.set(absolutePath, { module, mtime })
+      // Cache the compiled module with its mtime
+      moduleCache.set(absolutePath, { module, mtime })
 
-    return module
+      return module
+    } finally {
+      // Clean up temp file
+      try {
+        fs.unlinkSync(tempFile)
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   } catch (error) {
     // Re-throw with more context
     const message = error instanceof Error ? error.message : String(error)
@@ -113,4 +130,29 @@ export function clearModuleCache(): void {
  */
 export function getModuleCacheSize(): number {
   return moduleCache.size
+}
+
+/**
+ * Find a safe directory for temp files by walking up until we find
+ * a directory without special characters like brackets.
+ * This avoids URL encoding issues when using dynamic import.
+ *
+ * @param filePath - Starting file path
+ * @returns Directory path safe for temp files
+ */
+function findSafeTempDir(filePath: string): string {
+  let dir = path.dirname(filePath)
+  const hasSpecialChars = (p: string) => /\[|\]|\(|\)/.test(path.basename(p))
+
+  // Walk up until we find a directory without brackets
+  while (hasSpecialChars(dir)) {
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      // Reached root, use original directory
+      break
+    }
+    dir = parent
+  }
+
+  return dir
 }

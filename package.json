@@ -5,6 +5,8 @@
     "dev": "pnpm --filter @cloudwerk/cli dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "test:e2e": "vitest --config e2e/vitest.config.ts --run",
+    "validate:spike": "./scripts/validate-spike.sh",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -12,7 +14,8 @@
     "@types/node": "^20",
     "typescript": "^5",
     "eslint": "^8",
-    "prettier": "^3"
+    "prettier": "^3",
+    "vitest": "^1.0.0"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
