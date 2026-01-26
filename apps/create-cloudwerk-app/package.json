@@ -1,0 +1,6 @@
+{
+  "name": "create-cloudwerk-app",
+  "version": "0.0.1",
+  "description": "Create a new Cloudwerk app",
+  "private": true
+}

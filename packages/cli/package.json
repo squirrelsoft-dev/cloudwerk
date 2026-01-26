@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/cli",
+  "version": "0.0.1",
+  "description": "Dev server, build, deploy commands for Cloudwerk",
+  "private": true
+}

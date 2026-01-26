@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/example-hello-world",
+  "version": "0.0.1",
+  "description": "Hello World example for Cloudwerk",
+  "private": true
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/realtime",
+  "version": "0.0.1",
+  "description": "Durable Objects, WebSocket helpers for Cloudwerk",
+  "private": true
+}

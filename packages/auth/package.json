@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/auth",
+  "version": "0.0.1",
+  "description": "Sessions, auth middleware, OAuth for Cloudwerk",
+  "private": true
+}

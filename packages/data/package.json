@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/data",
+  "version": "0.0.1",
+  "description": "D1 integration, typed queries, migrations for Cloudwerk",
+  "private": true
+}

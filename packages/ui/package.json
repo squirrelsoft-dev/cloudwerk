@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/ui",
+  "version": "0.0.1",
+  "description": "SSR with Preact/React for Cloudwerk",
+  "private": true
+}

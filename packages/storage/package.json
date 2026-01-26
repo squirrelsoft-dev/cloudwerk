@@ -1,0 +1,6 @@
+{
+  "name": "@cloudwerk/storage",
+  "version": "0.0.1",
+  "description": "Unified KV + R2 abstraction for Cloudwerk",
+  "private": true
+}
