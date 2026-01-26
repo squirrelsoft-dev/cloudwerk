@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.0.5
+
+### Patch Changes
+
+- [`d2f7e98`](https://github.com/squirrelsoft-dev/cloudwerk/commit/d2f7e98cb2ed3ebd1b49a50df2c0127698a2a6c7) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Auto-generate package versions from workspace at build time instead of hardcoding
+
 ## 0.0.4
 
 ### Patch Changes
