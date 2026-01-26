@@ -50,7 +50,11 @@ jobs:
           echo "NODE_AUTH_TOKEN set: $([[ -n "$NODE_AUTH_TOKEN" ]] && echo 'yes' || echo 'no')"
           cat ~/.npmrc 2>/dev/null || echo "No ~/.npmrc"
           cat "$NPM_CONFIG_USERCONFIG" 2>/dev/null || echo "No NPM_CONFIG_USERCONFIG file"
-          cat /home/runner/work/_temp/.npmrc 2>/dev/null || echo "No /home/runner/work/_temp/.npmrc"
+
+      - name: Test OIDC publish (dry-run)
+        run: |
+          cd packages/core
+          npm publish --provenance --access public --dry-run 2>&1 || echo "Dry-run failed"
 
       - name: Create Release Pull Request or Publish
         id: changesets
