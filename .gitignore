@@ -5,6 +5,9 @@ node_modules/
 dist/
 .cloudwerk/
 
+# Generated files
+apps/create-cloudwerk-app/src/versions.ts
+
 # Test coverage
 coverage/
 

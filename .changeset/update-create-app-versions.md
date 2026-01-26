@@ -2,4 +2,4 @@
 "@cloudwerk/create-app": patch
 ---
 
-Update scaffolded projects to use @cloudwerk/core and @cloudwerk/cli 0.0.6
+Auto-generate package versions from workspace at build time instead of hardcoding

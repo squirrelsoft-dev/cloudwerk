@@ -9,16 +9,7 @@ import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import { validateProject } from './validate.js'
 import { logger, detectPackageManager, printSuccessBanner } from './utils.js'
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-/**
- * Current package versions for cloudwerk packages.
- */
-const CORE_VERSION = '0.0.6'
-const CLI_VERSION = '0.0.6'
+import { CORE_VERSION, CLI_VERSION } from './versions.js'
 
 /**
  * Get the template directory path.

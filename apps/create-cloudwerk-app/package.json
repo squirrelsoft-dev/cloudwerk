@@ -22,8 +22,10 @@
     "template"
   ],
   "scripts": {
+    "prebuild": "node scripts/generate-versions.js",
     "build": "tsup src/index.ts --format esm --dts",
-    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "dev": "node scripts/generate-versions.js && tsup src/index.ts --format esm --dts --watch",
+    "pretest": "node scripts/generate-versions.js",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --run --coverage"
