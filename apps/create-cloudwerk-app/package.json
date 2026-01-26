@@ -1,5 +1,5 @@
 {
-  "name": "create-cloudwerk-app",
+  "name": "@cloudwerk/create-app",
   "version": "0.0.1",
   "description": "Create a new Cloudwerk app",
   "type": "module",
