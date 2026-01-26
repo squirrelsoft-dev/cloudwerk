@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/cli",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Dev server, build, deploy commands for Cloudwerk",
   "type": "module",
   "bin": {
