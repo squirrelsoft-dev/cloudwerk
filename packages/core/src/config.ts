@@ -6,6 +6,8 @@
 
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { pathToFileURL } from 'node:url'
+import { build } from 'esbuild'
 import type { CloudwerkConfig, CloudwerkUserConfig, SupportedExtension } from './types.js'
 
 // ============================================================================
@@ -103,6 +105,30 @@ export function findConfigFile(cwd: string): string | null {
 }
 
 /**
+ * Compile a TypeScript config file to JavaScript using esbuild.
+ *
+ * @param configPath - Path to the TypeScript config file
+ * @returns Path to the compiled temporary JavaScript file
+ */
+async function compileTypeScriptConfig(configPath: string): Promise<string> {
+  const result = await build({
+    entryPoints: [configPath],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'node',
+    target: 'node20',
+    external: ['@cloudwerk/core'], // Don't bundle the core package
+  })
+
+  // Write temp file in the same directory as the config so it can resolve node_modules
+  const configDir = path.dirname(configPath)
+  const tempPath = path.join(configDir, `.cloudwerk-config-${Date.now()}.mjs`)
+  fs.writeFileSync(tempPath, result.outputFiles[0].text)
+  return tempPath
+}
+
+/**
  * Load configuration from a file or use defaults.
  *
  * @param cwd - Working directory to search for config
@@ -119,9 +145,17 @@ export async function loadConfig(cwd: string): Promise<CloudwerkConfig> {
     return { ...DEFAULT_CONFIG }
   }
 
+  let importPath = configPath
+  let tempFile: string | null = null
+
   try {
-    // Dynamic import the config file
-    const configModule = await import(configPath)
+    // Compile TypeScript configs
+    if (configPath.endsWith('.ts')) {
+      tempFile = await compileTypeScriptConfig(configPath)
+      importPath = pathToFileURL(tempFile).href
+    }
+
+    const configModule = await import(importPath)
     const userConfig = configModule.default as CloudwerkUserConfig
 
     return mergeConfig(DEFAULT_CONFIG, userConfig)
@@ -129,6 +163,15 @@ export async function loadConfig(cwd: string): Promise<CloudwerkConfig> {
     // If we can't load the config, use defaults with a warning
     console.warn(`Warning: Could not load config from ${configPath}:`, error)
     return { ...DEFAULT_CONFIG }
+  } finally {
+    // Clean up temp file
+    if (tempFile) {
+      try {
+        fs.unlinkSync(tempFile)
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 }
 

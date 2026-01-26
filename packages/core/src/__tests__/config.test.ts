@@ -4,7 +4,7 @@
  * Tests for configuration loading and validation.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -13,6 +13,7 @@ import {
   mergeConfig,
   DEFAULT_CONFIG,
   findConfigFile,
+  loadConfig,
   validateConfig,
   resolveRoutesDir,
   isSupportedExtension,
@@ -276,5 +277,106 @@ describe('isSupportedExtension', () => {
     expect(isSupportedExtension('.js', config)).toBe(true)
     expect(isSupportedExtension('.jsx', config)).toBe(true)
     expect(isSupportedExtension('.ts', config)).toBe(false)
+  })
+})
+
+// ============================================================================
+// loadConfig Tests
+// ============================================================================
+
+describe('loadConfig', () => {
+  let tempDir: string
+
+  beforeAll(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cloudwerk-loadconfig-'))
+  })
+
+  afterAll(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('should return defaults when no config file exists', async () => {
+    const emptyDir = path.join(tempDir, 'empty')
+    fs.mkdirSync(emptyDir, { recursive: true })
+
+    const config = await loadConfig(emptyDir)
+
+    expect(config).toEqual(DEFAULT_CONFIG)
+  })
+
+  it('should load and compile TypeScript config files', async () => {
+    const tsDir = path.join(tempDir, 'ts-config')
+    fs.mkdirSync(tsDir, { recursive: true })
+
+    // Create a TypeScript config file (without actual imports to avoid bundling issues in tests)
+    const tsConfig = `
+const config = {
+  routesDir: 'src/routes',
+  debug: true,
+}
+export default config
+`
+    fs.writeFileSync(path.join(tsDir, 'cloudwerk.config.ts'), tsConfig)
+
+    const config = await loadConfig(tsDir)
+
+    expect(config.routesDir).toBe('src/routes')
+    expect(config.debug).toBe(true)
+    // Defaults should still be applied for unspecified values
+    expect(config.extensions).toEqual(DEFAULT_CONFIG.extensions)
+    expect(config.strict).toBe(DEFAULT_CONFIG.strict)
+  })
+
+  it('should clean up temp files after loading TypeScript config', async () => {
+    const cleanupDir = path.join(tempDir, 'cleanup-test')
+    fs.mkdirSync(cleanupDir, { recursive: true })
+
+    const tsConfig = `export default { routesDir: 'test' }`
+    fs.writeFileSync(path.join(cleanupDir, 'cloudwerk.config.ts'), tsConfig)
+
+    await loadConfig(cleanupDir)
+
+    // Give a small delay for cleanup
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    // Check that no temp files remain in the config directory
+    const remainingTempFiles = fs.readdirSync(cleanupDir).filter(f => f.startsWith('.cloudwerk-config-'))
+    expect(remainingTempFiles.length).toBe(0)
+  })
+
+  it('should fall back to defaults on compilation error with warning', async () => {
+    const errorDir = path.join(tempDir, 'error-config')
+    fs.mkdirSync(errorDir, { recursive: true })
+
+    // Create an invalid TypeScript config (syntax error)
+    const invalidConfig = `export default { invalid syntax here`
+    fs.writeFileSync(path.join(errorDir, 'cloudwerk.config.ts'), invalidConfig)
+
+    // Mock console.warn to capture the warning
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const config = await loadConfig(errorDir)
+
+    expect(config).toEqual(DEFAULT_CONFIG)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Warning: Could not load config'),
+      expect.anything()
+    )
+
+    warnSpy.mockRestore()
+  })
+
+  it('should load JavaScript config files without compilation', async () => {
+    const jsDir = path.join(tempDir, 'js-config')
+    fs.mkdirSync(jsDir, { recursive: true })
+
+    // Create a JavaScript config file (ESM)
+    const jsConfig = `export default { routesDir: 'js-routes', basePath: '/api' }`
+    fs.writeFileSync(path.join(jsDir, 'cloudwerk.config.mjs'), jsConfig)
+
+    const config = await loadConfig(jsDir)
+
+    expect(config.routesDir).toBe('js-routes')
+    expect(config.basePath).toBe('/api')
   })
 })
