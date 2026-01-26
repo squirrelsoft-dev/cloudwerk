@@ -348,7 +348,7 @@ describe('scaffold integration', () => {
     expect(fs.existsSync(targetDir)).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'package.json'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, '.gitignore'))).toBe(true)
-    expect(fs.existsSync(path.join(targetDir, 'cloudwerk.config.js'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'cloudwerk.config.ts'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'tsconfig.json'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'wrangler.toml'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'route.ts'))).toBe(true)
