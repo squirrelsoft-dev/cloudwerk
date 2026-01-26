@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/core",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Routing, middleware, config for Cloudwerk",
   "repository": {
     "type": "git",
