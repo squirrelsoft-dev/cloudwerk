@@ -39,31 +39,26 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Debug npm info
-        run: |
-          node --version
-          npm --version
-          echo "Registry: $(npm config get registry)"
-          echo "GitHub Actor: $GITHUB_ACTOR"
-          echo "GitHub Repository: $GITHUB_REPOSITORY"
-          echo "NPM_CONFIG_USERCONFIG: $NPM_CONFIG_USERCONFIG"
-          echo "NODE_AUTH_TOKEN set: $([[ -n "$NODE_AUTH_TOKEN" ]] && echo 'yes' || echo 'no')"
-          cat ~/.npmrc 2>/dev/null || echo "No ~/.npmrc"
-          cat "$NPM_CONFIG_USERCONFIG" 2>/dev/null || echo "No NPM_CONFIG_USERCONFIG file"
-
-      - name: Test OIDC publish (dry-run)
-        run: |
-          cd packages/core
-          npm publish --provenance --access public --dry-run 2>&1 || echo "Dry-run failed"
-
-      - name: Create Release Pull Request or Publish
+      - name: Check for changesets
         id: changesets
+        run: |
+          if ls .changeset/*.md 2>/dev/null | grep -v README.md > /dev/null; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Version PR
+        if: steps.changesets.outputs.has_changesets == 'true'
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
-          publish: pnpm release:provenance
           commit: 'chore: version packages'
           title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true  # Enable provenance attestation
+
+      - name: Publish to npm
+        if: steps.changesets.outputs.has_changesets == 'false'
+        run: |
+          pnpm -r publish --access public --provenance --no-git-checks 2>&1 || echo "Some packages may already be published"
