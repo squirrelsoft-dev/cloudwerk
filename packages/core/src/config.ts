@@ -6,7 +6,6 @@
 
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 import type { CloudwerkConfig, CloudwerkUserConfig, SupportedExtension } from './types.js'
@@ -122,8 +121,9 @@ async function compileTypeScriptConfig(configPath: string): Promise<string> {
     external: ['@cloudwerk/core'], // Don't bundle the core package
   })
 
-  // Write to temp file and return path
-  const tempPath = path.join(tmpdir(), `cloudwerk-config-${Date.now()}.mjs`)
+  // Write temp file in the same directory as the config so it can resolve node_modules
+  const configDir = path.dirname(configPath)
+  const tempPath = path.join(configDir, `.cloudwerk-config-${Date.now()}.mjs`)
   fs.writeFileSync(tempPath, result.outputFiles[0].text)
   return tempPath
 }

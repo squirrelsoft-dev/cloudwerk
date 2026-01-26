@@ -334,18 +334,14 @@ export default config
     const tsConfig = `export default { routesDir: 'test' }`
     fs.writeFileSync(path.join(cleanupDir, 'cloudwerk.config.ts'), tsConfig)
 
-    // Get temp directory file count before
-    const osTmpDir = os.tmpdir()
-    const beforeFiles = fs.readdirSync(osTmpDir).filter(f => f.startsWith('cloudwerk-config-'))
-
     await loadConfig(cleanupDir)
 
     // Give a small delay for cleanup
     await new Promise(resolve => setTimeout(resolve, 50))
 
-    // Check that no new temp files remain
-    const afterFiles = fs.readdirSync(osTmpDir).filter(f => f.startsWith('cloudwerk-config-'))
-    expect(afterFiles.length).toBeLessThanOrEqual(beforeFiles.length)
+    // Check that no temp files remain in the config directory
+    const remainingTempFiles = fs.readdirSync(cleanupDir).filter(f => f.startsWith('.cloudwerk-config-'))
+    expect(remainingTempFiles.length).toBe(0)
   })
 
   it('should fall back to defaults on compilation error with warning', async () => {
