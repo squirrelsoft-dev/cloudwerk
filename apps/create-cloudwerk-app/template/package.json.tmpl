@@ -1,0 +1,23 @@
+{
+  "name": "{{name}}",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cloudwerk dev",
+    "build": "cloudwerk build",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudwerk/core": "^{{coreVersion}}",
+    "@cloudwerk/cli": "^{{cliVersion}}",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "wrangler": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
