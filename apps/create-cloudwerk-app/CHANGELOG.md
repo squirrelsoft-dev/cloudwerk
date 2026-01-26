@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.0.6
+
+### Patch Changes
+
+- [`c3225ff`](https://github.com/squirrelsoft-dev/cloudwerk/commit/c3225fff1bdadfdbaa6dac5fac27e2a82a6f0caf) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Update wrangler to v4 in template to fix security vulnerabilities (esbuild, undici)
+
 ## 0.0.5
 
 ### Patch Changes
