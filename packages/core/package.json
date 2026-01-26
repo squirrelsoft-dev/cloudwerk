@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/core",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Routing, middleware, config for Cloudwerk",
   "type": "module",
   "exports": {
@@ -9,7 +9,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
     "test": "vitest --run",
