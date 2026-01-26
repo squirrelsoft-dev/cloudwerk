@@ -114,6 +114,9 @@ importers:
 
   packages/core:
     dependencies:
+      esbuild:
+        specifier: ^0.24.0
+        version: 0.24.2
       fast-glob:
         specifier: ^3.3.0
         version: 3.3.3
