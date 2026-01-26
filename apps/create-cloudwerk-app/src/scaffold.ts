@@ -15,9 +15,10 @@ import { logger, detectPackageManager, printSuccessBanner } from './utils.js'
 // ============================================================================
 
 /**
- * Current workspace package version for cloudwerk packages.
+ * Current package versions for cloudwerk packages.
  */
-const PACKAGE_VERSION = '0.0.1'
+const CORE_VERSION = '0.0.1'
+const CLI_VERSION = '0.0.2'
 
 /**
  * Get the template directory path.
@@ -126,8 +127,8 @@ export async function scaffold(
 
   const templateValues: TemplateValues = {
     name: projectName,
-    coreVersion: PACKAGE_VERSION,
-    cliVersion: PACKAGE_VERSION,
+    coreVersion: CORE_VERSION,
+    cliVersion: CLI_VERSION,
   }
 
   logger.info(`Creating ${projectName}...`)
