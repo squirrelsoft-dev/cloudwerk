@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": [
+    "@changesets/changelog-github",
+    { "repo": "squirrelsoft-dev/cloudwerk" }
+  ],
+  "commit": false,
+  "fixed": [],
+  "linked": [["@cloudwerk/core", "@cloudwerk/cli"]],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}
