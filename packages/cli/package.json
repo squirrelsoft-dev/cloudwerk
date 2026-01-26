@@ -23,7 +23,7 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
-    "@cloudwerk/core": "workspace:*",
+    "@cloudwerk/core": "workspace:^",
     "@hono/node-server": "^1.13.0",
     "commander": "^12.1.0",
     "esbuild": "^0.24.0",
