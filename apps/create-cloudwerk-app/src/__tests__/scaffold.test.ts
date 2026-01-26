@@ -351,7 +351,7 @@ describe('scaffold integration', () => {
     expect(fs.existsSync(path.join(targetDir, 'cloudwerk.config.ts'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'tsconfig.json'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'wrangler.toml'))).toBe(true)
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'index.ts'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'route.ts'))).toBe(true)
 
     // Verify package.json has correct name
     const pkgJson = await fs.readJson(path.join(targetDir, 'package.json'))
