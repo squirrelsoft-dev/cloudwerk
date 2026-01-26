@@ -1,5 +1,11 @@
 # @cloudwerk/core
 
+## 0.0.6
+
+### Patch Changes
+
+- [`9b1016d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/9b1016d3742b5b279437637a85bd3bf771ba7505) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Upgrade esbuild to 0.25.0 to address security vulnerability (GHSA-67mh-4wv8-2f99)
+
 ## 0.0.5
 
 ### Patch Changes
