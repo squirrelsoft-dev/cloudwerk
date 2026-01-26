@@ -17,8 +17,8 @@ import { logger, detectPackageManager, printSuccessBanner } from './utils.js'
 /**
  * Current package versions for cloudwerk packages.
  */
-const CORE_VERSION = '0.0.1'
-const CLI_VERSION = '0.0.2'
+const CORE_VERSION = '0.0.6'
+const CLI_VERSION = '0.0.6'
 
 /**
  * Get the template directory path.
