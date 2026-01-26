@@ -1,0 +1,148 @@
+/**
+ * @cloudwerk/cli - Type Definitions
+ *
+ * CLI-specific types for the development server and commands.
+ */
+
+import type { CloudwerkConfig, HttpMethod, RouteEntry } from '@cloudwerk/core'
+
+// ============================================================================
+// CLI Option Types
+// ============================================================================
+
+/**
+ * Options for the `cloudwerk dev` command.
+ */
+export interface DevCommandOptions {
+  /** Port to listen on (default: 3000) */
+  port: string
+  /** Host to bind (default: localhost) */
+  host: string
+  /** Path to config file */
+  config?: string
+  /** Enable verbose logging */
+  verbose?: boolean
+}
+
+/**
+ * Resolved dev server configuration.
+ */
+export interface DevServerConfig {
+  /** Port number */
+  port: number
+  /** Host to bind */
+  host: string
+  /** Working directory */
+  cwd: string
+  /** Cloudwerk configuration */
+  config: CloudwerkConfig
+  /** Enable verbose logging */
+  verbose: boolean
+}
+
+// ============================================================================
+// Route Handler Types
+// ============================================================================
+
+/**
+ * A loaded route module with HTTP method exports.
+ */
+export interface LoadedRouteModule {
+  GET?: RouteHandlerFn
+  POST?: RouteHandlerFn
+  PUT?: RouteHandlerFn
+  PATCH?: RouteHandlerFn
+  DELETE?: RouteHandlerFn
+  OPTIONS?: RouteHandlerFn
+  HEAD?: RouteHandlerFn
+}
+
+/**
+ * Route handler function type.
+ */
+export type RouteHandlerFn = (c: unknown) => Response | Promise<Response>
+
+/**
+ * Registered route information for logging.
+ */
+export interface RegisteredRoute {
+  method: HttpMethod
+  pattern: string
+  filePath: string
+}
+
+// ============================================================================
+// Server Types
+// ============================================================================
+
+/**
+ * Server startup result.
+ */
+export interface ServerStartResult {
+  /** Local URL */
+  localUrl: string
+  /** Network URL (if applicable) */
+  networkUrl?: string
+  /** Registered routes */
+  routes: RegisteredRoute[]
+  /** Startup time in milliseconds */
+  startupTime: number
+}
+
+/**
+ * Logger interface for CLI output.
+ */
+export interface Logger {
+  info(message: string): void
+  success(message: string): void
+  warn(message: string): void
+  error(message: string): void
+  debug(message: string): void
+  log(message: string): void
+}
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+/**
+ * CLI error with helpful context.
+ */
+export class CliError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public suggestion?: string
+  ) {
+    super(message)
+    this.name = 'CliError'
+  }
+}
+
+/**
+ * Route compilation error.
+ */
+export class RouteCompilationError extends Error {
+  constructor(
+    message: string,
+    public filePath: string,
+    public originalError?: Error
+  ) {
+    super(message)
+    this.name = 'RouteCompilationError'
+  }
+}
+
+/**
+ * Port in use error.
+ */
+export class PortInUseError extends CliError {
+  constructor(port: number) {
+    super(
+      `Port ${port} is already in use`,
+      'EADDRINUSE',
+      `Try using a different port:\n    cloudwerk dev --port ${port + 1}`
+    )
+    this.name = 'PortInUseError'
+  }
+}
