@@ -6,7 +6,7 @@
 
 import type { Hono, Handler } from 'hono'
 import type { RouteManifest, HttpMethod } from '@cloudwerk/core'
-import type { Logger, RegisteredRoute, LoadedRouteModule } from '../types.js'
+import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 
 // ============================================================================

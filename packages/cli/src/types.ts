@@ -4,7 +4,7 @@
  * CLI-specific types for the development server and commands.
  */
 
-import type { CloudwerkConfig, HttpMethod, RouteEntry } from '@cloudwerk/core'
+import type { CloudwerkConfig, HttpMethod } from '@cloudwerk/core'
 
 // ============================================================================
 // CLI Option Types
