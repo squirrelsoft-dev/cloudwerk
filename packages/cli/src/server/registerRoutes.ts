@@ -4,7 +4,7 @@
  * Registers route handlers with Hono.
  */
 
-import type { Hono } from 'hono'
+import type { Hono, Handler } from 'hono'
 import type { RouteManifest, HttpMethod } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute, LoadedRouteModule } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
@@ -41,12 +41,14 @@ const HTTP_METHODS: HttpMethod[] = [
  * @param app - Hono app instance
  * @param manifest - Route manifest from @cloudwerk/core
  * @param logger - Logger for output
+ * @param verbose - Enable verbose logging
  * @returns Array of registered routes
  */
 export async function registerRoutes(
   app: Hono,
   manifest: RouteManifest,
-  logger: Logger
+  logger: Logger,
+  verbose: boolean = false
 ): Promise<RegisteredRoute[]> {
   const registeredRoutes: RegisteredRoute[] = []
 
@@ -60,7 +62,7 @@ export async function registerRoutes(
     try {
       // Load the route handler module
       logger.debug(`Loading route handler: ${route.filePath}`)
-      const module = await loadRouteHandler(route.absolutePath)
+      const module = await loadRouteHandler(route.absolutePath, verbose)
 
       // Register each HTTP method export
       for (const method of HTTP_METHODS) {
@@ -104,31 +106,31 @@ function registerMethod(
   pattern: string,
   handler: (c: unknown) => Response | Promise<Response>
 ): void {
-  // Cast handler to any to work with Hono's strict typing
+  // Cast to Hono's Handler type for proper type compatibility
   // The handler signature is compatible at runtime
-  const h = handler as (c: unknown) => Response | Promise<Response>
+  const h = handler as Handler
 
   switch (method) {
     case 'GET':
-      app.get(pattern, h as never)
+      app.get(pattern, h)
       break
     case 'POST':
-      app.post(pattern, h as never)
+      app.post(pattern, h)
       break
     case 'PUT':
-      app.put(pattern, h as never)
+      app.put(pattern, h)
       break
     case 'PATCH':
-      app.patch(pattern, h as never)
+      app.patch(pattern, h)
       break
     case 'DELETE':
-      app.delete(pattern, h as never)
+      app.delete(pattern, h)
       break
     case 'OPTIONS':
-      app.options(pattern, h as never)
+      app.options(pattern, h)
       break
     case 'HEAD':
-      app.on('HEAD', [pattern], h as never)
+      app.on('HEAD', [pattern], h)
       break
   }
 }

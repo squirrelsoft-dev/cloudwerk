@@ -24,12 +24,8 @@ import type { DevCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
 import { createLogger, printStartupBanner, printError } from '../utils/logger.js'
 import { createApp } from '../server/createApp.js'
-
-// ============================================================================
-// Version
-// ============================================================================
-
-const VERSION = '0.0.1'
+import { VERSION } from '../version.js'
+import { SHUTDOWN_TIMEOUT_MS } from '../constants.js'
 
 // ============================================================================
 // Dev Command
@@ -254,7 +250,7 @@ function setupGracefulShutdown(
     setTimeout(() => {
       logger.warn('Forcing shutdown...')
       process.exit(0)
-    }, 5000)
+    }, SHUTDOWN_TIMEOUT_MS)
   }
 
   process.on('SIGINT', shutdown)

@@ -9,6 +9,7 @@ import type { RouteManifest, CloudwerkConfig } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { registerRoutes } from './registerRoutes.js'
 import { logRequest } from '../utils/logger.js'
+import { HTTP_STATUS } from '../constants.js'
 
 // ============================================================================
 // App Creation
@@ -32,7 +33,9 @@ export async function createApp(
   logger: Logger,
   verbose: boolean = false
 ): Promise<{ app: Hono; routes: RegisteredRoute[] }> {
-  // Create Hono instance with base path
+  // Create Hono instance
+  // strict: false allows trailing slashes to be optional
+  // e.g., /api/users and /api/users/ both match the same route
   const app = new Hono({
     strict: false,
   })
@@ -55,7 +58,7 @@ export async function createApp(
   }
 
   // Register routes from manifest
-  const routes = await registerRoutes(app, manifest, logger)
+  const routes = await registerRoutes(app, manifest, logger, verbose)
 
   // Add 404 handler
   app.notFound((c) => {
@@ -65,7 +68,7 @@ export async function createApp(
         path: c.req.path,
         method: c.req.method,
       },
-      404
+      HTTP_STATUS.NOT_FOUND
     )
   })
 
@@ -80,7 +83,7 @@ export async function createApp(
         message: err.message,
         stack: err.stack,
       },
-      500
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     )
   })
 

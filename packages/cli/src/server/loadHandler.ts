@@ -4,6 +4,8 @@
  * Compiles TypeScript route files on-the-fly using esbuild.
  */
 
+import * as fs from 'node:fs'
+import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import type { LoadedRouteModule } from '../types.js'
 
@@ -25,9 +27,10 @@ const moduleCache = new Map<string, { module: LoadedRouteModule; mtime: number }
  * Load a route handler module by compiling TypeScript on-the-fly.
  *
  * Uses esbuild to compile the file to ESM, then imports it via data URL.
- * Results are cached to avoid recompilation on subsequent requests.
+ * Results are cached based on file mtime to avoid unnecessary recompilation.
  *
  * @param absolutePath - Absolute path to the route file
+ * @param verbose - Enable verbose logging (passed to esbuild)
  * @returns Loaded module with HTTP method exports
  *
  * @example
@@ -36,8 +39,25 @@ const moduleCache = new Map<string, { module: LoadedRouteModule; mtime: number }
  *   // Register GET handler
  * }
  */
-export async function loadRouteHandler(absolutePath: string): Promise<LoadedRouteModule> {
+export async function loadRouteHandler(
+  absolutePath: string,
+  verbose: boolean = false
+): Promise<LoadedRouteModule> {
   try {
+    // Check file modification time for cache invalidation
+    const stat = fs.statSync(absolutePath)
+    const mtime = stat.mtimeMs
+
+    // Return cached module if file hasn't changed
+    const cached = moduleCache.get(absolutePath)
+    if (cached && cached.mtime === mtime) {
+      return cached.module
+    }
+
+    // Derive esbuild target from current Node.js version
+    const nodeVersion = process.versions.node.split('.')[0]
+    const target = `node${nodeVersion}`
+
     // Build the TypeScript file
     const result = await build({
       entryPoints: [absolutePath],
@@ -45,31 +65,15 @@ export async function loadRouteHandler(absolutePath: string): Promise<LoadedRout
       write: false,
       format: 'esm',
       platform: 'node',
-      target: 'node20',
+      target,
       external: [
         '@cloudwerk/core',
         'hono',
-        'node:*',
-        'fs',
-        'path',
-        'crypto',
-        'http',
-        'https',
-        'stream',
-        'util',
-        'events',
-        'buffer',
-        'url',
-        'querystring',
-        'zlib',
-        'os',
-        'child_process',
-        'worker_threads',
-        'net',
-        'tls',
-        'dns',
+        // Use builtinModules for comprehensive Node.js built-in coverage
+        ...builtinModules,
+        ...builtinModules.map((m) => `node:${m}`),
       ],
-      logLevel: 'silent',
+      logLevel: verbose ? 'warning' : 'silent',
       sourcemap: 'inline',
     })
 
@@ -80,11 +84,14 @@ export async function loadRouteHandler(absolutePath: string): Promise<LoadedRout
     const code = result.outputFiles[0].text
 
     // Import via data URL to get module exports
-    // Data URLs don't support query strings, so we rely on Node.js not caching
-    // dynamic imports with identical data URLs (which it doesn't by default)
-    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+    // Use a unique identifier to bust any potential module cache
+    const cacheKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const dataUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}#${cacheKey}`
 
-    const module = await import(dataUrl) as LoadedRouteModule
+    const module = (await import(dataUrl)) as LoadedRouteModule
+
+    // Cache the compiled module with its mtime
+    moduleCache.set(absolutePath, { module, mtime })
 
     return module
   } catch (error) {
