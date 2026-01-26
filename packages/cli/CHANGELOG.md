@@ -1,5 +1,14 @@
 # @cloudwerk/cli
 
+## 0.0.5
+
+### Patch Changes
+
+- [`92ca5fd`](https://github.com/squirrelsoft-dev/cloudwerk/commit/92ca5fd19d1c02be8d2ff7986970d397ce5fa8ce) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix CI/CD publishing with npm trusted publishing (OIDC)
+
+- Updated dependencies [[`92ca5fd`](https://github.com/squirrelsoft-dev/cloudwerk/commit/92ca5fd19d1c02be8d2ff7986970d397ce5fa8ce)]:
+  - @cloudwerk/core@0.0.5
+
 ## 0.0.4
 
 ### Patch Changes
