@@ -10,5 +10,5 @@
     "outDir": "./dist",
     "rootDir": "./app"
   },
-  "include": ["app/**/*", "cloudwerk.config.ts"]
+  "include": ["app/**/*"]
 }
