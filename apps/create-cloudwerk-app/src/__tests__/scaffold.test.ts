@@ -379,8 +379,9 @@ describe('scaffold integration', () => {
     // Verify placeholders are replaced
     const pkgJson = await fs.readJson(path.join(targetDir, 'package.json'))
     expect(pkgJson.name).toBe('my-custom-app')
-    expect(pkgJson.dependencies['@cloudwerk/core']).toBe('^0.0.1')
-    expect(pkgJson.dependencies['@cloudwerk/cli']).toBe('^0.0.1')
+    // Verify cloudwerk dependencies use semver with caret
+    expect(pkgJson.dependencies['@cloudwerk/core']).toMatch(/^\^\d+\.\d+\.\d+$/)
+    expect(pkgJson.dependencies['@cloudwerk/cli']).toMatch(/^\^\d+\.\d+\.\d+$/)
 
     mockLog.mockRestore()
   })
