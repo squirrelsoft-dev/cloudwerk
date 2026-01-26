@@ -2,6 +2,11 @@
   "name": "@cloudwerk/create-app",
   "version": "0.0.2",
   "description": "Create a new Cloudwerk app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/squirrelsoft-dev/cloudwerk.git",
+    "directory": "apps/create-cloudwerk-app"
+  },
   "type": "module",
   "bin": {
     "create-cloudwerk-app": "./dist/index.js"
