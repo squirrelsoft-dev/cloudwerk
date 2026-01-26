@@ -39,6 +39,14 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Debug npm info
+        run: |
+          npm --version
+          echo "Registry: $(npm config get registry)"
+          echo "GitHub Actor: $GITHUB_ACTOR"
+          echo "GitHub Repository: $GITHUB_REPOSITORY"
+          cat ~/.npmrc || echo "No .npmrc found"
+
       - name: Create Release Pull Request or Publish
         id: changesets
         uses: changesets/action@v1
