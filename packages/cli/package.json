@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@cloudwerk/core": "workspace:^",
+    "@cloudwerk/ui": "workspace:^",
     "@hono/node-server": "^1.13.0",
     "commander": "^12.1.0",
     "esbuild": "^0.25.0",

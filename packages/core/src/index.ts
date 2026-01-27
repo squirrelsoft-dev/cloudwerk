@@ -34,6 +34,7 @@ export type {
   // Configuration Types
   CloudwerkConfig,
   CloudwerkUserConfig,
+  UIConfig,
 
   // Handler Types
   PageProps,

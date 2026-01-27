@@ -193,6 +193,17 @@ export interface RouteManifest {
 // ============================================================================
 
 /**
+ * UI renderer configuration.
+ */
+export interface UIConfig {
+  /**
+   * Which renderer to use for JSX components.
+   * @default 'hono-jsx'
+   */
+  renderer?: 'hono-jsx' | 'react' | 'preact'
+}
+
+/**
  * Configuration options for the route compiler
  */
 export interface CloudwerkConfig {
@@ -213,6 +224,11 @@ export interface CloudwerkConfig {
 
   /** Whether to enable debug logging (default: false) */
   debug: boolean
+
+  /**
+   * UI renderer configuration.
+   */
+  ui?: UIConfig
 }
 
 /**

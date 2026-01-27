@@ -138,6 +138,7 @@ describe('End-to-End Spike Validation', () => {
 interface Tarballs {
   core: string
   cli: string
+  ui: string
 }
 
 /**
@@ -148,10 +149,16 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   const packagesDir = join(targetDir, 'packages')
   await mkdir(packagesDir, { recursive: true })
 
-  // Pack @cloudwerk/core first (cli depends on it)
+  // Pack @cloudwerk/core first (cli and ui depend on it)
   console.log('[E2E] Packing @cloudwerk/core...')
   await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
     cwd: join(MONOREPO_ROOT, 'packages/core'),
+  })
+
+  // Pack @cloudwerk/ui (cli depends on it)
+  console.log('[E2E] Packing @cloudwerk/ui...')
+  await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
+    cwd: join(MONOREPO_ROOT, 'packages/ui'),
   })
 
   // Pack @cloudwerk/cli
@@ -164,16 +171,23 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   const corePackageJson = JSON.parse(
     await readFile(join(MONOREPO_ROOT, 'packages/core/package.json'), 'utf-8')
   )
+  const uiPackageJson = JSON.parse(
+    await readFile(join(MONOREPO_ROOT, 'packages/ui/package.json'), 'utf-8')
+  )
   const cliPackageJson = JSON.parse(
     await readFile(join(MONOREPO_ROOT, 'packages/cli/package.json'), 'utf-8')
   )
 
   // Find the tarball paths using dynamic versions
   const coreTarball = join(packagesDir, `cloudwerk-core-${corePackageJson.version}.tgz`)
+  const uiTarball = join(packagesDir, `cloudwerk-ui-${uiPackageJson.version}.tgz`)
   const cliTarball = join(packagesDir, `cloudwerk-cli-${cliPackageJson.version}.tgz`)
 
   if (!existsSync(coreTarball)) {
     throw new Error(`Core tarball not found at ${coreTarball}`)
+  }
+  if (!existsSync(uiTarball)) {
+    throw new Error(`UI tarball not found at ${uiTarball}`)
   }
   if (!existsSync(cliTarball)) {
     throw new Error(`CLI tarball not found at ${cliTarball}`)
@@ -181,6 +195,7 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
 
   return {
     core: coreTarball,
+    ui: uiTarball,
     cli: cliTarball,
   }
 }
@@ -204,10 +219,11 @@ async function patchPackageJson(projectDir: string, tarballs: Tarballs): Promise
   }
 
   // Add pnpm overrides to redirect transitive dependencies
-  // This ensures @cloudwerk/cli's dependency on @cloudwerk/core also resolves to local tarball
+  // This ensures @cloudwerk/cli's dependencies also resolve to local tarballs
   pkg.pnpm = pkg.pnpm || {}
   pkg.pnpm.overrides = pkg.pnpm.overrides || {}
   pkg.pnpm.overrides['@cloudwerk/core'] = `file:${tarballs.core}`
+  pkg.pnpm.overrides['@cloudwerk/ui'] = `file:${tarballs.ui}`
 
   await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
 }
