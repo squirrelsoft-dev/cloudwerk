@@ -11,7 +11,13 @@ import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
 import { validateRouteConfig, hasUseClientDirective, generateComponentId, validateComponentBoundaries, handleBoundaryValidationResult } from '@cloudwerk/core'
-import type { PageComponent, RouteConfig, LoaderFunction, ActionFunction } from '@cloudwerk/core'
+import type {
+  PageComponent,
+  RouteConfig,
+  LoaderFunction,
+  ActionFunction,
+  GenerateStaticParamsFunction,
+} from '@cloudwerk/core'
 
 // ============================================================================
 // Types
@@ -41,6 +47,8 @@ export interface LoadedPageModule {
   isClientComponent?: boolean
   /** Component ID for hydration (only set if isClientComponent is true) */
   clientComponentId?: string
+  /** Optional function to generate static params for SSG */
+  generateStaticParams?: GenerateStaticParamsFunction
 }
 
 // ============================================================================
@@ -150,6 +158,7 @@ export async function loadPageModule(
         PUT?: unknown
         PATCH?: unknown
         DELETE?: unknown
+        generateStaticParams?: unknown
       }
 
       // Validate that default export exists and is a function
@@ -206,6 +215,17 @@ export async function loadPageModule(
         }
       }
 
+      // Validate generateStaticParams if present
+      let validatedGenerateStaticParams: GenerateStaticParamsFunction | undefined = undefined
+      if ('generateStaticParams' in rawModule && rawModule.generateStaticParams !== undefined) {
+        if (typeof rawModule.generateStaticParams !== 'function') {
+          throw new Error(
+            `Page generateStaticParams export must be a function, got ${typeof rawModule.generateStaticParams}`
+          )
+        }
+        validatedGenerateStaticParams = rawModule.generateStaticParams as GenerateStaticParamsFunction
+      }
+
       // Create module with validated config, loader, actions, and client component info
       const module: LoadedPageModule = {
         default: rawModule.default,
@@ -215,6 +235,7 @@ export async function loadPageModule(
         ...validatedMethods,
         isClientComponent,
         clientComponentId,
+        generateStaticParams: validatedGenerateStaticParams,
       }
 
       // Cache the compiled module with its mtime

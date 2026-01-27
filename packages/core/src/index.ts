@@ -62,6 +62,7 @@ export type {
 
   // Route Config Types
   RouteConfig,
+  RenderingMode,
   AuthRequirement,
   RateLimitConfig,
   CacheConfig,
@@ -90,6 +91,10 @@ export type {
   ClientComponentInfo,
   ClientComponentMeta,
   HydrationManifest,
+
+  // Static Site Generation Types
+  GenerateStaticParamsArgs,
+  GenerateStaticParamsFunction,
 
   // Component Boundary Validation Types
   BoundaryValidationType,

@@ -733,6 +733,14 @@ export type CacheConfig = 'public' | 'private' | 'no-store' | {
 }
 
 /**
+ * Rendering mode for a route.
+ *
+ * - `'ssr'`: Server-side rendering (default). Page is rendered on each request.
+ * - `'static'`: Static site generation. Page is pre-rendered at build time.
+ */
+export type RenderingMode = 'ssr' | 'static'
+
+/**
  * Route configuration object exported from route files.
  *
  * Allows declarative route-level configuration for auth, rate limiting,
@@ -751,6 +759,18 @@ export type CacheConfig = 'public' | 'private' | 'no-store' | {
  * export function GET(request: Request, context) {
  *   // Handler code
  * }
+ *
+ * @example
+ * // Static page with SSG
+ * import type { RouteConfig } from '@cloudwerk/core'
+ *
+ * export const config: RouteConfig = {
+ *   rendering: 'static',
+ * }
+ *
+ * export default function AboutPage() {
+ *   return <h1>About Us</h1>
+ * }
  */
 export interface RouteConfig {
   /** Authentication requirement */
@@ -761,6 +781,14 @@ export interface RouteConfig {
 
   /** Caching configuration */
   cache?: CacheConfig
+
+  /**
+   * Rendering mode for this route.
+   * - `'ssr'`: Server-side rendering (default). Page is rendered on each request.
+   * - `'static'`: Static site generation. Page is pre-rendered at build time.
+   * @default 'ssr'
+   */
+  rendering?: RenderingMode
 
   /**
    * Whether to enable streaming for this route.
@@ -1129,3 +1157,59 @@ export interface HydrationManifest {
   /** Generated timestamp */
   generatedAt: Date
 }
+
+// ============================================================================
+// Static Site Generation (SSG) Types
+// ============================================================================
+
+/**
+ * Arguments passed to generateStaticParams functions.
+ *
+ * Currently, this interface is empty but is included for forward compatibility
+ * with future features like nested dynamic route support.
+ *
+ * @example
+ * ```typescript
+ * // app/posts/[slug]/page.tsx
+ * import type { GenerateStaticParamsFunction } from '@cloudwerk/core'
+ *
+ * export const generateStaticParams: GenerateStaticParamsFunction<{ slug: string }> =
+ *   async () => {
+ *     const posts = await getAllPosts()
+ *     return posts.map((post) => ({ slug: post.slug }))
+ *   }
+ * ```
+ */
+export interface GenerateStaticParamsArgs {
+  // Reserved for future features (e.g., parentParams for nested dynamic routes)
+}
+
+/**
+ * Function to generate static params for SSG.
+ *
+ * Export this from a page with `rendering: 'static'` config to generate
+ * multiple static pages for dynamic route segments.
+ *
+ * @example
+ * ```typescript
+ * // app/posts/[slug]/page.tsx
+ * import type { GenerateStaticParamsFunction, RouteConfig } from '@cloudwerk/core'
+ *
+ * export const config: RouteConfig = {
+ *   rendering: 'static',
+ * }
+ *
+ * export const generateStaticParams: GenerateStaticParamsFunction<{ slug: string }> =
+ *   async () => {
+ *     const posts = await getAllPosts()
+ *     return posts.map((post) => ({ slug: post.slug }))
+ *   }
+ *
+ * export default function PostPage({ params }: PageProps<{ slug: string }>) {
+ *   // ...
+ * }
+ * ```
+ */
+export type GenerateStaticParamsFunction<TParams = Record<string, string>> = (
+  args?: GenerateStaticParamsArgs
+) => TParams[] | Promise<TParams[]>

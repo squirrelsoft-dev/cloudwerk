@@ -32,6 +32,20 @@ export interface DevCommandOptions {
 }
 
 /**
+ * Options for the `cloudwerk build` command.
+ */
+export interface BuildCommandOptions {
+  /** Output directory for static files (default: ./dist) */
+  output?: string
+  /** Enable static site generation for routes with rendering: 'static' */
+  ssg?: boolean
+  /** Path to config file */
+  config?: string
+  /** Enable verbose logging */
+  verbose?: boolean
+}
+
+/**
  * Resolved dev server configuration.
  */
 export interface DevServerConfig {
