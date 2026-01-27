@@ -68,6 +68,8 @@ export {
   generateHydrationScript,
   generatePreloadHints,
   generateHydrationRuntime,
+  generateReactHydrationRuntime,
+  generateReactHydrationScript,
 } from './hydration.js'
 
 // ============================================================================

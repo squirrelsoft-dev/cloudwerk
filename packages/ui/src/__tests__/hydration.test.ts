@@ -11,6 +11,8 @@ import {
   generateHydrationScript,
   generatePreloadHints,
   generateHydrationRuntime,
+  generateReactHydrationRuntime,
+  generateReactHydrationScript,
 } from '../hydration.js'
 import { createHydrationManifest, addToHydrationManifest } from '@cloudwerk/core'
 
@@ -580,5 +582,313 @@ describe('generateHydrationRuntime', () => {
     const openParens = (runtime.match(/\(/g) || []).length
     const closeParens = (runtime.match(/\)/g) || []).length
     expect(openParens).toBe(closeParens)
+  })
+})
+
+// ============================================================================
+// generateReactHydrationRuntime Tests
+// ============================================================================
+
+describe('generateReactHydrationRuntime', () => {
+  it('should generate valid JavaScript module', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    // Should be a valid ES module with imports
+    expect(runtime).toContain("import React from 'react'")
+    expect(runtime).toContain("import { hydrateRoot } from 'react-dom/client'")
+    expect(runtime).toContain('export function hydrate')
+  })
+
+  it('should export React for component rendering', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('export { React }')
+  })
+
+  it('should export hydrateRoot from react-dom/client', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('export { hydrateRoot }')
+  })
+
+  it('should export hydrate wrapper function', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('export function hydrate(Component, props, container)')
+    expect(runtime).toContain('hydrateRoot(container, React.createElement(Component, props))')
+  })
+
+  it('should re-export all React hooks', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    // Core hooks
+    expect(runtime).toContain('useState')
+    expect(runtime).toContain('useEffect')
+    expect(runtime).toContain('useRef')
+    expect(runtime).toContain('useCallback')
+    expect(runtime).toContain('useMemo')
+    expect(runtime).toContain('useReducer')
+    expect(runtime).toContain('useContext')
+    expect(runtime).toContain('useLayoutEffect')
+    expect(runtime).toContain('useImperativeHandle')
+    expect(runtime).toContain('useDebugValue')
+  })
+
+  it('should re-export React 18+ hooks', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('useSyncExternalStore')
+    expect(runtime).toContain('useTransition')
+    expect(runtime).toContain('useDeferredValue')
+    expect(runtime).toContain('useId')
+    expect(runtime).toContain('useInsertionEffect')
+  })
+
+  it('should re-export React 19 hooks', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('useOptimistic')
+    expect(runtime).toContain('useActionState')
+    expect(runtime).toContain('use')
+  })
+
+  it('should include comment explaining the runtime', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    expect(runtime).toContain('Cloudwerk React Hydration Runtime')
+    expect(runtime).toContain('react-dom/client')
+  })
+
+  it('should not have trailing whitespace issues', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    // Should be trimmed
+    expect(runtime).toBe(runtime.trim())
+    // Should start with comment, not whitespace
+    expect(runtime.charAt(0)).toBe('/')
+  })
+
+  it('should be syntactically valid ES module (basic check)', () => {
+    const runtime = generateReactHydrationRuntime()
+
+    // Should have balanced braces (simple check)
+    const openBraces = (runtime.match(/{/g) || []).length
+    const closeBraces = (runtime.match(/}/g) || []).length
+    expect(openBraces).toBe(closeBraces)
+
+    // Should have balanced parentheses
+    const openParens = (runtime.match(/\(/g) || []).length
+    const closeParens = (runtime.match(/\)/g) || []).length
+    expect(openParens).toBe(closeParens)
+  })
+})
+
+// ============================================================================
+// generateReactHydrationScript Tests
+// ============================================================================
+
+describe('generateReactHydrationScript', () => {
+  it('should return empty string for empty manifest', () => {
+    const manifest = createHydrationManifest()
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toBe('')
+  })
+
+  it('should generate script for manifest with components', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/components/Counter.tsx',
+        componentId: 'components_Counter',
+        exportName: 'default',
+      },
+      '/__cloudwerk/components_Counter.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('<script type="module">')
+    expect(script).toContain('</script>')
+    expect(script).toContain('components_Counter')
+    expect(script).toContain('/__cloudwerk/components_Counter.js')
+  })
+
+  it('should use React hydrateRoot instead of Hono render', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('hydrateRoot')
+    expect(script).toContain('React.createElement')
+    expect(script).not.toContain('hono')
+  })
+
+  it('should import from react-runtime.js', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('/__cloudwerk/react-runtime.js')
+  })
+
+  it('should use custom hydration endpoint for react-runtime', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/custom/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest, {
+      hydrationEndpoint: '/custom',
+    })
+
+    expect(script).toContain('/custom/react-runtime.js')
+  })
+
+  it('should include bundle map in script', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Counter.tsx',
+        componentId: 'Counter',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Counter.js'
+    )
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Toggle.tsx',
+        componentId: 'Toggle',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Toggle.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('Counter')
+    expect(script).toContain('Toggle')
+    expect(script).toContain('/__cloudwerk/Counter.js')
+    expect(script).toContain('/__cloudwerk/Toggle.js')
+  })
+
+  it('should include module caching logic', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('moduleCache')
+    expect(script).toContain('loadComponent')
+  })
+
+  it('should query for hydration elements', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain("querySelectorAll('[data-hydrate-id]')")
+    expect(script).toContain("getAttribute('data-hydrate-id')")
+    expect(script).toContain("getAttribute('data-hydrate-props')")
+  })
+
+  it('should remove hydration attributes after hydration', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain("removeAttribute('data-hydrate-id')")
+    expect(script).toContain("removeAttribute('data-hydrate-props')")
+  })
+
+  it('should handle errors gracefully in generated script', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('try')
+    expect(script).toContain('catch')
+    expect(script).toContain('console.error')
+  })
+
+  it('should import React and hydrateRoot from runtime', () => {
+    const manifest = createHydrationManifest()
+    addToHydrationManifest(
+      manifest,
+      {
+        filePath: '/app/Component.tsx',
+        componentId: 'Component',
+        exportName: 'default',
+      },
+      '/__cloudwerk/Component.js'
+    )
+
+    const script = generateReactHydrationScript(manifest)
+
+    expect(script).toContain('const { React, hydrateRoot }')
+    expect(script).toContain("await import('/__cloudwerk/react-runtime.js')")
   })
 })
