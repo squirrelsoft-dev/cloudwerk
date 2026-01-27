@@ -76,18 +76,33 @@ export const reactRenderer: Renderer = {
   /**
    * Hydrate a React element on the client.
    *
-   * This is a placeholder that throws an informative error.
-   * Client-side hydration will be implemented in issue #39.
+   * Uses react-dom/client's hydrateRoot to attach event handlers and state
+   * to server-rendered HTML. This is called by the client-side hydration
+   * runtime for each Client Component.
    *
-   * @param _element - React element (unused)
-   * @param _root - DOM element (unused)
-   * @throws Error with information about when this feature will be available
+   * Note: This method is primarily used by the client-side hydration runtime.
+   * In server-side code, it will throw an error since the DOM is not available.
+   *
+   * @param element - React element to hydrate
+   * @param root - DOM element to hydrate into
+   * @throws Error if called in a non-browser environment
    */
-  hydrate(_element: unknown, _root: Element): void {
-    throw new Error(
-      'Client hydration requires react-dom/client. ' +
-        'This feature will be available after issue #39 is implemented.'
-    )
+  hydrate(element: unknown, root: Element): void {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      throw new Error(
+        'hydrate() can only be called in a browser environment. ' +
+          'For server-side rendering, use render() instead.'
+      )
+    }
+
+    // Dynamic import to avoid issues on server-side
+    // This will be bundled by esbuild for client-side code
+    import('react-dom/client').then(({ hydrateRoot }) => {
+      hydrateRoot(root as unknown as HTMLElement, element as ReactElement)
+    }).catch((error) => {
+      console.error('[Cloudwerk] Failed to hydrate React component:', error)
+    })
   },
 }
 

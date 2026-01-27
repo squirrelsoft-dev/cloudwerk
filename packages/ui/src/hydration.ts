@@ -229,7 +229,7 @@ export function generatePreloadHints(manifest: HydrationManifest): string {
 // ============================================================================
 
 /**
- * Generate the hydration runtime module.
+ * Generate the hydration runtime module for Hono JSX.
  *
  * This is served at `/__cloudwerk/runtime.js` and provides the render
  * function that uses hono/jsx/dom for client-side hydration.
@@ -265,4 +265,189 @@ export {
   useId,
 } from 'hono/jsx/dom';
 `.trim()
+}
+
+// ============================================================================
+// React Hydration Runtime
+// ============================================================================
+
+/**
+ * Generate the React hydration runtime module.
+ *
+ * This is served at `/__cloudwerk/react-runtime.js` and provides the
+ * hydrateRoot function from react-dom/client for client-side hydration.
+ *
+ * The runtime exports:
+ * - hydrateRoot from react-dom/client for hydration
+ * - React and all React hooks for client components
+ *
+ * @returns JavaScript module source code
+ */
+export function generateReactHydrationRuntime(): string {
+  return `
+// Cloudwerk React Hydration Runtime
+// Uses react-dom/client for client-side hydration
+import React from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  useReducer,
+  useContext,
+  useLayoutEffect,
+  useImperativeHandle,
+  useDebugValue,
+  useSyncExternalStore,
+  useTransition,
+  useDeferredValue,
+  useId,
+  useInsertionEffect,
+  useOptimistic,
+  useActionState,
+  use,
+} from 'react';
+
+// Re-export React for component rendering
+export { React };
+
+// Re-export hydrateRoot for hydration
+export { hydrateRoot };
+
+// Hydrate function that wraps hydrateRoot for Cloudwerk usage
+export function hydrate(Component, props, container) {
+  return hydrateRoot(container, React.createElement(Component, props));
+}
+
+// Re-export all hooks for client components
+export {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  useReducer,
+  useContext,
+  useLayoutEffect,
+  useImperativeHandle,
+  useDebugValue,
+  useSyncExternalStore,
+  useTransition,
+  useDeferredValue,
+  useId,
+  useInsertionEffect,
+  useOptimistic,
+  useActionState,
+  use,
+};
+`.trim()
+}
+
+/**
+ * Generate the React hydration bootstrap script to include in the HTML response.
+ *
+ * This script:
+ * 1. Finds all elements with `data-hydrate-id` attributes
+ * 2. Loads the corresponding client bundles
+ * 3. Hydrates each component with React's hydrateRoot
+ *
+ * @param manifest - Hydration manifest with component metadata
+ * @param options - Script generation options
+ * @returns Script tags for hydration
+ *
+ * @example
+ * ```typescript
+ * const script = generateReactHydrationScript(manifest, {
+ *   hydrationEndpoint: '/__cloudwerk',
+ * })
+ * // Insert at the end of the <body> tag
+ * ```
+ */
+export function generateReactHydrationScript(
+  manifest: HydrationManifest,
+  options: HydrationScriptOptions = {}
+): string {
+  const { hydrationEndpoint = '/__cloudwerk' } = options
+
+  // If no client components, return empty string
+  if (manifest.components.size === 0) {
+    return ''
+  }
+
+  // Build the component bundle map
+  const bundleMap: Record<string, string> = {}
+  for (const [id, meta] of manifest.components) {
+    bundleMap[id] = meta.bundlePath
+  }
+
+  // Generate the React hydration bootstrap script
+  // This runs after DOM is ready and hydrates all marked elements
+  const script = `
+<script type="module">
+(async function() {
+  // Bundle map for component lookups
+  const bundles = ${JSON.stringify(bundleMap)};
+
+  // Find all elements that need hydration
+  const elements = document.querySelectorAll('[data-hydrate-id]');
+  if (elements.length === 0) return;
+
+  // Cache for loaded modules
+  const moduleCache = new Map();
+
+  // Load a component module
+  async function loadComponent(bundlePath) {
+    if (moduleCache.has(bundlePath)) {
+      return moduleCache.get(bundlePath);
+    }
+    const module = await import(bundlePath);
+    moduleCache.set(bundlePath, module);
+    return module;
+  }
+
+  // Import React and hydrateRoot from the runtime
+  const { React, hydrateRoot } = await import('${hydrationEndpoint}/react-runtime.js');
+
+  // Hydrate each element
+  for (const el of elements) {
+    const componentId = el.getAttribute('data-hydrate-id');
+    const propsJson = el.getAttribute('data-hydrate-props');
+
+    if (!componentId || !bundles[componentId]) {
+      console.warn('[Cloudwerk] Unknown client component:', componentId);
+      continue;
+    }
+
+    try {
+      // Parse props
+      const props = propsJson ? JSON.parse(propsJson) : {};
+
+      // Load the component module
+      const bundlePath = bundles[componentId];
+      const module = await loadComponent(bundlePath);
+      const Component = module.default;
+
+      if (!Component) {
+        console.error('[Cloudwerk] No default export in component:', componentId);
+        continue;
+      }
+
+      // Hydrate the component using React's hydrateRoot
+      // This attaches event handlers to the server-rendered HTML
+      hydrateRoot(el, React.createElement(Component, props));
+
+      // Remove hydration attributes after successful hydration
+      el.removeAttribute('data-hydrate-id');
+      el.removeAttribute('data-hydrate-props');
+    } catch (error) {
+      console.error('[Cloudwerk] Failed to hydrate component:', componentId, error);
+    }
+  }
+})();
+</script>
+`.trim()
+
+  return script
 }
