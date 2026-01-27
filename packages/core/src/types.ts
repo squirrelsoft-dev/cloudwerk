@@ -125,6 +125,9 @@ export interface RouteEntry {
 
   /** Priority for route sorting (lower = higher priority) */
   priority: number
+
+  /** Route configuration (auth, rate limiting, caching, custom metadata) */
+  config?: RouteConfig
 }
 
 // ============================================================================
@@ -482,4 +485,94 @@ export interface LoadedMiddlewareModule {
   default?: Middleware
   /** Named 'middleware' export */
   middleware?: Middleware
+}
+
+// ============================================================================
+// Route Config Types
+// ============================================================================
+
+/**
+ * Authentication requirement for a route.
+ *
+ * - `'required'`: Request must be authenticated
+ * - `'optional'`: Authentication is checked but not required
+ * - `'none'`: No authentication required
+ */
+export type AuthRequirement = 'required' | 'optional' | 'none'
+
+/**
+ * Rate limit configuration.
+ *
+ * Can be a shorthand string like `'100/1m'` (100 requests per minute)
+ * or an object with explicit configuration.
+ *
+ * @example
+ * // Shorthand: "requests/window"
+ * rateLimit: '100/1m'
+ *
+ * @example
+ * // Object form
+ * rateLimit: { requests: 100, window: '1m' }
+ */
+export type RateLimitConfig = string | {
+  /** Maximum number of requests allowed */
+  requests: number
+  /** Time window: '1m', '1h', '1d' */
+  window: string
+}
+
+/**
+ * Cache configuration.
+ *
+ * Can be a shorthand string or an object with explicit configuration.
+ *
+ * @example
+ * // Shorthand strings
+ * cache: 'public'   // Cache-Control: public
+ * cache: 'private'  // Cache-Control: private
+ * cache: 'no-store' // Cache-Control: no-store
+ *
+ * @example
+ * // Object form with max-age
+ * cache: { maxAge: 3600, staleWhileRevalidate: 60 }
+ */
+export type CacheConfig = 'public' | 'private' | 'no-store' | {
+  /** Max age in seconds */
+  maxAge: number
+  /** Stale-while-revalidate in seconds */
+  staleWhileRevalidate?: number
+}
+
+/**
+ * Route configuration object exported from route files.
+ *
+ * Allows declarative route-level configuration for auth, rate limiting,
+ * caching, and custom metadata that middleware/plugins can access.
+ *
+ * @example
+ * // In a route.ts file
+ * import type { RouteConfig } from '@cloudwerk/core'
+ *
+ * export const config: RouteConfig = {
+ *   auth: 'required',
+ *   rateLimit: '100/1m',
+ *   cache: 'private',
+ * }
+ *
+ * export function GET(request: Request, context) {
+ *   // Handler code
+ * }
+ */
+export interface RouteConfig {
+  /** Authentication requirement */
+  auth?: AuthRequirement
+
+  /** Rate limiting configuration */
+  rateLimit?: RateLimitConfig
+
+  /** Caching configuration */
+  cache?: CacheConfig
+
+  /** Custom metadata (for plugins/middleware) */
+  [key: string]: unknown
 }

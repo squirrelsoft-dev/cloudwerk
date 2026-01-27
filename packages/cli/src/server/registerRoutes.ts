@@ -5,9 +5,9 @@
  */
 
 import * as path from 'node:path'
-import type { Hono, Handler } from 'hono'
-import type { RouteManifest, HttpMethod, CloudwerkHandler } from '@cloudwerk/core'
-import { createHandlerAdapter } from '@cloudwerk/core'
+import type { Hono, Handler, MiddlewareHandler } from 'hono'
+import type { RouteManifest, HttpMethod, CloudwerkHandler, RouteConfig } from '@cloudwerk/core'
+import { createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
@@ -63,6 +63,23 @@ function isCloudwerkHandler(fn: unknown): fn is CloudwerkHandler {
   return typeof fn === 'function' && fn.length === 2
 }
 
+/**
+ * Create middleware that sets route config in the request context.
+ *
+ * This middleware runs AFTER user middleware to ensure the config
+ * is available for the route handler. User middleware cannot override
+ * the route config because this runs after them.
+ *
+ * @param config - The route configuration to set
+ * @returns Hono middleware handler
+ */
+function createConfigMiddleware(config: RouteConfig): MiddlewareHandler {
+  return async (c, next) => {
+    setRouteConfig(config)
+    await next()
+  }
+}
+
 // ============================================================================
 // Route Registration
 // ============================================================================
@@ -115,6 +132,17 @@ export async function registerRoutes(
       // Load the route handler module
       logger.debug(`Loading route handler: ${route.filePath}`)
       const module = await loadRouteHandler(route.absolutePath, verbose)
+
+      // Apply config middleware if route exports config
+      // This runs AFTER user middleware, so config is only available in handlers
+      // (user middleware cannot access getRouteConfig() - see plan for rationale)
+      if (module.config) {
+        app.use(route.urlPattern, createConfigMiddleware(module.config))
+
+        if (verbose) {
+          logger.info(`Applied route config: ${route.filePath} -> ${route.urlPattern}`)
+        }
+      }
 
       // Register each HTTP method export
       for (const method of HTTP_METHODS) {

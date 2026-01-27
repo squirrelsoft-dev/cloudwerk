@@ -4,7 +4,7 @@
  * CLI-specific types for the development server and commands.
  */
 
-import type { CloudwerkConfig, HttpMethod } from '@cloudwerk/core'
+import type { CloudwerkConfig, HttpMethod, RouteConfig } from '@cloudwerk/core'
 
 // ============================================================================
 // CLI Option Types
@@ -45,7 +45,7 @@ export interface DevServerConfig {
 // ============================================================================
 
 /**
- * A loaded route module with HTTP method exports.
+ * A loaded route module with HTTP method exports and optional config.
  */
 export interface LoadedRouteModule {
   GET?: RouteHandlerFn
@@ -55,6 +55,8 @@ export interface LoadedRouteModule {
   DELETE?: RouteHandlerFn
   OPTIONS?: RouteHandlerFn
   HEAD?: RouteHandlerFn
+  /** Route configuration (auth, rate limiting, caching, custom metadata) */
+  config?: RouteConfig
 }
 
 /**

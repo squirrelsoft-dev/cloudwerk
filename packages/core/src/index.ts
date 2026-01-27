@@ -58,6 +58,12 @@ export type {
   // Middleware Types
   Middleware,
   LoadedMiddlewareModule,
+
+  // Route Config Types
+  RouteConfig,
+  AuthRequirement,
+  RateLimitConfig,
+  CacheConfig,
 } from './types.js'
 
 export {
@@ -199,6 +205,24 @@ export {
   // Middleware Adapter
   createMiddlewareAdapter,
 } from './middleware.js'
+
+// ============================================================================
+// Route Config Exports
+// ============================================================================
+
+export {
+  // Route Config Access (public API)
+  getRouteConfig,
+
+  // Route Config Validation (for CLI/internal use)
+  validateRouteConfig,
+
+  // Internal constants and functions (for CLI integration)
+  // Note: setRouteConfig is intentionally not in public API docs
+  // but needs to be exported for internal framework use
+  setRouteConfig,
+  ROUTE_CONFIG_KEY,
+} from './route-config.js'
 
 // ============================================================================
 // Response Helper Exports
