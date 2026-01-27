@@ -1,0 +1,450 @@
+---
+title: Blog Example
+description: Build a full-featured blog with Cloudwerk.
+---
+
+import { FileTree, Steps, Aside } from '@astrojs/starlight/components';
+
+Build a complete blog application with user authentication, markdown support, comments, and more.
+
+## Overview
+
+This example demonstrates:
+- User authentication with sessions
+- CRUD operations with D1
+- Markdown rendering
+- Comments system
+- SEO optimization
+
+## Project Structure
+
+<FileTree>
+- app/
+  - page.tsx                    # Homepage with recent posts
+  - layout.tsx                  # Root layout
+  - middleware.ts               # Auth middleware
+  - (auth)/
+    - login/
+      - page.tsx
+    - register/
+      - page.tsx
+    - logout/
+      - route.ts
+  - posts/
+    - page.tsx                  # Posts list
+    - new/
+      - page.tsx                # Create post (auth required)
+    - [slug]/
+      - page.tsx                # Post detail
+      - edit/
+        - page.tsx              # Edit post (auth required)
+  - api/
+    - posts/
+      - route.ts
+      - [slug]/
+        - route.ts
+        - comments/
+          - route.ts
+- migrations/
+  - 0001_create_users.sql
+  - 0002_create_posts.sql
+  - 0003_create_comments.sql
+</FileTree>
+
+## Database Schema
+
+### Users Table
+
+```sql
+-- migrations/0001_create_users.sql
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  bio TEXT,
+  avatar_url TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_users_email ON users(email);
+```
+
+### Posts Table
+
+```sql
+-- migrations/0002_create_posts.sql
+CREATE TABLE posts (
+  id TEXT PRIMARY KEY,
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  excerpt TEXT,
+  content TEXT NOT NULL,
+  published BOOLEAN NOT NULL DEFAULT FALSE,
+  author_id TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_posts_slug ON posts(slug);
+CREATE INDEX idx_posts_author ON posts(author_id);
+CREATE INDEX idx_posts_published ON posts(published);
+```
+
+### Comments Table
+
+```sql
+-- migrations/0003_create_comments.sql
+CREATE TABLE comments (
+  id TEXT PRIMARY KEY,
+  content TEXT NOT NULL,
+  post_id TEXT NOT NULL REFERENCES posts(id),
+  author_id TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_comments_post ON comments(post_id);
+```
+
+## Implementation
+
+### Root Layout
+
+```tsx
+// app/layout.tsx
+import type { LayoutProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+  return { user };
+}
+
+export default function RootLayout({ children, user }: LayoutProps & { user: User | null }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>My Blog</title>
+      </head>
+      <body>
+        <header>
+          <nav>
+            <a href="/">Home</a>
+            <a href="/posts">Posts</a>
+            {user ? (
+              <>
+                <a href="/posts/new">Write</a>
+                <form action="/logout" method="POST">
+                  <button type="submit">Logout</button>
+                </form>
+              </>
+            ) : (
+              <>
+                <a href="/login">Login</a>
+                <a href="/register">Register</a>
+              </>
+            )}
+          </nav>
+        </header>
+        <main>{children}</main>
+        <footer>
+          <p>Built with Cloudwerk</p>
+        </footer>
+      </body>
+    </html>
+  );
+}
+```
+
+### Homepage
+
+```tsx
+// app/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const posts = await context.db
+    .selectFrom('posts')
+    .innerJoin('users', 'users.id', 'posts.author_id')
+    .select([
+      'posts.slug',
+      'posts.title',
+      'posts.excerpt',
+      'posts.created_at',
+      'users.name as authorName',
+    ])
+    .where('posts.published', '=', true)
+    .orderBy('posts.created_at', 'desc')
+    .limit(10)
+    .execute();
+
+  return { posts };
+}
+
+export default function HomePage({ posts }: PageProps & { posts: Post[] }) {
+  return (
+    <div>
+      <h1>Welcome to My Blog</h1>
+      <section>
+        <h2>Recent Posts</h2>
+        <ul>
+          {posts.map((post) => (
+            <li key={post.slug}>
+              <a href={`/posts/${post.slug}`}>
+                <h3>{post.title}</h3>
+              </a>
+              <p>{post.excerpt}</p>
+              <small>By {post.authorName} on {new Date(post.created_at).toLocaleDateString()}</small>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+```
+
+### Post Detail Page
+
+```tsx
+// app/posts/[slug]/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import { NotFoundError } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const post = await context.db
+    .selectFrom('posts')
+    .innerJoin('users', 'users.id', 'posts.author_id')
+    .select([
+      'posts.id',
+      'posts.slug',
+      'posts.title',
+      'posts.content',
+      'posts.created_at',
+      'posts.author_id',
+      'users.name as authorName',
+      'users.avatar_url as authorAvatar',
+    ])
+    .where('posts.slug', '=', params.slug)
+    .where('posts.published', '=', true)
+    .executeTakeFirst();
+
+  if (!post) {
+    throw new NotFoundError('Post not found');
+  }
+
+  const comments = await context.db
+    .selectFrom('comments')
+    .innerJoin('users', 'users.id', 'comments.author_id')
+    .select([
+      'comments.id',
+      'comments.content',
+      'comments.created_at',
+      'users.name as authorName',
+    ])
+    .where('comments.post_id', '=', post.id)
+    .orderBy('comments.created_at', 'asc')
+    .execute();
+
+  const user = await context.auth.getUser();
+
+  return { post, comments, user };
+}
+
+export default function PostPage({ post, comments, user }: PageProps & LoaderData) {
+  return (
+    <article>
+      <header>
+        <h1>{post.title}</h1>
+        <div>
+          By {post.authorName} on {new Date(post.created_at).toLocaleDateString()}
+        </div>
+      </header>
+
+      <div>{post.content}</div>
+
+      <section>
+        <h2>Comments ({comments.length})</h2>
+
+        {user && (
+          <form action={`/api/posts/${post.slug}/comments`} method="POST">
+            <textarea name="content" placeholder="Write a comment..." required />
+            <button type="submit">Post Comment</button>
+          </form>
+        )}
+
+        <ul>
+          {comments.map((comment) => (
+            <li key={comment.id}>
+              <strong>{comment.authorName}</strong>
+              <p>{comment.content}</p>
+              <small>{new Date(comment.created_at).toLocaleDateString()}</small>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </article>
+  );
+}
+```
+
+### Create Post Page
+
+```tsx
+// app/posts/new/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  await context.auth.requireUser();
+  return {};
+}
+
+export default function NewPostPage() {
+  return (
+    <div>
+      <h1>Create New Post</h1>
+      <form action="/api/posts" method="POST">
+        <div>
+          <label htmlFor="title">Title</label>
+          <input type="text" id="title" name="title" required />
+        </div>
+        <div>
+          <label htmlFor="excerpt">Excerpt</label>
+          <textarea id="excerpt" name="excerpt" rows={2} />
+        </div>
+        <div>
+          <label htmlFor="content">Content (Markdown)</label>
+          <textarea id="content" name="content" rows={20} required />
+        </div>
+        <div>
+          <label>
+            <input type="checkbox" name="published" value="true" />
+            Publish immediately
+          </label>
+        </div>
+        <button type="submit">Create Post</button>
+      </form>
+    </div>
+  );
+}
+```
+
+### Posts API Route
+
+```typescript
+// app/api/posts/route.ts
+import { json, redirect } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const user = await context.auth.requireUser();
+
+  const formData = await request.formData();
+  const title = formData.get('title') as string;
+  const excerpt = formData.get('excerpt') as string;
+  const content = formData.get('content') as string;
+  const published = formData.get('published') === 'true';
+
+  const slug = slugify(title) + '-' + Date.now().toString(36);
+
+  await context.db
+    .insertInto('posts')
+    .values({
+      id: crypto.randomUUID(),
+      slug,
+      title,
+      excerpt,
+      content,
+      published,
+      author_id: user.id,
+    })
+    .execute();
+
+  return redirect(`/posts/${slug}`);
+}
+```
+
+### Comments API Route
+
+```typescript
+// app/api/posts/[slug]/comments/route.ts
+import { json, redirect } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+
+export async function POST(request: Request, { params, context }: CloudwerkHandlerContext) {
+  const user = await context.auth.requireUser();
+
+  const post = await context.db
+    .selectFrom('posts')
+    .select(['id'])
+    .where('slug', '=', params.slug)
+    .executeTakeFirst();
+
+  if (!post) {
+    return json({ error: 'Post not found' }, { status: 404 });
+  }
+
+  const formData = await request.formData();
+  const content = formData.get('content') as string;
+
+  await context.db
+    .insertInto('comments')
+    .values({
+      id: crypto.randomUUID(),
+      content,
+      post_id: post.id,
+      author_id: user.id,
+    })
+    .execute();
+
+  return redirect(`/posts/${params.slug}`);
+}
+```
+
+## Running the Example
+
+<Steps>
+1. Clone or create the project:
+   ```bash
+   pnpm create cloudwerk@latest my-blog --template blog
+   ```
+
+2. Set up the database:
+   ```bash
+   wrangler d1 create my-blog-db
+   wrangler d1 migrations apply my-blog-db --local
+   ```
+
+3. Start development:
+   ```bash
+   pnpm dev
+   ```
+
+4. Deploy:
+   ```bash
+   pnpm deploy
+   ```
+</Steps>
+
+## Next Steps
+
+- Add markdown parsing with a library like `marked`
+- Implement post categories and tags
+- Add RSS feed generation
+- Implement search functionality
+- Add social sharing buttons
+
+## Related Examples
+
+- **[SaaS Starter](/examples/saas-starter/)** - User management and subscriptions
+- **[API Backend](/examples/api-backend/)** - RESTful API design
+- **[Real-time Chat](/examples/realtime-chat/)** - WebSocket communication

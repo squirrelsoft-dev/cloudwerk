@@ -1,0 +1,44 @@
+{
+  "grouping_type": "milestone-github",
+  "grouping_id": "milestone-5",
+  "grouping_display": "Milestone: v0.4.0 - React Renderer & SSG",
+  "created_at": "2026-01-27T14:12:00Z",
+  "worktrees": [
+    {
+      "issue_number": "45",
+      "issue_key": null,
+      "issue_title": "feat(cli): Renderer switching and migration guide",
+      "branch_name": "feat/issue-45-renderer-switching-and-migration-guide",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-45-renderer-switching-and-migration-guide",
+      "created_at": "2026-01-27T14:12:00Z",
+      "status": "active"
+    },
+    {
+      "issue_number": "43",
+      "issue_key": null,
+      "issue_title": "feat(core): Static Site Generation (SSG) support",
+      "branch_name": "feat/issue-43-static-site-generation-ssg-support",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-43-static-site-generation-ssg-support",
+      "created_at": "2026-01-27T14:12:00Z",
+      "status": "active"
+    },
+    {
+      "issue_number": "41",
+      "issue_key": null,
+      "issue_title": "feat(ui): React client component hydration",
+      "branch_name": "feat/issue-41-react-client-component-hydration",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-41-react-client-component-hydration",
+      "created_at": "2026-01-27T14:12:00Z",
+      "status": "active"
+    },
+    {
+      "issue_number": "40",
+      "issue_key": null,
+      "issue_title": "feat(ui): React server-side rendering option",
+      "branch_name": "feat/issue-40-react-server-side-rendering-option",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-40-react-server-side-rendering-option",
+      "created_at": "2026-01-27T14:12:00Z",
+      "status": "active"
+    }
+  ]
+}

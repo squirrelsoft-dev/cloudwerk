@@ -1,0 +1,274 @@
+---
+title: Cloudflare Limits
+description: Reference for Cloudflare Workers platform limits and quotas.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cloudflare Workers has certain limits you should be aware of when building your Cloudwerk application.
+
+## Workers Limits
+
+### Request Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| Requests per day | 100,000 | Unlimited |
+| Request body size | 100 MB | 100 MB |
+| Response body size | No limit (streaming) | No limit (streaming) |
+
+### Execution Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| CPU time per request | 10 ms | 30 s (Unbound) |
+| Duration (wall clock) | No explicit limit | No explicit limit |
+| Memory per request | 128 MB | 128 MB |
+| Environment variables | 64 | 64 |
+| Environment variable size | 5 KB each | 5 KB each |
+
+### Script Limits
+
+| Limit | Value |
+|-------|-------|
+| Script size (compressed) | 10 MB |
+| Script size (uncompressed) | 30 MB |
+| Number of scripts | Unlimited |
+
+<Aside type="tip">
+If you hit the CPU time limit, consider using Cloudflare Queues for background processing or Durable Objects for complex computations.
+</Aside>
+
+## D1 Database Limits
+
+### Database Limits
+
+| Limit | Value |
+|-------|-------|
+| Maximum databases | 50,000 per account |
+| Maximum storage per database | 10 GB |
+| Maximum rows read per query | 1,000,000 |
+| Maximum rows written per query | 1,000 |
+| Maximum query duration | 30 seconds |
+
+### Query Limits
+
+| Limit | Value |
+|-------|-------|
+| Maximum SQL statement size | 100 KB |
+| Maximum bound parameters | 100 |
+| Maximum columns per table | 2,000 |
+| Maximum row size | 1 MB |
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Reads per second | ~10,000 |
+| Writes per second | ~1,000 |
+| Typical read latency | 5-50 ms |
+| Typical write latency | 50-200 ms |
+
+<Aside type="note">
+D1 is optimized for read-heavy workloads. For write-heavy use cases, consider batching writes or using Durable Objects.
+</Aside>
+
+## KV Limits
+
+### Storage Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| Maximum namespaces | 100 | 100 |
+| Maximum keys per namespace | Unlimited | Unlimited |
+| Maximum value size | 25 MB | 25 MB |
+| Maximum key size | 512 bytes | 512 bytes |
+| Maximum metadata size | 1 KB | 1 KB |
+
+### Operation Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| Reads per day | 100,000 | Unlimited |
+| Writes per day | 1,000 | Unlimited |
+| Deletes per day | 1,000 | Unlimited |
+| Lists per day | 1,000 | Unlimited |
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Read latency | < 60 ms (95th percentile) |
+| Write propagation | Up to 60 seconds (eventually consistent) |
+
+## R2 Limits
+
+### Storage Limits
+
+| Limit | Value |
+|-------|-------|
+| Maximum object size | 5 TB |
+| Maximum bucket count | 1,000 per account |
+| Maximum objects per bucket | Unlimited |
+
+### Request Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| Class A operations (writes) | 1,000,000/month | $4.50 per million |
+| Class B operations (reads) | 10,000,000/month | $0.36 per million |
+| Data transfer (egress) | Free | Free |
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Put latency | < 100 ms |
+| Get latency | < 50 ms |
+| Multipart upload parts | 10,000 max |
+
+## Queues Limits
+
+### Queue Limits
+
+| Limit | Value |
+|-------|-------|
+| Maximum queues per account | 100 |
+| Maximum message size | 128 KB |
+| Maximum batch size | 100 messages |
+| Maximum in-flight messages | 10,000 |
+
+### Rate Limits
+
+| Limit | Value |
+|-------|-------|
+| Messages per second (send) | 400 per queue |
+| Messages per second (receive) | 5,000 per consumer |
+
+### Retention
+
+| Limit | Value |
+|-------|-------|
+| Message retention | 4 days |
+| Retry attempts | Configurable (default: 3) |
+| Maximum delay | 12 hours |
+
+## Durable Objects Limits
+
+### Storage Limits
+
+| Limit | Value |
+|-------|-------|
+| Storage per object | 10 GB |
+| Key size | 2 KB |
+| Value size | 128 KB |
+| Total storage per account | No explicit limit |
+
+### Performance
+
+| Metric | Value |
+|--------|-------|
+| Requests per object | ~500/second |
+| Alarm precision | 1 second |
+
+### WebSocket Limits
+
+| Limit | Value |
+|-------|-------|
+| Max connections per object | 32,768 (hibernatable) |
+| Max message size | 1 MB |
+
+<Aside type="caution">
+Durable Objects are single-threaded. Design your application to distribute load across multiple objects for high-throughput scenarios.
+</Aside>
+
+## Cron Triggers Limits
+
+| Limit | Value |
+|-------|-------|
+| Triggers per Worker | 3 |
+| Minimum interval | 1 minute |
+| Execution time (Free) | 30 seconds |
+| Execution time (Paid) | 15 minutes |
+
+## Bindings Limits
+
+| Limit | Value |
+|-------|-------|
+| Total bindings per Worker | 200 |
+| Service bindings | 20 |
+
+## Subrequest Limits
+
+| Limit | Free | Paid |
+|-------|------|------|
+| Subrequests per request | 50 | 1,000 |
+| Recursive subrequests | 16 | 16 |
+
+## Best Practices
+
+### Optimize for Limits
+
+1. **CPU Time**: Use streaming for large responses, offload heavy work to Queues
+2. **Database**: Use indexes, paginate results, batch writes
+3. **KV**: Cache frequently accessed data, use appropriate TTLs
+4. **R2**: Use multipart uploads for large files
+5. **Queues**: Use batching for high-volume message sending
+
+### Monitor Usage
+
+```typescript
+// Track request timing
+export const middleware: Middleware = async (request, next, context) => {
+  const start = Date.now();
+  const response = await next(request);
+  const duration = Date.now() - start;
+
+  // Log for monitoring
+  console.log(`Request took ${duration}ms`);
+
+  // Alert if approaching limits
+  if (duration > 8000) { // 8s warning for 10ms limit
+    console.warn('Request approaching CPU limit');
+  }
+
+  return response;
+};
+```
+
+### Handle Errors Gracefully
+
+```typescript
+export async function loader({ context }: LoaderArgs) {
+  try {
+    const data = await context.db.selectFrom('items').execute();
+    return { data };
+  } catch (error) {
+    if (error.message.includes('D1_ERROR')) {
+      // Handle D1-specific errors
+      console.error('Database error:', error);
+      return { data: [], error: 'Database temporarily unavailable' };
+    }
+    throw error;
+  }
+}
+```
+
+## Pricing Reference
+
+For current pricing, see the [Cloudflare Workers Pricing](https://developers.cloudflare.com/workers/platform/pricing/) page.
+
+| Service | Free Tier | Paid (Workers Paid) |
+|---------|-----------|---------------------|
+| Workers | 100K requests/day | $5/month + $0.50/million |
+| D1 | 5M rows read/day, 100K writes/day | $0.001/million rows read |
+| KV | 100K reads/day, 1K writes/day | $0.50/million reads |
+| R2 | 10M Class B, 1M Class A/month | $0.36/million reads |
+| Queues | Included | $0.40/million messages |
+| Durable Objects | Included | $0.15/million requests |
+
+## Next Steps
+
+- **[Configuration](/reference/cloudwerk-config/)** - Optimize your config
+- **[Deployment Guide](/guides/deployment/)** - Deploy efficiently
+- **[Database Guide](/guides/database/)** - Optimize D1 queries

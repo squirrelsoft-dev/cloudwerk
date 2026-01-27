@@ -1,0 +1,476 @@
+---
+title: cloudwerk.config.ts Reference
+description: Complete reference for all Cloudwerk configuration options.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page provides a complete reference for all configuration options available in `cloudwerk.config.ts`.
+
+## File Location
+
+The configuration file should be placed in your project root:
+
+```
+my-project/
+├── app/
+├── cloudwerk.config.ts   # Configuration file
+├── package.json
+└── wrangler.toml
+```
+
+## Basic Structure
+
+```typescript
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  // All options documented below
+});
+```
+
+## All Configuration Options
+
+### Application Directories
+
+```typescript
+export default defineConfig({
+  /**
+   * Directory containing your application routes
+   * @default 'app'
+   */
+  appDir: 'app',
+
+  /**
+   * Directory for static assets served at the root
+   * @default 'public'
+   */
+  publicDir: 'public',
+
+  /**
+   * Output directory for build artifacts
+   * @default '.cloudwerk'
+   */
+  outDir: '.cloudwerk',
+});
+```
+
+### Development Server
+
+```typescript
+export default defineConfig({
+  dev: {
+    /**
+     * Port for the development server
+     * @default 8787
+     */
+    port: 8787,
+
+    /**
+     * Host to bind the server to
+     * @default 'localhost'
+     */
+    host: 'localhost',
+
+    /**
+     * Enable HTTPS for local development
+     * @default false
+     */
+    https: false,
+
+    /**
+     * Automatically open browser on start
+     * @default false
+     */
+    open: false,
+
+    /**
+     * Custom SSL certificate for HTTPS
+     */
+    ssl: {
+      key: './certs/localhost.key',
+      cert: './certs/localhost.crt',
+    },
+  },
+});
+```
+
+### Build Options
+
+```typescript
+export default defineConfig({
+  build: {
+    /**
+     * Minify output for production
+     * @default true
+     */
+    minify: true,
+
+    /**
+     * Generate source maps
+     * @default true
+     */
+    sourcemap: true,
+
+    /**
+     * Enable tree shaking to remove unused code
+     * @default true
+     */
+    treeshake: true,
+
+    /**
+     * ECMAScript target version
+     * @default 'es2022'
+     */
+    target: 'es2022',
+
+    /**
+     * Dependencies to exclude from bundling
+     * @default []
+     */
+    external: ['some-large-library'],
+
+    /**
+     * Enable bundle analysis
+     * @default false
+     */
+    analyze: false,
+  },
+});
+```
+
+### Database Configuration
+
+```typescript
+export default defineConfig({
+  database: {
+    /**
+     * The binding name in wrangler.toml
+     * @required
+     */
+    binding: 'DB',
+
+    /**
+     * Directory containing migration files
+     * @default 'migrations'
+     */
+    migrationsDir: 'migrations',
+
+    /**
+     * TypeScript schema for type-safe queries
+     */
+    schema: {} as DatabaseSchema,
+  },
+});
+```
+
+### Authentication
+
+```typescript
+export default defineConfig({
+  auth: {
+    /**
+     * Session configuration
+     */
+    session: {
+      /**
+       * Where to store sessions
+       * @default 'kv'
+       */
+      storage: 'kv', // 'kv' | 'durable-object'
+
+      /**
+       * KV namespace binding name
+       */
+      namespace: 'SESSIONS',
+
+      /**
+       * Session duration in seconds
+       * @default 604800 (7 days)
+       */
+      maxAge: 60 * 60 * 24 * 7,
+
+      /**
+       * Session cookie configuration
+       */
+      cookie: {
+        name: 'session',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        domain: undefined, // Auto-detect
+      },
+    },
+
+    /**
+     * OAuth providers configuration
+     */
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID!,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        scopes: ['user:email'],
+      },
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        scopes: ['email', 'profile'],
+      },
+    },
+  },
+});
+```
+
+### Queues
+
+```typescript
+export default defineConfig({
+  queues: {
+    /**
+     * Configure queue handlers
+     * Key is the binding name in wrangler.toml
+     */
+    EMAIL_QUEUE: {
+      /**
+       * Path to the queue handler file
+       */
+      handler: './workers/email-queue.ts',
+    },
+
+    WEBHOOK_QUEUE: {
+      handler: './workers/webhook-queue.ts',
+    },
+  },
+});
+```
+
+### Durable Objects
+
+```typescript
+export default defineConfig({
+  durableObjects: {
+    /**
+     * Configure Durable Object classes
+     * Key is the binding name in wrangler.toml
+     */
+    CHAT_ROOM: {
+      /**
+       * Path to the Durable Object class file
+       */
+      class: './workers/chat-room.ts',
+
+      /**
+       * Name of the exported class
+       */
+      className: 'ChatRoom',
+    },
+
+    RATE_LIMITER: {
+      class: './workers/rate-limiter.ts',
+      className: 'RateLimiter',
+    },
+  },
+});
+```
+
+### Triggers (Cron Jobs)
+
+```typescript
+export default defineConfig({
+  triggers: {
+    /**
+     * Path to the trigger handler file
+     */
+    handler: './workers/triggers.ts',
+  },
+});
+```
+
+### Middleware
+
+```typescript
+export default defineConfig({
+  middleware: {
+    /**
+     * Middleware applied to all routes
+     */
+    global: [
+      './middleware/logging.ts',
+      './middleware/cors.ts',
+    ],
+
+    /**
+     * Middleware applied to specific path patterns
+     */
+    paths: {
+      '/api/*': ['./middleware/api-auth.ts'],
+      '/admin/*': ['./middleware/admin-auth.ts'],
+    },
+  },
+});
+```
+
+### Rendering
+
+```typescript
+export default defineConfig({
+  rendering: {
+    /**
+     * Enable streaming SSR
+     * @default true
+     */
+    streaming: true,
+
+    /**
+     * JSX renderer to use
+     * @default 'hono-jsx'
+     */
+    renderer: 'hono-jsx', // 'hono-jsx' | 'react' | 'preact'
+  },
+});
+```
+
+### Experimental Features
+
+```typescript
+export default defineConfig({
+  experimental: {
+    /**
+     * Run loaders in parallel when possible
+     * @default false
+     */
+    parallelLoaders: true,
+
+    /**
+     * Enable edge caching for static responses
+     * @default false
+     */
+    edgeCaching: true,
+  },
+});
+```
+
+## Full Example
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+import type { Database } from './lib/db/schema';
+
+export default defineConfig({
+  appDir: 'app',
+  publicDir: 'public',
+  outDir: '.cloudwerk',
+
+  dev: {
+    port: 8787,
+    open: true,
+  },
+
+  build: {
+    minify: process.env.NODE_ENV === 'production',
+    sourcemap: true,
+    treeshake: true,
+  },
+
+  database: {
+    binding: 'DB',
+    migrationsDir: 'migrations',
+    schema: {} as Database,
+  },
+
+  auth: {
+    session: {
+      storage: 'kv',
+      namespace: 'SESSIONS',
+      maxAge: 60 * 60 * 24 * 7,
+      cookie: {
+        name: 'session',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      },
+    },
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID!,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        scopes: ['user:email'],
+      },
+    },
+  },
+
+  queues: {
+    EMAIL_QUEUE: {
+      handler: './workers/email-queue.ts',
+    },
+  },
+
+  durableObjects: {
+    RATE_LIMITER: {
+      class: './workers/rate-limiter.ts',
+      className: 'RateLimiter',
+    },
+  },
+
+  triggers: {
+    handler: './workers/triggers.ts',
+  },
+
+  rendering: {
+    streaming: true,
+    renderer: 'hono-jsx',
+  },
+});
+```
+
+## TypeScript Support
+
+Use `defineConfig` for full type inference:
+
+```typescript
+import { defineConfig, type CloudwerkConfig } from '@cloudwerk/core';
+
+// Method 1: Direct definition with inference
+export default defineConfig({
+  appDir: 'app',
+});
+
+// Method 2: Separate type annotation
+const config: CloudwerkConfig = {
+  appDir: 'app',
+};
+
+export default defineConfig(config);
+```
+
+## Environment Variables
+
+Access environment variables in your config:
+
+```typescript
+export default defineConfig({
+  build: {
+    minify: process.env.NODE_ENV === 'production',
+  },
+  auth: {
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID!,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+      },
+    },
+  },
+});
+```
+
+<Aside type="note">
+Environment variables are resolved at build time. Use `context.env` for runtime access to Cloudflare bindings.
+</Aside>
+
+## Next Steps
+
+- **[CLI Reference](/api/cli/)** - Command-line options
+- **[File Conventions](/reference/file-conventions/)** - Route file patterns
+- **[Cloudflare Limits](/reference/cloudflare-limits/)** - Platform limits

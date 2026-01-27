@@ -1,0 +1,245 @@
+---
+title: Routing
+description: Learn how Cloudwerk's file-based routing system works.
+---
+
+import { FileTree, Aside } from '@astrojs/starlight/components';
+
+Cloudwerk uses a file-based routing system where your file structure defines your application's routes. This guide covers everything from basic routes to advanced patterns.
+
+## How Routing Works
+
+Cloudwerk scans your `app/` directory and compiles routes based on file conventions:
+
+| File | Description |
+|------|-------------|
+| `page.tsx` | UI for a route |
+| `route.ts` | API endpoint |
+| `layout.tsx` | Shared UI wrapper |
+| `middleware.ts` | Request middleware |
+| `error.tsx` | Error boundary |
+| `not-found.tsx` | 404 handler |
+
+## Basic Routes
+
+### Static Routes
+
+Create a `page.tsx` file to define a route:
+
+<FileTree>
+- app/
+  - page.tsx          # /
+  - about/
+    - page.tsx        # /about
+  - contact/
+    - page.tsx        # /contact
+</FileTree>
+
+```tsx
+// app/about/page.tsx
+export default function AboutPage() {
+  return <h1>About Us</h1>;
+}
+```
+
+### Nested Routes
+
+Routes can be nested to any depth:
+
+<FileTree>
+- app/
+  - products/
+    - page.tsx            # /products
+    - categories/
+      - page.tsx          # /products/categories
+      - [slug]/
+        - page.tsx        # /products/categories/:slug
+</FileTree>
+
+## Dynamic Routes
+
+### Single Dynamic Segment
+
+Use brackets `[param]` for dynamic segments:
+
+```
+app/users/[id]/page.tsx -> /users/:id
+```
+
+Access the parameter in your loader:
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  const userId = params.id;  // "123" for /users/123
+  return { user: await getUser(userId) };
+}
+```
+
+### Multiple Dynamic Segments
+
+Routes can have multiple dynamic segments:
+
+```
+app/[locale]/blog/[slug]/page.tsx -> /:locale/blog/:slug
+```
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  const { locale, slug } = params;
+  return { post: await getPost(locale, slug) };
+}
+```
+
+### Catch-All Segments
+
+Use `[...param]` to match any number of segments:
+
+```
+app/docs/[...slug]/page.tsx
+```
+
+| URL | params.slug |
+|-----|-------------|
+| `/docs/intro` | `['intro']` |
+| `/docs/guides/routing` | `['guides', 'routing']` |
+| `/docs/api/core/types` | `['api', 'core', 'types']` |
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  const path = params.slug.join('/');  // "guides/routing"
+  return { doc: await getDoc(path) };
+}
+```
+
+### Optional Catch-All
+
+Use `[[...param]]` for optional catch-all segments:
+
+```
+app/shop/[[...categories]]/page.tsx
+```
+
+| URL | params.categories |
+|-----|-------------------|
+| `/shop` | `undefined` |
+| `/shop/electronics` | `['electronics']` |
+| `/shop/electronics/phones` | `['electronics', 'phones']` |
+
+## Route Groups
+
+Organize routes without affecting URLs using `(groupName)`:
+
+<FileTree>
+- app/
+  - (marketing)/
+    - layout.tsx        # Marketing layout
+    - page.tsx          # /
+    - pricing/
+      - page.tsx        # /pricing
+  - (dashboard)/
+    - layout.tsx        # Dashboard layout
+    - dashboard/
+      - page.tsx        # /dashboard
+    - settings/
+      - page.tsx        # /settings
+</FileTree>
+
+<Aside type="tip">
+Route groups are useful for applying different layouts to different sections of your app.
+</Aside>
+
+## Parallel Routes
+
+Use `@slot` directories for parallel route segments:
+
+<FileTree>
+- app/
+  - layout.tsx
+  - @sidebar/
+    - page.tsx
+    - users/
+      - page.tsx
+  - @main/
+    - page.tsx
+    - users/
+      - page.tsx
+</FileTree>
+
+Access slots in your layout:
+
+```tsx
+export default function Layout({ sidebar, main }: LayoutProps) {
+  return (
+    <div className="flex">
+      <aside>{sidebar}</aside>
+      <main>{main}</main>
+    </div>
+  );
+}
+```
+
+## Intercepting Routes
+
+Intercept routes using `(.)`, `(..)`, or `(...)` prefixes:
+
+<FileTree>
+- app/
+  - feed/
+    - page.tsx
+    - (.)photo/
+      - [id]/
+        - page.tsx    # Intercepts /feed/photo/:id
+  - photo/
+    - [id]/
+      - page.tsx      # Direct access to /photo/:id
+</FileTree>
+
+| Convention | Description |
+|------------|-------------|
+| `(.)` | Same level |
+| `(..)` | One level up |
+| `(...)` | Root level |
+
+## API Routes
+
+Create API endpoints with `route.ts`:
+
+```typescript
+// app/api/users/route.ts
+import { json } from '@cloudwerk/core';
+
+export async function GET(request: Request, ctx: CloudwerkHandlerContext) {
+  return json({ users: [] });
+}
+
+export async function POST(request: Request, ctx: CloudwerkHandlerContext) {
+  const body = await request.json();
+  return json({ created: body }, { status: 201 });
+}
+```
+
+### HTTP Methods
+
+Export functions for the HTTP methods you want to handle:
+
+- `GET` - Read data
+- `POST` - Create data
+- `PUT` - Replace data
+- `PATCH` - Update data
+- `DELETE` - Remove data
+- `HEAD` - Headers only
+- `OPTIONS` - CORS preflight
+
+## Route Priority
+
+When multiple routes could match, Cloudwerk uses this priority:
+
+1. Static routes (`/about`)
+2. Dynamic routes (`/[id]`)
+3. Catch-all routes (`/[...slug]`)
+
+## Next Steps
+
+- **[Data Loading](/guides/data-loading/)** - Server-side data fetching
+- **[Middleware](/guides/authentication/)** - Protect routes
+- **[API Reference](/api/configuration/)** - Route configuration options

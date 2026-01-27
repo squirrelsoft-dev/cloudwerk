@@ -1,0 +1,270 @@
+---
+title: Project Structure
+description: Learn the file conventions and directory structure of a Cloudwerk project.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+Cloudwerk uses a file-based routing system where your directory structure defines your application's routes. This guide covers all the file conventions you need to know.
+
+## Overview
+
+A typical Cloudwerk project has this structure:
+
+<FileTree>
+- app/
+  - page.tsx          # Home page (/)
+  - layout.tsx        # Root layout
+  - middleware.ts     # Global middleware
+  - error.tsx         # Error boundary
+  - not-found.tsx     # 404 page
+  - about/
+    - page.tsx        # About page (/about)
+  - users/
+    - page.tsx        # Users list (/users)
+    - [id]/
+      - page.tsx      # User profile (/users/:id)
+      - edit/
+        - page.tsx    # Edit user (/users/:id/edit)
+  - api/
+    - health/
+      - route.ts      # Health endpoint (/api/health)
+    - users/
+      - route.ts      # Users API (/api/users)
+      - [id]/
+        - route.ts    # User API (/api/users/:id)
+- public/             # Static assets
+- cloudwerk.config.ts # Configuration
+- wrangler.toml       # Cloudflare config
+- package.json
+- tsconfig.json
+</FileTree>
+
+## File Conventions
+
+### page.tsx
+
+The `page.tsx` file defines a publicly accessible page at that route:
+
+```tsx
+// app/about/page.tsx -> /about
+export default function AboutPage() {
+  return <h1>About Us</h1>;
+}
+```
+
+Pages can export a `loader()` function for server-side data fetching:
+
+```tsx
+export async function loader({ params, context }: LoaderArgs) {
+  return { data: await fetchData() };
+}
+
+export default function Page({ data }: PageProps & { data: Data }) {
+  return <div>{/* render data */}</div>;
+}
+```
+
+### layout.tsx
+
+The `layout.tsx` file wraps pages and nested layouts:
+
+```tsx
+// app/layout.tsx
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <html>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+Layouts can also have their own `loader()` functions:
+
+```tsx
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+  return { user };
+}
+
+export default function DashboardLayout({ children, user }: LayoutProps & { user: User }) {
+  return (
+    <div>
+      <Sidebar user={user} />
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+### route.ts
+
+The `route.ts` file defines API endpoints that handle HTTP methods:
+
+```typescript
+// app/api/users/route.ts
+import { json } from '@cloudwerk/core';
+
+export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
+  const users = await context.db.selectFrom('users').execute();
+  return json(users);
+}
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const body = await request.json();
+  const user = await context.db.insertInto('users').values(body).execute();
+  return json(user, { status: 201 });
+}
+```
+
+Supported methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`
+
+### middleware.ts
+
+The `middleware.ts` file runs before route handlers:
+
+```typescript
+// app/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next) => {
+  // Run before the route handler
+  console.log(`${request.method} ${request.url}`);
+
+  const response = await next(request);
+
+  // Run after the route handler
+  return response;
+};
+```
+
+Middleware is inherited by child routes. Place middleware at any level:
+
+<FileTree>
+- app/
+  - middleware.ts       # Runs for all routes
+  - admin/
+    - middleware.ts     # Runs for /admin/* routes
+    - page.tsx
+</FileTree>
+
+### error.tsx
+
+The `error.tsx` file handles errors in that route segment:
+
+```tsx
+// app/error.tsx
+'use client';
+
+export default function ErrorPage({ error, reset }: ErrorProps) {
+  return (
+    <div>
+      <h1>Something went wrong</h1>
+      <p>{error.message}</p>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+### not-found.tsx
+
+The `not-found.tsx` file handles 404 errors:
+
+```tsx
+// app/not-found.tsx
+export default function NotFoundPage() {
+  return (
+    <div>
+      <h1>404 - Page Not Found</h1>
+      <a href="/">Go home</a>
+    </div>
+  );
+}
+```
+
+## Dynamic Routes
+
+### Single Segment
+
+Use brackets for dynamic segments:
+
+```
+app/users/[id]/page.tsx -> /users/:id
+```
+
+Access params in your loader or component:
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  // params.id is the dynamic value
+  return { user: await getUser(params.id) };
+}
+```
+
+### Catch-All Segments
+
+Use `[...slug]` to catch all subsequent segments:
+
+```
+app/docs/[...slug]/page.tsx -> /docs/*
+```
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  // params.slug is an array like ['guides', 'routing']
+  const path = params.slug.join('/');
+  return { doc: await getDoc(path) };
+}
+```
+
+### Optional Catch-All
+
+Use `[[...slug]]` for optional catch-all:
+
+```
+app/shop/[[...categories]]/page.tsx
+-> /shop
+-> /shop/electronics
+-> /shop/electronics/phones
+```
+
+## Route Groups
+
+Use `(groupName)` to organize routes without affecting the URL:
+
+<FileTree>
+- app/
+  - (marketing)/
+    - page.tsx          # /
+    - about/
+      - page.tsx        # /about
+  - (dashboard)/
+    - layout.tsx        # Dashboard layout
+    - dashboard/
+      - page.tsx        # /dashboard
+    - settings/
+      - page.tsx        # /settings
+</FileTree>
+
+## Colocation
+
+You can colocate components, utilities, and tests alongside your routes:
+
+<FileTree>
+- app/
+  - users/
+    - page.tsx
+    - UserCard.tsx        # Component (not a route)
+    - user.utils.ts       # Utility (not a route)
+    - page.test.ts        # Test (not a route)
+</FileTree>
+
+Only `page.tsx`, `layout.tsx`, `route.ts`, and `middleware.ts` are treated as routes.
+
+## Next Steps
+
+- **[Routing Guide](/guides/routing/)** - Deep dive into routing patterns
+- **[Data Loading](/guides/data-loading/)** - Server-side data fetching
+- **[Middleware](/api/context/)** - Request middleware patterns

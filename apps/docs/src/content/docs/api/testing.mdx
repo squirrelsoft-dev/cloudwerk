@@ -1,0 +1,395 @@
+---
+title: Testing
+description: Testing utilities and patterns for Cloudwerk applications.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Cloudwerk provides testing utilities built on Vitest for testing your pages, API routes, and Workers.
+
+## Setup
+
+### Install Dependencies
+
+```bash
+pnpm add -D vitest @cloudflare/vitest-pool-workers
+```
+
+### Configuration
+
+Create `vitest.config.ts`:
+
+```typescript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    environment: 'miniflare',
+    environmentOptions: {
+      bindings: {
+        // Test bindings
+      },
+    },
+  },
+});
+```
+
+Or use the Cloudflare pool:
+
+```typescript
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
+
+export default defineWorkersConfig({
+  test: {
+    poolOptions: {
+      workers: {
+        wrangler: { configPath: './wrangler.toml' },
+      },
+    },
+  },
+});
+```
+
+## Testing API Routes
+
+### Basic Route Tests
+
+```typescript
+// app/api/users/route.test.ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { createTestContext } from '@cloudwerk/testing';
+
+describe('GET /api/users', () => {
+  let ctx: TestContext;
+
+  beforeAll(async () => {
+    ctx = await createTestContext();
+  });
+
+  afterAll(async () => {
+    await ctx.cleanup();
+  });
+
+  it('should return users', async () => {
+    const response = await ctx.fetch('/api/users');
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data).toHaveProperty('users');
+  });
+
+  it('should require authentication', async () => {
+    const response = await ctx.fetch('/api/users/me');
+
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+### Testing POST Requests
+
+```typescript
+describe('POST /api/users', () => {
+  it('should create a user', async () => {
+    const response = await ctx.fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'test@example.com',
+        name: 'Test User',
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const user = await response.json();
+    expect(user.email).toBe('test@example.com');
+  });
+
+  it('should validate input', async () => {
+    const response = await ctx.fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'invalid' }),
+    });
+
+    expect(response.status).toBe(400);
+    const error = await response.json();
+    expect(error).toHaveProperty('errors');
+  });
+});
+```
+
+### Testing with Authentication
+
+```typescript
+describe('Authenticated Routes', () => {
+  it('should access protected route with auth', async () => {
+    // Create authenticated context
+    const authCtx = await ctx.withAuth({ userId: 'user-123' });
+
+    const response = await authCtx.fetch('/api/users/me');
+
+    expect(response.status).toBe(200);
+    const user = await response.json();
+    expect(user.id).toBe('user-123');
+  });
+});
+```
+
+## Testing Loaders
+
+### Page Loader Tests
+
+```typescript
+// app/users/[id]/page.test.ts
+import { describe, it, expect } from 'vitest';
+import { loader } from './page';
+import { createMockLoaderArgs } from '@cloudwerk/testing';
+
+describe('User Page Loader', () => {
+  it('should return user data', async () => {
+    const args = createMockLoaderArgs({
+      params: { id: 'user-123' },
+    });
+
+    // Seed test data
+    await args.context.db
+      .insertInto('users')
+      .values({ id: 'user-123', name: 'Test User', email: 'test@example.com' })
+      .execute();
+
+    const result = await loader(args);
+
+    expect(result.user).toMatchObject({
+      id: 'user-123',
+      name: 'Test User',
+    });
+  });
+
+  it('should throw NotFoundError for missing user', async () => {
+    const args = createMockLoaderArgs({
+      params: { id: 'nonexistent' },
+    });
+
+    await expect(loader(args)).rejects.toThrow('Not found');
+  });
+});
+```
+
+## Testing Components
+
+### Component Tests
+
+```typescript
+// app/components/UserCard.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { UserCard } from './UserCard';
+
+describe('UserCard', () => {
+  it('should render user name', () => {
+    render(<UserCard user={{ id: '1', name: 'John Doe', email: 'john@example.com' }} />);
+
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(screen.getByText('john@example.com')).toBeInTheDocument();
+  });
+
+  it('should handle missing avatar', () => {
+    render(<UserCard user={{ id: '1', name: 'John', email: 'john@example.com' }} />);
+
+    expect(screen.getByText('J')).toBeInTheDocument(); // Initials fallback
+  });
+});
+```
+
+## Testing Middleware
+
+```typescript
+// app/middleware.test.ts
+import { describe, it, expect } from 'vitest';
+import { middleware } from './middleware';
+import { createMockRequest, createMockContext } from '@cloudwerk/testing';
+
+describe('Auth Middleware', () => {
+  it('should allow authenticated requests', async () => {
+    const request = createMockRequest('/api/protected', {
+      headers: { Cookie: 'session=valid-session' },
+    });
+    const context = createMockContext({
+      auth: { getUser: async () => ({ id: 'user-123' }) },
+    });
+    const next = vi.fn().mockResolvedValue(new Response('OK'));
+
+    const response = await middleware(request, next, context);
+
+    expect(next).toHaveBeenCalled();
+    expect(response.status).toBe(200);
+  });
+
+  it('should reject unauthenticated requests', async () => {
+    const request = createMockRequest('/api/protected');
+    const context = createMockContext({
+      auth: { getUser: async () => null },
+    });
+    const next = vi.fn();
+
+    const response = await middleware(request, next, context);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
+  });
+});
+```
+
+## Testing Queue Handlers
+
+```typescript
+// workers/email-queue.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import handler from './email-queue';
+import { createMockMessage, createMockEnv } from '@cloudwerk/testing';
+
+describe('Email Queue Handler', () => {
+  it('should process email messages', async () => {
+    const env = createMockEnv();
+    const message = createMockMessage({
+      body: { type: 'welcome', to: 'user@example.com' },
+    });
+
+    await handler.queue([message], env, {});
+
+    expect(message.ack).toHaveBeenCalled();
+    expect(env.EMAIL_API.send).toHaveBeenCalledWith({
+      to: 'user@example.com',
+      template: 'welcome',
+    });
+  });
+
+  it('should retry on failure', async () => {
+    const env = createMockEnv();
+    env.EMAIL_API.send.mockRejectedValue(new Error('API Error'));
+
+    const message = createMockMessage({
+      body: { type: 'welcome', to: 'user@example.com' },
+    });
+
+    await handler.queue([message], env, {});
+
+    expect(message.retry).toHaveBeenCalled();
+    expect(message.ack).not.toHaveBeenCalled();
+  });
+});
+```
+
+## Testing Durable Objects
+
+```typescript
+// workers/counter.test.ts
+import { describe, it, expect } from 'vitest';
+import { Counter } from './counter';
+import { createMockDurableObjectState } from '@cloudwerk/testing';
+
+describe('Counter Durable Object', () => {
+  it('should increment count', async () => {
+    const state = createMockDurableObjectState();
+    const counter = new Counter(state, {});
+
+    const response = await counter.fetch(
+      new Request('http://counter/increment')
+    );
+
+    expect(await response.text()).toBe('1');
+  });
+
+  it('should persist count', async () => {
+    const state = createMockDurableObjectState();
+    const counter = new Counter(state, {});
+
+    await counter.fetch(new Request('http://counter/increment'));
+    await counter.fetch(new Request('http://counter/increment'));
+    await counter.fetch(new Request('http://counter/increment'));
+
+    const response = await counter.fetch(new Request('http://counter/'));
+
+    expect(await response.text()).toBe('3');
+    expect(state.storage.put).toHaveBeenCalledWith('count', 3);
+  });
+});
+```
+
+## Testing Utilities
+
+### `createTestContext()`
+
+Create a full test context:
+
+```typescript
+const ctx = await createTestContext({
+  // Seed database
+  seed: async (db) => {
+    await db.insertInto('users').values([
+      { id: '1', name: 'User 1' },
+      { id: '2', name: 'User 2' },
+    ]).execute();
+  },
+});
+```
+
+### `createMockLoaderArgs()`
+
+Create mock loader arguments:
+
+```typescript
+const args = createMockLoaderArgs({
+  params: { id: '123' },
+  request: new Request('http://localhost/users/123'),
+  context: {
+    env: { API_KEY: 'test-key' },
+  },
+});
+```
+
+### `createMockRequest()`
+
+Create mock requests:
+
+```typescript
+const request = createMockRequest('/api/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Test' }),
+});
+```
+
+### `createMockContext()`
+
+Create mock context:
+
+```typescript
+const context = createMockContext({
+  env: { DB: mockDb, KV: mockKv },
+  auth: { getUser: async () => mockUser },
+});
+```
+
+## Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Watch mode
+pnpm test --watch
+
+# Coverage
+pnpm test --coverage
+
+# Specific file
+pnpm test app/api/users/route.test.ts
+```
+
+## Next Steps
+
+- **[CLI Reference](/api/cli/)** - Test command options
+- **[Configuration](/api/configuration/)** - Test configuration
+- **[Examples](/examples/blog/)** - See tests in action

@@ -1,0 +1,347 @@
+---
+title: CLI Reference
+description: Complete reference for Cloudwerk CLI commands.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The Cloudwerk CLI provides commands for development, building, and deployment.
+
+## Installation
+
+The CLI is included with `@cloudwerk/cli`:
+
+```bash
+pnpm add -D @cloudwerk/cli
+```
+
+## Commands
+
+### `cloudwerk dev`
+
+Start the development server with hot reload.
+
+```bash
+cloudwerk dev [options]
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--port, -p` | Port number | `8787` |
+| `--host` | Host to bind | `localhost` |
+| `--https` | Enable HTTPS | `false` |
+| `--open, -o` | Open browser | `false` |
+
+**Examples:**
+
+```bash
+# Start dev server
+cloudwerk dev
+
+# Custom port
+cloudwerk dev --port 3000
+
+# Open browser
+cloudwerk dev --open
+
+# All interfaces
+cloudwerk dev --host 0.0.0.0
+```
+
+### `cloudwerk build`
+
+Build the application for production.
+
+```bash
+cloudwerk build [options]
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--sourcemap` | Generate sourcemaps | `true` |
+| `--minify` | Minify output | `true` |
+| `--analyze` | Bundle analysis | `false` |
+
+**Examples:**
+
+```bash
+# Production build
+cloudwerk build
+
+# With bundle analysis
+cloudwerk build --analyze
+
+# Development build
+cloudwerk build --no-minify
+```
+
+### `cloudwerk deploy`
+
+Deploy to Cloudflare Workers.
+
+```bash
+cloudwerk deploy [options]
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--env, -e` | Environment | `production` |
+| `--dry-run` | Preview without deploying | `false` |
+
+**Examples:**
+
+```bash
+# Deploy to production
+cloudwerk deploy
+
+# Deploy to staging
+cloudwerk deploy --env staging
+
+# Preview deployment
+cloudwerk deploy --dry-run
+```
+
+### `cloudwerk generate`
+
+Generate boilerplate files.
+
+```bash
+cloudwerk generate <type> <name> [options]
+```
+
+**Types:**
+
+| Type | Description |
+|------|-------------|
+| `page` | Create a new page |
+| `layout` | Create a new layout |
+| `route` | Create an API route |
+| `middleware` | Create middleware |
+| `component` | Create a component |
+
+**Examples:**
+
+```bash
+# Generate a page
+cloudwerk generate page users/profile
+
+# Generate an API route
+cloudwerk generate route api/users
+
+# Generate middleware
+cloudwerk generate middleware auth
+
+# Generate with loader
+cloudwerk generate page products --loader
+```
+
+### `cloudwerk migrate`
+
+Run database migrations.
+
+```bash
+cloudwerk migrate <command> [options]
+```
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `create <name>` | Create new migration |
+| `up` | Run pending migrations |
+| `down` | Rollback last migration |
+| `status` | Show migration status |
+| `reset` | Reset all migrations |
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--local` | Apply to local DB | `true` |
+| `--remote` | Apply to remote DB | `false` |
+
+**Examples:**
+
+```bash
+# Create migration
+cloudwerk migrate create add_users_table
+
+# Run local migrations
+cloudwerk migrate up
+
+# Run remote migrations
+cloudwerk migrate up --remote
+
+# Check status
+cloudwerk migrate status
+
+# Rollback
+cloudwerk migrate down
+```
+
+### `cloudwerk routes`
+
+Display route information.
+
+```bash
+cloudwerk routes [options]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+| `--verbose` | Show detailed info |
+
+**Examples:**
+
+```bash
+# List all routes
+cloudwerk routes
+
+# JSON output
+cloudwerk routes --json
+
+# Detailed info
+cloudwerk routes --verbose
+```
+
+**Output:**
+
+```
+Routes:
+  GET    /                      app/page.tsx
+  GET    /about                 app/about/page.tsx
+  GET    /users                 app/users/page.tsx
+  GET    /users/:id             app/users/[id]/page.tsx
+  GET    /api/health            app/api/health/route.ts
+  POST   /api/users             app/api/users/route.ts
+  GET    /api/users/:id         app/api/users/[id]/route.ts
+  PUT    /api/users/:id         app/api/users/[id]/route.ts
+  DELETE /api/users/:id         app/api/users/[id]/route.ts
+```
+
+### `cloudwerk typecheck`
+
+Run TypeScript type checking.
+
+```bash
+cloudwerk typecheck [options]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--watch` | Watch mode |
+| `--strict` | Strict mode |
+
+**Examples:**
+
+```bash
+# Type check
+cloudwerk typecheck
+
+# Watch mode
+cloudwerk typecheck --watch
+```
+
+### `cloudwerk lint`
+
+Run ESLint on the codebase.
+
+```bash
+cloudwerk lint [options]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--fix` | Auto-fix issues |
+| `--format` | Output format |
+
+**Examples:**
+
+```bash
+# Check for issues
+cloudwerk lint
+
+# Auto-fix
+cloudwerk lint --fix
+```
+
+### `cloudwerk test`
+
+Run tests.
+
+```bash
+cloudwerk test [options] [files]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--watch` | Watch mode |
+| `--coverage` | Coverage report |
+| `--ui` | Open Vitest UI |
+
+**Examples:**
+
+```bash
+# Run all tests
+cloudwerk test
+
+# Watch mode
+cloudwerk test --watch
+
+# Specific file
+cloudwerk test app/users/page.test.ts
+
+# Coverage
+cloudwerk test --coverage
+```
+
+## Global Options
+
+These options work with all commands:
+
+| Option | Description |
+|--------|-------------|
+| `--config, -c` | Config file path |
+| `--help, -h` | Show help |
+| `--version, -v` | Show version |
+| `--verbose` | Verbose output |
+| `--quiet, -q` | Minimal output |
+
+## Configuration
+
+Commands read from `cloudwerk.config.ts` by default. Override with `--config`:
+
+```bash
+cloudwerk dev --config cloudwerk.production.ts
+```
+
+## Exit Codes
+
+| Code | Description |
+|------|-------------|
+| `0` | Success |
+| `1` | General error |
+| `2` | Configuration error |
+| `3` | Build error |
+| `4` | Deployment error |
+
+## Next Steps
+
+- **[Configuration](/api/configuration/)** - Config file options
+- **[Deployment Guide](/guides/deployment/)** - Deploy your app
+- **[Testing](/api/testing/)** - Testing utilities

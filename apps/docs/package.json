@@ -2,5 +2,22 @@
   "name": "@cloudwerk/docs",
   "version": "0.0.1",
   "description": "Cloudwerk documentation site",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.37.4",
+    "astro": "^5.7.0",
+    "sharp": "^0.33.5",
+    "starlight-page-actions": "^0.4.0",
+    "starlight-theme-galaxy": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5"
+  }
 }

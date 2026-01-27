@@ -1,0 +1,335 @@
+---
+title: Triggers API
+description: API reference for scheduled triggers and cron jobs.
+---
+
+Scheduled triggers allow you to run code on a recurring schedule using cron expressions.
+
+## Configuration
+
+### wrangler.toml
+
+Define cron triggers in your `wrangler.toml`:
+
+```toml
+[triggers]
+crons = [
+  "0 * * * *",      # Every hour
+  "0 0 * * *",      # Every day at midnight
+  "*/5 * * * *",    # Every 5 minutes
+  "0 9 * * 1-5",    # Weekdays at 9 AM
+]
+```
+
+### cloudwerk.config.ts
+
+Configure the trigger handler:
+
+```typescript
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  triggers: {
+    handler: './workers/triggers.ts',
+  },
+});
+```
+
+## Handler
+
+### Basic Handler
+
+```typescript
+// workers/triggers.ts
+import type { ScheduledEvent, Env, ExecutionContext } from '@cloudwerk/core';
+
+export default {
+  async scheduled(
+    event: ScheduledEvent,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    console.log(`Cron triggered: ${event.cron}`);
+    // Your logic here
+  },
+};
+```
+
+### Multi-Cron Handler
+
+```typescript
+// workers/triggers.ts
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    switch (event.cron) {
+      case '0 * * * *':
+        await hourlyTasks(env);
+        break;
+      case '0 0 * * *':
+        await dailyTasks(env);
+        break;
+      case '*/5 * * * *':
+        await frequentTasks(env);
+        break;
+      default:
+        console.warn(`Unknown cron: ${event.cron}`);
+    }
+  },
+};
+
+async function hourlyTasks(env: Env) {
+  // Hourly logic
+}
+
+async function dailyTasks(env: Env) {
+  // Daily logic
+}
+
+async function frequentTasks(env: Env) {
+  // Frequent logic
+}
+```
+
+## ScheduledEvent
+
+The event object passed to the handler:
+
+```typescript
+interface ScheduledEvent {
+  /**
+   * The cron pattern that triggered this event
+   */
+  cron: string;
+
+  /**
+   * The scheduled time for this invocation (Unix timestamp in ms)
+   */
+  scheduledTime: number;
+
+  /**
+   * Whether to retry on failure
+   */
+  noRetry(): void;
+}
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `cron` | `string` | The cron pattern that triggered this event |
+| `scheduledTime` | `number` | Unix timestamp (ms) of scheduled time |
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `noRetry()` | Prevent automatic retry on failure |
+
+## ExecutionContext
+
+The execution context for background operations:
+
+```typescript
+interface ExecutionContext {
+  /**
+   * Extend the lifetime of the event handler
+   */
+  waitUntil(promise: Promise<unknown>): void;
+
+  /**
+   * Abort the request (not typically used in scheduled)
+   */
+  passThroughOnException(): void;
+}
+```
+
+### Using waitUntil
+
+```typescript
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    // Main task
+    await processData(env);
+
+    // Background tasks that can run after main task completes
+    ctx.waitUntil(sendMetrics(env));
+    ctx.waitUntil(cleanupTempFiles(env));
+  },
+};
+```
+
+## Cron Syntax
+
+Standard cron syntax with five fields:
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
+│ │ │ │ │
+* * * * *
+```
+
+### Special Characters
+
+| Character | Description | Example |
+|-----------|-------------|---------|
+| `*` | Any value | `* * * * *` (every minute) |
+| `,` | List separator | `0,30 * * * *` (at 0 and 30 minutes) |
+| `-` | Range | `0 9-17 * * *` (9 AM to 5 PM) |
+| `/` | Step | `*/15 * * * *` (every 15 minutes) |
+
+### Common Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| `* * * * *` | Every minute |
+| `*/5 * * * *` | Every 5 minutes |
+| `0 * * * *` | Every hour (at minute 0) |
+| `0 */2 * * *` | Every 2 hours |
+| `0 0 * * *` | Daily at midnight |
+| `0 0 * * 0` | Weekly on Sunday |
+| `0 0 1 * *` | Monthly on the 1st |
+| `0 9 * * 1-5` | Weekdays at 9 AM |
+| `0 0 1 1 *` | Yearly on Jan 1st |
+
+## Error Handling
+
+### Basic Error Handling
+
+```typescript
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    try {
+      await processData(env);
+    } catch (error) {
+      console.error('Scheduled task failed:', error);
+      // The task will be retried automatically
+      throw error;
+    }
+  },
+};
+```
+
+### Prevent Retry
+
+```typescript
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    try {
+      await processData(env);
+    } catch (error) {
+      if (isPermanentError(error)) {
+        // Don't retry for permanent errors
+        event.noRetry();
+        await logPermanentFailure(error, env);
+      }
+      throw error;
+    }
+  },
+};
+```
+
+### Logging
+
+```typescript
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const startTime = Date.now();
+    const taskName = getTaskName(event.cron);
+
+    console.log(`[${taskName}] Starting...`);
+
+    try {
+      await runTask(event.cron, env);
+
+      const duration = Date.now() - startTime;
+      console.log(`[${taskName}] Completed in ${duration}ms`);
+
+      // Log to database
+      ctx.waitUntil(
+        env.DB.prepare(`
+          INSERT INTO cron_logs (task, status, duration, run_at)
+          VALUES (?, 'success', ?, datetime('now'))
+        `).bind(taskName, duration).run()
+      );
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[${taskName}] Failed after ${duration}ms:`, error);
+
+      ctx.waitUntil(
+        env.DB.prepare(`
+          INSERT INTO cron_logs (task, status, error, duration, run_at)
+          VALUES (?, 'error', ?, ?, datetime('now'))
+        `).bind(taskName, error.message, duration).run()
+      );
+
+      throw error;
+    }
+  },
+};
+```
+
+## Testing
+
+### Local Testing
+
+Test scheduled triggers locally:
+
+```bash
+wrangler dev --test-scheduled
+```
+
+Trigger manually:
+```bash
+curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
+```
+
+### Unit Testing
+
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import handler from './triggers';
+
+describe('Scheduled Triggers', () => {
+  it('should run hourly task', async () => {
+    const env = createMockEnv();
+    const ctx = createMockContext();
+
+    await handler.scheduled(
+      { cron: '0 * * * *', scheduledTime: Date.now(), noRetry: vi.fn() },
+      env,
+      ctx
+    );
+
+    // Assert expected behavior
+    expect(env.DB.prepare).toHaveBeenCalled();
+  });
+});
+```
+
+## Best Practices
+
+1. **Keep tasks idempotent** - Safe to run multiple times
+2. **Use appropriate intervals** - Don't over-schedule
+3. **Handle errors gracefully** - Log and alert on failures
+4. **Use waitUntil for non-critical work** - Don't block completion
+5. **Monitor execution time** - Stay within limits
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Maximum cron triggers per Worker | 3 |
+| Minimum interval | 1 minute |
+| Maximum execution time | 30 seconds (free), 15 minutes (paid) |
+
+## Next Steps
+
+- **[Triggers Guide](/guides/triggers/)** - Common patterns
+- **[Queues Guide](/guides/queues/)** - For longer tasks
+- **[Configuration](/api/configuration/)** - Config options

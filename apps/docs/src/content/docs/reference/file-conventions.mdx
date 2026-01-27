@@ -1,0 +1,362 @@
+---
+title: File Conventions
+description: Reference for all file naming conventions in Cloudwerk.
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+Cloudwerk uses a file-based routing system with specific file naming conventions. This reference documents all recognized file patterns.
+
+## Route Files
+
+These files define your application's routes:
+
+| File | Purpose |
+|------|---------|
+| `page.tsx` | UI component for a route |
+| `route.ts` | API endpoint handlers |
+| `layout.tsx` | Shared UI wrapper |
+| `middleware.ts` | Request middleware |
+| `error.tsx` | Error boundary |
+| `not-found.tsx` | 404 handler |
+| `loading.tsx` | Loading state |
+
+## page.tsx
+
+Defines a publicly accessible page at the route path.
+
+```tsx
+// app/about/page.tsx -> /about
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+// Optional: Server-side data loading
+export async function loader({ params, context }: LoaderArgs) {
+  return { data: await fetchData() };
+}
+
+// Required: Page component
+export default function AboutPage({ data }: PageProps & { data: Data }) {
+  return <h1>About Us</h1>;
+}
+```
+
+**Exports:**
+- `default` (required) - React component to render
+- `loader` (optional) - Server-side data fetching function
+
+## route.ts
+
+Defines API endpoints that handle HTTP methods.
+
+```typescript
+// app/api/users/route.ts -> /api/users
+import { json } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+
+export async function GET(request: Request, ctx: CloudwerkHandlerContext) {
+  return json({ users: [] });
+}
+
+export async function POST(request: Request, ctx: CloudwerkHandlerContext) {
+  const body = await request.json();
+  return json({ created: body }, { status: 201 });
+}
+
+export async function PUT(request: Request, ctx: CloudwerkHandlerContext) {
+  return json({ updated: true });
+}
+
+export async function PATCH(request: Request, ctx: CloudwerkHandlerContext) {
+  return json({ patched: true });
+}
+
+export async function DELETE(request: Request, ctx: CloudwerkHandlerContext) {
+  return new Response(null, { status: 204 });
+}
+
+export async function HEAD(request: Request, ctx: CloudwerkHandlerContext) {
+  return new Response(null, { status: 200 });
+}
+
+export async function OPTIONS(request: Request, ctx: CloudwerkHandlerContext) {
+  return new Response(null, {
+    headers: { 'Allow': 'GET, POST, PUT, DELETE, OPTIONS' }
+  });
+}
+```
+
+**Exports:**
+- `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS` - HTTP method handlers
+
+## layout.tsx
+
+Wraps pages and nested layouts with shared UI.
+
+```tsx
+// app/layout.tsx
+import type { LayoutProps, LoaderArgs } from '@cloudwerk/core';
+
+// Optional: Layout-level data loading
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+  return { user };
+}
+
+// Required: Layout component
+export default function RootLayout({ children, user }: LayoutProps & { user: User }) {
+  return (
+    <html>
+      <head><title>My App</title></head>
+      <body>
+        <Header user={user} />
+        <main>{children}</main>
+        <Footer />
+      </body>
+    </html>
+  );
+}
+```
+
+**Exports:**
+- `default` (required) - React component with `children` prop
+- `loader` (optional) - Server-side data fetching function
+
+## middleware.ts
+
+Runs before route handlers to modify requests/responses.
+
+```typescript
+// app/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next, context) => {
+  // Before handling
+  console.log(`${request.method} ${request.url}`);
+
+  // Continue to route handler
+  const response = await next(request);
+
+  // After handling
+  response.headers.set('X-Custom', 'value');
+
+  return response;
+};
+```
+
+**Exports:**
+- `middleware` (required) - Middleware function
+
+## error.tsx
+
+Handles errors that occur in the route segment.
+
+```tsx
+// app/error.tsx
+'use client';
+
+interface ErrorProps {
+  error: Error;
+  reset: () => void;
+}
+
+export default function ErrorPage({ error, reset }: ErrorProps) {
+  return (
+    <div>
+      <h1>Something went wrong</h1>
+      <p>{error.message}</p>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+**Exports:**
+- `default` (required) - React component with `error` and `reset` props
+
+## not-found.tsx
+
+Handles 404 errors for the route segment.
+
+```tsx
+// app/not-found.tsx
+export default function NotFoundPage() {
+  return (
+    <div>
+      <h1>404 - Page Not Found</h1>
+      <a href="/">Go home</a>
+    </div>
+  );
+}
+```
+
+**Exports:**
+- `default` (required) - React component
+
+## loading.tsx
+
+Displays while the page is loading (with streaming SSR).
+
+```tsx
+// app/loading.tsx
+export default function Loading() {
+  return <div className="spinner">Loading...</div>;
+}
+```
+
+**Exports:**
+- `default` (required) - React component
+
+## Dynamic Segments
+
+### `[param]` - Single Dynamic Segment
+
+```
+app/users/[id]/page.tsx -> /users/:id
+```
+
+Access via `params.id` in loader:
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  const user = await getUser(params.id);
+  return { user };
+}
+```
+
+### `[...slug]` - Catch-All Segment
+
+```
+app/docs/[...slug]/page.tsx -> /docs/*
+```
+
+Access via `params.slug` as an array:
+
+```tsx
+export async function loader({ params }: LoaderArgs) {
+  // /docs/guides/routing -> params.slug = ['guides', 'routing']
+  const path = params.slug.join('/');
+  return { doc: await getDoc(path) };
+}
+```
+
+### `[[...slug]]` - Optional Catch-All
+
+```
+app/shop/[[...categories]]/page.tsx
+```
+
+Matches:
+- `/shop` -> `params.categories = undefined`
+- `/shop/electronics` -> `params.categories = ['electronics']`
+- `/shop/electronics/phones` -> `params.categories = ['electronics', 'phones']`
+
+## Route Groups
+
+### `(groupName)` - Logical Grouping
+
+Group routes without affecting the URL:
+
+<FileTree>
+- app/
+  - (marketing)/
+    - page.tsx          # /
+    - about/
+      - page.tsx        # /about
+  - (dashboard)/
+    - layout.tsx        # Dashboard layout
+    - dashboard/
+      - page.tsx        # /dashboard
+</FileTree>
+
+## Parallel Routes
+
+### `@slot` - Parallel Segments
+
+Render multiple pages simultaneously:
+
+<FileTree>
+- app/
+  - layout.tsx
+  - @sidebar/
+    - page.tsx
+  - @main/
+    - page.tsx
+</FileTree>
+
+Access in layout:
+
+```tsx
+export default function Layout({ sidebar, main }: LayoutProps) {
+  return (
+    <div className="flex">
+      <aside>{sidebar}</aside>
+      <main>{main}</main>
+    </div>
+  );
+}
+```
+
+## Intercepting Routes
+
+### `(.)`, `(..)`, `(...)` - Route Interception
+
+Intercept routes from parent segments:
+
+| Convention | Behavior |
+|------------|----------|
+| `(.)` | Same level |
+| `(..)` | One level up |
+| `(...)` | Root level |
+
+<FileTree>
+- app/
+  - feed/
+    - page.tsx
+    - (.)photo/
+      - [id]/
+        - page.tsx      # Intercepts /feed/photo/:id
+  - photo/
+    - [id]/
+      - page.tsx        # Direct access /photo/:id
+</FileTree>
+
+## File Extensions
+
+Supported file extensions:
+
+| Extension | Description |
+|-----------|-------------|
+| `.tsx` | TypeScript with JSX |
+| `.ts` | TypeScript |
+| `.jsx` | JavaScript with JSX |
+| `.js` | JavaScript |
+
+## Ignored Files
+
+These patterns are ignored by the router:
+
+- Files starting with `_` (e.g., `_components.tsx`)
+- Files starting with `.` (e.g., `.gitkeep`)
+- Test files (`*.test.ts`, `*.spec.ts`)
+- Type declaration files (`*.d.ts`)
+- Non-route files (any file not matching route conventions)
+
+## Colocation
+
+You can colocate non-route files alongside routes:
+
+<FileTree>
+- app/
+  - users/
+    - page.tsx            # Route
+    - UserCard.tsx        # Component (not a route)
+    - user.utils.ts       # Utility (not a route)
+    - page.test.ts        # Test (not a route)
+    - _helpers.ts         # Private (not a route)
+</FileTree>
+
+## Next Steps
+
+- **[Routing Guide](/guides/routing/)** - Routing patterns in depth
+- **[Configuration](/reference/cloudwerk-config/)** - Config file reference
+- **[Cloudflare Limits](/reference/cloudflare-limits/)** - Platform limits
