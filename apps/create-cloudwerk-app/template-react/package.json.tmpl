@@ -1,0 +1,27 @@
+{
+  "name": "{{name}}",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cloudwerk dev",
+    "build": "cloudwerk build",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudwerk/core": "^{{coreVersion}}",
+    "@cloudwerk/cli": "^{{cliVersion}}",
+    "hono": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.0.0",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

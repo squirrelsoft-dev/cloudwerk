@@ -61,7 +61,8 @@ describe('End-to-End Spike Validation', () => {
     const { scaffold } = await import(scaffoldPath)
 
     console.log('[E2E] Scaffolding project...')
-    await scaffold('test-app', { targetDir: projectDir })
+    // Use 'none' renderer for API-only template to test JSON endpoints
+    await scaffold('test-app', { targetDir: projectDir, renderer: 'none' })
 
     // 4. Patch package.json to use tarball references
     console.log('[E2E] Patching package.json for local packages...')

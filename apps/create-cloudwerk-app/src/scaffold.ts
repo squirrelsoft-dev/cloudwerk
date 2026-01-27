@@ -10,14 +10,19 @@ import fs from 'fs-extra'
 import { validateProject } from './validate.js'
 import { logger, detectPackageManager, printSuccessBanner } from './utils.js'
 import { CORE_VERSION, CLI_VERSION } from './versions.js'
+import type { RendererChoice } from './prompts.js'
 
 /**
- * Get the template directory path.
+ * Get the template directory path for the specified renderer.
+ *
+ * @param renderer - The UI renderer choice
+ * @returns Path to the template directory
  */
-function getTemplateDir(): string {
+function getTemplateDir(renderer: RendererChoice): string {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
-  // In dist, go up one level then to template
-  return path.resolve(__dirname, '..', 'template')
+  const templateName = renderer === 'none' ? 'template-api' : `template-${renderer}`
+  // In dist, go up one level then to template directory
+  return path.resolve(__dirname, '..', templateName)
 }
 
 // ============================================================================
@@ -87,6 +92,8 @@ function getOutputFileName(fileName: string): string {
 export interface ScaffoldOptions {
   /** Target directory for the project (defaults to cwd + projectName) */
   targetDir?: string
+  /** UI renderer to use (defaults to 'hono-jsx') */
+  renderer?: RendererChoice
 }
 
 /**
@@ -102,6 +109,7 @@ export async function scaffold(
 ): Promise<void> {
   // Determine target directory
   const targetDir = options.targetDir || path.resolve(process.cwd(), projectName)
+  const renderer = options.renderer || 'hono-jsx'
 
   // Validate project
   const validation = validateProject(projectName, targetDir)
@@ -109,7 +117,7 @@ export async function scaffold(
     throw new Error(validation.error!)
   }
 
-  const templateDir = getTemplateDir()
+  const templateDir = getTemplateDir(renderer)
 
   // Check template directory exists
   if (!fs.existsSync(templateDir)) {
