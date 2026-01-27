@@ -14,6 +14,7 @@ import {
   validateProject,
 } from '../validate.js'
 import { detectPackageManager, getInstallCommand, getDevCommand } from '../utils.js'
+import { isInteractiveMode, type RendererChoice } from '../prompts.js'
 
 // ============================================================================
 // validateProjectName Tests
@@ -428,5 +429,227 @@ describe('scaffold integration', () => {
     await fs.writeFile(path.join(targetDir, 'file.txt'), 'content')
 
     await expect(scaffold(projectName, { targetDir })).rejects.toThrow('already exists')
+  })
+})
+
+// ============================================================================
+// Renderer Selection Tests
+// ============================================================================
+
+describe('scaffold with renderer selection', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloudwerk-renderer-test-'))
+  })
+
+  afterEach(async () => {
+    await fs.remove(tempDir)
+  })
+
+  const importScaffold = async () => {
+    const module = await import('../scaffold.js')
+    return module.scaffold
+  }
+
+  it('should use hono-jsx renderer by default', async () => {
+    const mockLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const scaffold = await importScaffold()
+    const projectName = 'hono-default-test'
+    const targetDir = path.join(tempDir, projectName)
+
+    await scaffold(projectName, { targetDir })
+
+    // Verify cloudwerk.config.ts has hono-jsx renderer
+    const config = await fs.readFile(
+      path.join(targetDir, 'cloudwerk.config.ts'),
+      'utf-8'
+    )
+    expect(config).toContain("renderer: 'hono-jsx'")
+
+    // Verify tsconfig.json has JSX configuration for Hono
+    const tsconfig = await fs.readJson(path.join(targetDir, 'tsconfig.json'))
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx')
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('hono/jsx')
+
+    // Verify page.tsx exists
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+
+    // Verify counter component exists with hono/jsx import
+    const counter = await fs.readFile(
+      path.join(targetDir, 'app', 'components', 'counter.tsx'),
+      'utf-8'
+    )
+    expect(counter).toContain("from 'hono/jsx'")
+
+    mockLog.mockRestore()
+  })
+
+  it('should scaffold with hono-jsx renderer', async () => {
+    const mockLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const scaffold = await importScaffold()
+    const projectName = 'hono-jsx-test'
+    const targetDir = path.join(tempDir, projectName)
+
+    await scaffold(projectName, { targetDir, renderer: 'hono-jsx' })
+
+    // Verify cloudwerk.config.ts has hono-jsx renderer
+    const config = await fs.readFile(
+      path.join(targetDir, 'cloudwerk.config.ts'),
+      'utf-8'
+    )
+    expect(config).toContain("renderer: 'hono-jsx'")
+
+    // Verify tsconfig.json has JSX configuration for Hono
+    const tsconfig = await fs.readJson(path.join(targetDir, 'tsconfig.json'))
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx')
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('hono/jsx')
+
+    // Verify page.tsx exists
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+
+    // Verify counter component exists with hono/jsx import
+    const counter = await fs.readFile(
+      path.join(targetDir, 'app', 'components', 'counter.tsx'),
+      'utf-8'
+    )
+    expect(counter).toContain("from 'hono/jsx'")
+
+    mockLog.mockRestore()
+  })
+
+  it('should scaffold with react renderer', async () => {
+    const mockLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const scaffold = await importScaffold()
+    const projectName = 'react-test'
+    const targetDir = path.join(tempDir, projectName)
+
+    await scaffold(projectName, { targetDir, renderer: 'react' })
+
+    // Verify cloudwerk.config.ts has react renderer
+    const config = await fs.readFile(
+      path.join(targetDir, 'cloudwerk.config.ts'),
+      'utf-8'
+    )
+    expect(config).toContain("renderer: 'react'")
+
+    // Verify tsconfig.json has JSX configuration for React
+    const tsconfig = await fs.readJson(path.join(targetDir, 'tsconfig.json'))
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx')
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('react')
+
+    // Verify package.json has React dependencies
+    const pkgJson = await fs.readJson(path.join(targetDir, 'package.json'))
+    expect(pkgJson.dependencies.react).toBeDefined()
+    expect(pkgJson.dependencies['react-dom']).toBeDefined()
+    expect(pkgJson.devDependencies['@types/react']).toBeDefined()
+    expect(pkgJson.devDependencies['@types/react-dom']).toBeDefined()
+
+    // Verify page.tsx exists
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+
+    // Verify counter component exists with react import
+    const counter = await fs.readFile(
+      path.join(targetDir, 'app', 'components', 'counter.tsx'),
+      'utf-8'
+    )
+    expect(counter).toContain("from 'react'")
+
+    mockLog.mockRestore()
+  })
+
+  it('should scaffold with none renderer (API only)', async () => {
+    const mockLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const scaffold = await importScaffold()
+    const projectName = 'api-only-test'
+    const targetDir = path.join(tempDir, projectName)
+
+    await scaffold(projectName, { targetDir, renderer: 'none' })
+
+    // Verify cloudwerk.config.ts does NOT have ui config
+    const config = await fs.readFile(
+      path.join(targetDir, 'cloudwerk.config.ts'),
+      'utf-8'
+    )
+    expect(config).not.toContain('renderer')
+    expect(config).not.toContain('ui:')
+
+    // Verify tsconfig.json does NOT have JSX configuration
+    const tsconfig = await fs.readJson(path.join(targetDir, 'tsconfig.json'))
+    expect(tsconfig.compilerOptions.jsx).toBeUndefined()
+    expect(tsconfig.compilerOptions.jsxImportSource).toBeUndefined()
+
+    // Verify route.ts exists (API route)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'route.ts'))).toBe(true)
+
+    // Verify page.tsx does NOT exist
+    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(false)
+
+    // Verify components directory does NOT exist
+    expect(fs.existsSync(path.join(targetDir, 'app', 'components'))).toBe(false)
+
+    mockLog.mockRestore()
+  })
+})
+
+// ============================================================================
+// isInteractiveMode Tests
+// ============================================================================
+
+describe('isInteractiveMode', () => {
+  const originalEnv = process.env
+  const originalStdin = process.stdin.isTTY
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    Object.defineProperty(process.stdin, 'isTTY', {
+      value: originalStdin,
+      writable: true,
+    })
+  })
+
+  it('should return false when CI=true', () => {
+    process.env.CI = 'true'
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true })
+    expect(isInteractiveMode([])).toBe(false)
+  })
+
+  it('should return false when CI=1', () => {
+    process.env.CI = '1'
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true })
+    expect(isInteractiveMode([])).toBe(false)
+  })
+
+  it('should return false when --renderer flag is present', () => {
+    delete process.env.CI
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true })
+    expect(isInteractiveMode(['node', 'create-cloudwerk-app', 'my-app', '--renderer', 'react'])).toBe(false)
+  })
+
+  it('should return false when -r flag is present', () => {
+    delete process.env.CI
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true })
+    expect(isInteractiveMode(['node', 'create-cloudwerk-app', 'my-app', '-r', 'react'])).toBe(false)
+  })
+
+  it('should return false when not in TTY', () => {
+    delete process.env.CI
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, writable: true })
+    expect(isInteractiveMode([])).toBe(false)
+  })
+
+  it('should return true when in TTY with no CI and no renderer flag', () => {
+    delete process.env.CI
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, writable: true })
+    expect(isInteractiveMode(['node', 'create-cloudwerk-app', 'my-app'])).toBe(true)
   })
 })

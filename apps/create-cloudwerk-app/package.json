@@ -19,7 +19,9 @@
   },
   "files": [
     "dist",
-    "template"
+    "template-hono-jsx",
+    "template-react",
+    "template-api"
   ],
   "scripts": {
     "prebuild": "node scripts/generate-versions.js",
@@ -31,6 +33,7 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
+    "@clack/prompts": "^0.8.2",
     "commander": "^12.1.0",
     "fs-extra": "^11.0.0",
     "picocolors": "^1.1.0"
