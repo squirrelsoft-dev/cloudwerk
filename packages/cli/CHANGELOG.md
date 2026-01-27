@@ -1,5 +1,22 @@
 # @cloudwerk/cli
 
+## 0.3.0
+
+### Minor Changes
+
+- [#118](https://github.com/squirrelsoft-dev/cloudwerk/pull/118) [`f0b1b5a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f0b1b5a492f1c997540fee69303365d5bc2f649a) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add loading.tsx for streaming and suspense boundaries
+  - `loading.tsx` components display immediately during navigation while loaders fetch data
+  - Uses streaming HTML responses for instant visual feedback
+  - Loading boundaries render within parent layouts
+  - Streaming can be disabled per-route via `config.streaming = false`
+  - Closest loading boundary wins (nested takes precedence)
+
+### Patch Changes
+
+- Updated dependencies [[`f0b1b5a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f0b1b5a492f1c997540fee69303365d5bc2f649a)]:
+  - @cloudwerk/core@0.3.0
+  - @cloudwerk/ui@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes
