@@ -8,6 +8,7 @@
 import { program } from 'commander'
 import { dev } from './commands/dev.js'
 import { build } from './commands/build.js'
+import { configGet, configSet } from './commands/config.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -45,6 +46,24 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .option('--verbose', 'Enable verbose logging')
   .action(build)
+
+// ============================================================================
+// Config Command
+// ============================================================================
+
+const configCmd = program
+  .command('config')
+  .description('Manage Cloudwerk configuration')
+
+configCmd
+  .command('get <key>')
+  .description('Get a configuration value')
+  .action(configGet)
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a configuration value')
+  .action(configSet)
 
 // ============================================================================
 // Parse Arguments

@@ -242,19 +242,26 @@ describe('reactRenderer', () => {
   })
 
   describe('hydrate()', () => {
-    it('throws error until #39 is implemented', () => {
+    it('throws error when called in non-browser environment', () => {
       const element = React.createElement('div', null, 'Test')
       const mockRoot = {} as Element
 
-      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow('Client hydration requires react-dom/client')
-      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow('issue #39')
+      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow('hydrate() can only be called in a browser environment')
     })
 
-    it('error message mentions react-dom/client requirement', () => {
+    it('error message mentions using render() for server-side', () => {
       const element = React.createElement('div', null, 'Test')
       const mockRoot = {} as Element
 
-      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow(/react-dom\/client/)
+      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow(/For server-side rendering, use render\(\) instead/)
+    })
+
+    it('checks for browser environment before hydrating', () => {
+      const element = React.createElement('div', null, 'Test')
+      const mockRoot = {} as Element
+
+      // In Node.js, window and document are undefined
+      expect(() => reactRenderer.hydrate(element, mockRoot)).toThrow(/browser environment/)
     })
   })
 })

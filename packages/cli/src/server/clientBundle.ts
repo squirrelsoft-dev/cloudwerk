@@ -28,7 +28,7 @@ function findNodeModulesDir(filePath: string): string {
 const nodeModulesPath = findNodeModulesDir(honoMainPath)
 import type { ClientComponentInfo, HydrationManifest } from '@cloudwerk/core'
 import { generateComponentId, createHydrationManifest, addToHydrationManifest } from '@cloudwerk/core'
-import { generateHydrationRuntime } from '@cloudwerk/ui'
+import { generateHydrationRuntime, generateReactHydrationRuntime } from '@cloudwerk/ui'
 
 // ============================================================================
 // Types
@@ -50,6 +50,8 @@ export interface ClientBundleOptions {
   sourcemap?: boolean
   /** Enable verbose logging */
   verbose?: boolean
+  /** Renderer to use for client-side hydration ('hono-jsx' or 'react') */
+  renderer?: 'hono-jsx' | 'react'
 }
 
 /**
@@ -109,6 +111,7 @@ export async function generateClientBundles(
     minify = process.env.NODE_ENV === 'production',
     sourcemap = process.env.NODE_ENV !== 'production',
     verbose = false,
+    renderer = 'hono-jsx',
   } = options
 
   // Ensure output directory exists
@@ -121,14 +124,27 @@ export async function generateClientBundles(
   const bundles = new Map<string, string>()
   let totalSize = 0
 
-  // Generate the hydration runtime
-  const runtimePath = path.join(outputDir, 'runtime.js')
-  const runtimeContent = generateHydrationRuntime()
-  fs.writeFileSync(runtimePath, runtimeContent)
-  totalSize += runtimeContent.length
+  // Generate the appropriate hydration runtime based on renderer
+  if (renderer === 'react') {
+    // Generate React hydration runtime
+    const runtimePath = path.join(outputDir, 'react-runtime.js')
+    const runtimeContent = generateReactHydrationRuntime()
+    fs.writeFileSync(runtimePath, runtimeContent)
+    totalSize += runtimeContent.length
 
-  if (verbose) {
-    console.log(`[Cloudwerk] Generated hydration runtime: ${runtimePath}`)
+    if (verbose) {
+      console.log(`[Cloudwerk] Generated React hydration runtime: ${runtimePath}`)
+    }
+  } else {
+    // Generate Hono JSX hydration runtime (default)
+    const runtimePath = path.join(outputDir, 'runtime.js')
+    const runtimeContent = generateHydrationRuntime()
+    fs.writeFileSync(runtimePath, runtimeContent)
+    totalSize += runtimeContent.length
+
+    if (verbose) {
+      console.log(`[Cloudwerk] Generated hydration runtime: ${runtimePath}`)
+    }
   }
 
   // Generate bundle for each client component
@@ -141,6 +157,7 @@ export async function generateClientBundles(
         minify,
         sourcemap,
         verbose,
+        renderer,
       })
 
       // Add to manifest
@@ -186,14 +203,15 @@ async function generateSingleBundle(
   componentPath: string,
   options: ClientBundleOptions
 ): Promise<SingleBundleResult> {
-  const { outputDir, appDir, basePath = '/__cloudwerk', minify, sourcemap } = options
+  const { outputDir, appDir, basePath = '/__cloudwerk', minify, sourcemap, renderer = 'hono-jsx' } = options
 
   // Generate component ID
   const componentId = generateComponentId(componentPath, appDir)
 
-  // Check cache
+  // Check cache - include renderer in cache key to handle switching renderers
+  const cacheKey = `${componentPath}:${renderer}`
   const stat = fs.statSync(componentPath)
-  const cached = bundleCache.get(componentPath)
+  const cached = bundleCache.get(cacheKey)
   if (cached && cached.mtime === stat.mtimeMs) {
     // Return cached result
     return {
@@ -204,6 +222,9 @@ async function generateSingleBundle(
     }
   }
 
+  // Determine JSX import source based on renderer
+  const jsxImportSource = renderer === 'react' ? 'react' : 'hono/jsx/dom'
+
   // Build the component for browser
   const result = await build({
     entryPoints: [componentPath],
@@ -213,7 +234,7 @@ async function generateSingleBundle(
     platform: 'browser',
     target: ['es2020', 'chrome80', 'firefox80', 'safari14'],
     jsx: 'automatic',
-    jsxImportSource: 'hono/jsx/dom',
+    jsxImportSource,
     minify,
     sourcemap: sourcemap ? 'inline' : false,
     external: [], // Bundle everything for client
@@ -221,7 +242,7 @@ async function generateSingleBundle(
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
     },
     logLevel: 'silent',
-    // Resolve hono from the package's node_modules
+    // Resolve hono/react from the package's node_modules
     nodePaths: [nodeModulesPath],
   })
 
@@ -235,8 +256,8 @@ async function generateSingleBundle(
   // Write bundle to disk
   fs.writeFileSync(outputPath, content)
 
-  // Update cache
-  bundleCache.set(componentPath, {
+  // Update cache with renderer-specific key
+  bundleCache.set(cacheKey, {
     content,
     mtime: stat.mtimeMs,
     bundlePath: `${basePath}/${componentId}.js`,
@@ -255,6 +276,14 @@ async function generateSingleBundle(
 // ============================================================================
 
 /**
+ * Options for on-demand bundle generation.
+ */
+export interface OnDemandBundleOptions {
+  /** Renderer to use for client-side hydration ('hono-jsx' or 'react') */
+  renderer?: 'hono-jsx' | 'react'
+}
+
+/**
  * Generate a client bundle on-demand (for development).
  *
  * This is used during development to generate bundles only when needed,
@@ -262,21 +291,29 @@ async function generateSingleBundle(
  *
  * @param componentPath - Absolute path to the component file
  * @param appDir - App directory for component ID generation
+ * @param options - On-demand bundle options
  * @returns Bundle content as string
  */
 export async function generateBundleOnDemand(
   componentPath: string,
-  appDir: string
+  appDir: string,
+  options: OnDemandBundleOptions = {}
 ): Promise<{ content: string; componentId: string }> {
-  // Check cache
+  const { renderer = 'hono-jsx' } = options
+
+  // Check cache with renderer-specific key
+  const cacheKey = `${componentPath}:${renderer}`
   const stat = fs.statSync(componentPath)
-  const cached = bundleCache.get(componentPath)
+  const cached = bundleCache.get(cacheKey)
   if (cached && cached.mtime === stat.mtimeMs) {
     return {
       content: cached.content,
       componentId: generateComponentId(componentPath, appDir),
     }
   }
+
+  // Determine JSX import source based on renderer
+  const jsxImportSource = renderer === 'react' ? 'react' : 'hono/jsx/dom'
 
   // Build the component
   const result = await build({
@@ -287,14 +324,14 @@ export async function generateBundleOnDemand(
     platform: 'browser',
     target: ['es2020', 'chrome80', 'firefox80', 'safari14'],
     jsx: 'automatic',
-    jsxImportSource: 'hono/jsx/dom',
+    jsxImportSource,
     minify: false,
     sourcemap: 'inline',
     define: {
       'process.env.NODE_ENV': JSON.stringify('development'),
     },
     logLevel: 'silent',
-    // Resolve hono from the package's node_modules
+    // Resolve hono/react from the package's node_modules
     nodePaths: [nodeModulesPath],
   })
 
@@ -305,8 +342,8 @@ export async function generateBundleOnDemand(
   const content = result.outputFiles[0].text
   const componentId = generateComponentId(componentPath, appDir)
 
-  // Update cache
-  bundleCache.set(componentPath, {
+  // Update cache with renderer-specific key
+  bundleCache.set(cacheKey, {
     content,
     mtime: stat.mtimeMs,
     bundlePath: `/__cloudwerk/${componentId}.js`,
@@ -335,7 +372,10 @@ export function getBundleCacheSize(): number {
 
 /**
  * Check if a component is cached.
+ * @param componentPath - Absolute path to the component file
+ * @param renderer - Renderer to check cache for (defaults to 'hono-jsx')
  */
-export function isBundleCached(componentPath: string): boolean {
-  return bundleCache.has(componentPath)
+export function isBundleCached(componentPath: string, renderer: 'hono-jsx' | 'react' = 'hono-jsx'): boolean {
+  const cacheKey = `${componentPath}:${renderer}`
+  return bundleCache.has(cacheKey)
 }
