@@ -320,7 +320,9 @@ export function addDependencies(cwd: string, packages: string[], isDev: boolean 
       stdio: 'pipe',
     })
     return true
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Failed to run ${pm} ${args.join(' ')}: ${message}`)
     return false
   }
 }
@@ -346,7 +348,9 @@ export function removeDependencies(cwd: string, packages: string[]): boolean {
       stdio: 'pipe',
     })
     return true
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Failed to run ${pm} ${args.join(' ')}: ${message}`)
     return false
   }
 }

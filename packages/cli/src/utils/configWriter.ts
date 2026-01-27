@@ -6,6 +6,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { loadConfig } from '@cloudwerk/core'
 
 // ============================================================================
 // Types
@@ -64,6 +65,8 @@ export function findConfigFile(cwd: string): string | null {
 /**
  * Read the current renderer from cloudwerk config.
  *
+ * Uses the core loadConfig function for robust TypeScript/JavaScript parsing.
+ *
  * @param cwd - Directory containing config file
  * @returns Parsed config values
  */
@@ -74,12 +77,48 @@ export function readCloudwerkConfig(cwd: string): ParsedConfig {
     return {}
   }
 
+  // For synchronous reading, parse the file content directly
+  // This is a simplified parser that handles common config patterns
   const content = fs.readFileSync(configPath, 'utf-8')
+  return parseConfigContent(content)
+}
+
+/**
+ * Read the current renderer from cloudwerk config asynchronously.
+ *
+ * Uses the core loadConfig function for robust TypeScript/JavaScript parsing.
+ *
+ * @param cwd - Directory containing config file
+ * @returns Parsed config values
+ */
+export async function readCloudwerkConfigAsync(cwd: string): Promise<ParsedConfig> {
+  try {
+    const config = await loadConfig(cwd)
+    return {
+      renderer: config.ui?.renderer as RendererType | undefined,
+      routesDir: config.routesDir,
+    }
+  } catch {
+    // Fall back to synchronous parsing if loadConfig fails
+    return readCloudwerkConfig(cwd)
+  }
+}
+
+/**
+ * Parse config content to extract values.
+ *
+ * Handles common patterns in cloudwerk.config.ts files.
+ *
+ * @param content - File content
+ * @returns Parsed config values
+ */
+function parseConfigContent(content: string): ParsedConfig {
   const result: ParsedConfig = {}
 
   // Extract renderer value using regex
-  // Match patterns like: renderer: 'react' or renderer: "hono-jsx"
-  const rendererMatch = content.match(/renderer\s*:\s*['"]([^'"]+)['"]/i)
+  // Handles: renderer: 'react', renderer: "hono-jsx", renderer:'preact'
+  // Also handles comments and whitespace variations
+  const rendererMatch = content.match(/renderer\s*:\s*['"`]([^'"`]+)['"`]/i)
   if (rendererMatch) {
     const value = rendererMatch[1]
     if (value === 'hono-jsx' || value === 'react' || value === 'preact') {
@@ -88,7 +127,7 @@ export function readCloudwerkConfig(cwd: string): ParsedConfig {
   }
 
   // Extract routesDir value
-  const routesDirMatch = content.match(/routesDir\s*:\s*['"]([^'"]+)['"]/i)
+  const routesDirMatch = content.match(/routesDir\s*:\s*['"`]([^'"`]+)['"`]/i)
   if (routesDirMatch) {
     result.routesDir = routesDirMatch[1]
   }
@@ -131,83 +170,113 @@ export function writeCloudwerkConfig(cwd: string, updates: ConfigUpdate): boolea
 /**
  * Update the renderer value in config content.
  *
+ * Strategy:
+ * 1. If renderer exists, replace its value
+ * 2. If ui section exists without renderer, add renderer to it
+ * 3. If no ui section, add it before the closing of defineConfig
+ *
  * @param content - Current file content
  * @param renderer - New renderer value
  * @returns Updated content
  */
 function updateRenderer(content: string, renderer: RendererType): string {
-  // Check if ui section exists
-  const hasUiSection = /ui\s*:\s*\{/.test(content)
+  // Pattern to match existing renderer value (handles single, double, and backtick quotes)
+  const rendererPattern = /(renderer\s*:\s*)['"`][^'"`]*['"`]/
 
-  if (hasUiSection) {
-    // Check if renderer exists within ui section
-    const hasRenderer = /ui\s*:\s*\{[^}]*renderer\s*:/s.test(content)
+  if (rendererPattern.test(content)) {
+    // Case 1: renderer exists - replace its value
+    return content.replace(rendererPattern, `$1'${renderer}'`)
+  }
 
-    if (hasRenderer) {
-      // Replace existing renderer value
-      return content.replace(
-        /(ui\s*:\s*\{[^}]*renderer\s*:\s*)['"][^'"]+['"]/s,
-        `$1'${renderer}'`
-      )
+  // Pattern to match ui section opening
+  const uiSectionPattern = /(ui\s*:\s*\{)/
+
+  if (uiSectionPattern.test(content)) {
+    // Case 2: ui section exists but no renderer - add renderer as first property
+    return content.replace(uiSectionPattern, `$1\n    renderer: '${renderer}',`)
+  }
+
+  // Case 3: no ui section - need to add it
+  return addUiSection(content, renderer)
+}
+
+/**
+ * Add a ui section to the config content.
+ *
+ * Uses a simple approach: find the closing }) of defineConfig and insert before it.
+ *
+ * @param content - Current file content
+ * @param renderer - Renderer value
+ * @returns Updated content
+ */
+function addUiSection(content: string, renderer: RendererType): string {
+  // Check if this is a defineConfig-style file
+  if (!content.includes('defineConfig')) {
+    // Not a standard config file - generate a new one
+    return generateMinimalConfig({ renderer })
+  }
+
+  // Strategy: Find the closing `})` of defineConfig and insert ui section before it
+  // We look for `})` that's likely the end of defineConfig (at start of line or after whitespace)
+
+  // First, try to find a clean insertion point by looking for the last property
+  // A property line typically ends with a comma or has content before `}`
+
+  const lines = content.split('\n')
+  const result: string[] = []
+  let inserted = false
+
+  // Find the defineConfig closing - look for `})` pattern
+  // We scan backwards to find the right place
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // Found the closing `})` of defineConfig
+    if (!inserted && (trimmed === '})' || trimmed.startsWith('})'))) {
+      // Insert ui section before this line
+      // Detect indentation from surrounding lines
+      const indent = detectIndentation(lines, i)
+
+      // When using unshift (prepending), add in reverse order
+      // so the final order is: ui: { → renderer → }, → })
+      result.unshift(line) // Add the closing line first (we're going backwards)
+      result.unshift(`${indent}},`)
+      result.unshift(`${indent}  renderer: '${renderer}',`)
+      result.unshift(`${indent}ui: {`)
+      inserted = true
     } else {
-      // Add renderer to existing ui section
-      return content.replace(
-        /(ui\s*:\s*\{)/,
-        `$1\n    renderer: '${renderer}',`
-      )
-    }
-  } else {
-    // Check if defineConfig call exists
-    const hasDefineConfig = /defineConfig\s*\(\s*\{/.test(content)
-
-    if (hasDefineConfig) {
-      // Find the closing of the defineConfig object
-      // Look for the pattern where we can insert the ui config
-      // We need to add ui: { renderer: '...' } before the closing }
-
-      // Try to find a good insertion point - before the closing }
-      // Match the defineConfig({ ... }) pattern and find the last property
-      const lines = content.split('\n')
-      const result: string[] = []
-      let insertedUi = false
-      let depth = 0
-      let inDefineConfig = false
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-
-        // Track when we enter defineConfig
-        if (line.includes('defineConfig(')) {
-          inDefineConfig = true
-        }
-
-        if (inDefineConfig) {
-          // Count braces to track depth
-          for (const char of line) {
-            if (char === '{') depth++
-            if (char === '}') depth--
-          }
-
-          // If we're about to close the defineConfig object (depth goes to 0)
-          // and we haven't inserted yet, insert before this line
-          if (depth === 0 && !insertedUi && line.includes('}')) {
-            // Insert ui config before the closing brace
-            result.push('  ui: {')
-            result.push(`    renderer: '${renderer}',`)
-            result.push('  },')
-            insertedUi = true
-          }
-        }
-
-        result.push(line)
-      }
-
-      return result.join('\n')
-    } else {
-      // No defineConfig - wrap with minimal structure
-      return generateMinimalConfig({ renderer })
+      result.unshift(line)
     }
   }
+
+  if (!inserted) {
+    // Fallback: couldn't find insertion point, generate new config
+    return generateMinimalConfig({ renderer })
+  }
+
+  return result.join('\n')
+}
+
+/**
+ * Detect the indentation level used in the config file.
+ *
+ * @param lines - File lines
+ * @param closingLineIndex - Index of the closing line
+ * @returns Indentation string (spaces or tabs)
+ */
+function detectIndentation(lines: string[], closingLineIndex: number): string {
+  // Look at preceding lines to detect indentation
+  for (let i = closingLineIndex - 1; i >= 0; i--) {
+    const line = lines[i]
+    // Find a line with content that has indentation
+    const match = line.match(/^(\s+)\S/)
+    if (match) {
+      return match[1]
+    }
+  }
+  // Default to 2 spaces
+  return '  '
 }
 
 /**
