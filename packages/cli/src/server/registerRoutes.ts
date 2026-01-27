@@ -32,7 +32,13 @@ import {
   resolveNotFoundBoundary,
   resolveLoadingBoundary,
 } from '@cloudwerk/core'
-import { render, renderStream, renderToStream } from '@cloudwerk/ui'
+import {
+  render,
+  renderStream,
+  renderToStream,
+  generateHydrationScript,
+  generatePreloadHints,
+} from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
@@ -42,6 +48,11 @@ import { loadErrorBoundaryModule } from './loadErrorBoundary.js'
 import { loadNotFoundModule } from './loadNotFound.js'
 import { loadLoadingModule, type LoadedLoadingModule } from './loadLoading.js'
 import { parseSearchParams } from './parseSearchParams.js'
+import {
+  type HydrationManifestTracker,
+  trackIfClientComponent,
+  createRequestScopedManifest,
+} from './hydrationManifest.js'
 
 // ============================================================================
 // HTTP Methods
@@ -59,6 +70,90 @@ const HTTP_METHODS: HttpMethod[] = [
   'OPTIONS',
   'HEAD',
 ]
+
+// ============================================================================
+// Hydration Injection
+// ============================================================================
+
+/**
+ * Request-scoped tracking for client components used during rendering.
+ */
+interface RequestHydrationContext {
+  /** Component IDs used in this request */
+  usedComponentIds: Set<string>
+  /** Hydration manifest tracker */
+  tracker: HydrationManifestTracker
+}
+
+/**
+ * Inject hydration scripts into an HTML response.
+ *
+ * This function:
+ * 1. Generates preload hints for client bundles
+ * 2. Generates the hydration bootstrap script
+ * 3. Injects preloads after <head> and script before </body>
+ *
+ * @param response - Original Response with HTML content
+ * @param hydrationCtx - Request-scoped hydration context
+ * @returns Response with injected hydration scripts
+ */
+async function injectHydrationScripts(
+  response: Response,
+  hydrationCtx: RequestHydrationContext
+): Promise<Response> {
+  // If no client components used, return original response
+  if (hydrationCtx.usedComponentIds.size === 0) {
+    return response
+  }
+
+  // Create request-scoped manifest with only used components
+  const manifest = createRequestScopedManifest(
+    hydrationCtx.tracker,
+    hydrationCtx.usedComponentIds
+  )
+
+  // Generate hydration artifacts
+  const preloadHints = generatePreloadHints(manifest)
+  const hydrationScript = generateHydrationScript(manifest)
+
+  // If no scripts to inject, return original
+  if (!preloadHints && !hydrationScript) {
+    return response
+  }
+
+  // Read the original HTML
+  const html = await response.text()
+
+  // Inject preload hints after <head>
+  let modifiedHtml = html
+  if (preloadHints) {
+    const headEndIndex = modifiedHtml.indexOf('</head>')
+    if (headEndIndex !== -1) {
+      modifiedHtml =
+        modifiedHtml.slice(0, headEndIndex) +
+        '\n' + preloadHints + '\n' +
+        modifiedHtml.slice(headEndIndex)
+    }
+  }
+
+  // Inject hydration script before </body>
+  if (hydrationScript) {
+    const bodyEndIndex = modifiedHtml.lastIndexOf('</body>')
+    if (bodyEndIndex !== -1) {
+      modifiedHtml =
+        modifiedHtml.slice(0, bodyEndIndex) +
+        '\n' + hydrationScript + '\n' +
+        modifiedHtml.slice(bodyEndIndex)
+    }
+  }
+
+  // Create new response with modified HTML
+  return new Response(modifiedHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  })
+}
 
 // ============================================================================
 // Handler Detection
@@ -105,7 +200,7 @@ function isCloudwerkHandler(fn: unknown): fn is CloudwerkHandler {
  * @returns Hono middleware handler
  */
 function createConfigMiddleware(config: RouteConfig): MiddlewareHandler {
-  return async (c, next) => {
+  return async (_c, next) => {
     setRouteConfig(config)
     await next()
   }
@@ -214,6 +309,7 @@ async function executeAction(
  * @param scanResult - Scan result containing error and not-found boundaries
  * @param logger - Logger for output
  * @param verbose - Enable verbose logging
+ * @param hydrationTracker - Optional hydration manifest tracker for client component tracking
  * @returns Array of registered routes
  */
 export async function registerRoutes(
@@ -221,7 +317,8 @@ export async function registerRoutes(
   manifest: RouteManifest,
   scanResult: ScanResult,
   logger: Logger,
-  verbose: boolean = false
+  verbose: boolean = false,
+  hydrationTracker?: HydrationManifestTracker
 ): Promise<RegisteredRoute[]> {
   const registeredRoutes: RegisteredRoute[] = []
 
@@ -234,11 +331,31 @@ export async function registerRoutes(
         const pageModule = await loadPageModule(route.absolutePath, verbose)
         const PageComponent = pageModule.default
 
+        // Track page as client component if it has 'use client' directive
+        if (hydrationTracker && pageModule.isClientComponent) {
+          trackIfClientComponent(hydrationTracker, route.absolutePath)
+          if (verbose) {
+            logger.debug(`Tracked client component: ${route.filePath}`)
+          }
+        }
+
         // Load all layout components (already in correct order: root -> closest)
         const layoutModules = await Promise.all(
           route.layouts.map((layoutPath) => loadLayoutModule(layoutPath, verbose))
         )
         const layouts = layoutModules.map((m) => m.default)
+
+        // Track layout client components
+        if (hydrationTracker) {
+          for (let i = 0; i < layoutModules.length; i++) {
+            if (layoutModules[i].isClientComponent) {
+              trackIfClientComponent(hydrationTracker, route.layouts[i])
+              if (verbose) {
+                logger.debug(`Tracked client layout: ${route.layouts[i]}`)
+              }
+            }
+          }
+        }
 
         // Load loading component if one exists for this route
         const loadingPath = resolveLoadingBoundary(route.filePath, scanResult.loading)
@@ -290,12 +407,29 @@ export async function registerRoutes(
           const pathname = new URL(request.url).pathname
           const layoutLoaderData: Record<string, unknown>[] = []
 
+          // Create request-scoped hydration context
+          const hydrationCtx: RequestHydrationContext | null = hydrationTracker
+            ? { usedComponentIds: new Set<string>(), tracker: hydrationTracker }
+            : null
+
+          // Track page component if it's a client component
+          if (hydrationCtx && pageModule.isClientComponent && pageModule.clientComponentId) {
+            hydrationCtx.usedComponentIds.add(pageModule.clientComponentId)
+          }
+
+          // Track layout client components
+          for (const layoutModule of layoutModules) {
+            if (hydrationCtx && layoutModule.isClientComponent && layoutModule.clientComponentId) {
+              hydrationCtx.usedComponentIds.add(layoutModule.clientComponentId)
+            }
+          }
+
           // Determine if streaming is enabled for this route
           // Streaming is enabled if: loading.tsx exists AND streaming !== false in config
           const streamingDisabled = pageModule.config?.streaming === false
           const useStreaming = loadingModule && !streamingDisabled
 
-          if (useStreaming) {
+          if (useStreaming && loadingModule) {
             // STREAMING MODE: Show loading UI immediately, stream content when ready
             try {
               const LoadingComponent = loadingModule.default
@@ -435,7 +569,13 @@ export async function registerRoutes(
 
             // Use renderToStream for native Suspense support
             // This enables progressive streaming for pages with Suspense boundaries
-            return renderToStream(element)
+            const response = await renderToStream(element)
+
+            // Inject hydration scripts if client components were used
+            if (hydrationCtx && hydrationCtx.usedComponentIds.size > 0) {
+              return injectHydrationScripts(response, hydrationCtx)
+            }
+            return response
           } catch (error) {
             // Handle NotFoundError with not-found boundary
             if (error instanceof NotFoundError) {
@@ -552,12 +692,29 @@ export async function registerRoutes(
             const actionFn = action as ActionFunction
 
             // Register the action handler
-            registerMethod(app, method, route.urlPattern, async (c) => {
+            registerMethod(app, method, route.urlPattern, async (c: Context) => {
               // Declare variables outside try block so they're available in catch
               const params = c.req.param()
               const searchParams = parseSearchParams(c)
               const request = c.req.raw
               const layoutLoaderData: Record<string, unknown>[] = []
+
+              // Create request-scoped hydration context
+              const actionHydrationCtx: RequestHydrationContext | null = hydrationTracker
+                ? { usedComponentIds: new Set<string>(), tracker: hydrationTracker }
+                : null
+
+              // Track page component if it's a client component
+              if (actionHydrationCtx && pageModule.isClientComponent && pageModule.clientComponentId) {
+                actionHydrationCtx.usedComponentIds.add(pageModule.clientComponentId)
+              }
+
+              // Track layout client components
+              for (const layoutModule of layoutModules) {
+                if (actionHydrationCtx && layoutModule.isClientComponent && layoutModule.clientComponentId) {
+                  actionHydrationCtx.usedComponentIds.add(layoutModule.clientComponentId)
+                }
+              }
 
               try {
                 // Execute action
@@ -621,7 +778,13 @@ export async function registerRoutes(
 
                 // Use renderToStream for native Suspense support
                 // This enables progressive streaming for pages with Suspense boundaries
-                return renderToStream(element)
+                const actionResponse = await renderToStream(element)
+
+                // Inject hydration scripts if client components were used
+                if (actionHydrationCtx && actionHydrationCtx.usedComponentIds.size > 0) {
+                  return injectHydrationScripts(actionResponse, actionHydrationCtx)
+                }
+                return actionResponse
               } catch (error) {
                 // Handle NotFoundError with not-found boundary
                 if (error instanceof NotFoundError) {

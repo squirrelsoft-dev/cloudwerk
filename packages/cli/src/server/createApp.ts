@@ -6,10 +6,12 @@
 
 import { Hono } from 'hono'
 import type { RouteManifest, CloudwerkConfig, ScanResult } from '@cloudwerk/core'
-import { contextMiddleware } from '@cloudwerk/core'
+import { contextMiddleware, resolveRoutesDir } from '@cloudwerk/core'
 import { setActiveRenderer, getAvailableRenderers } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { registerRoutes } from './registerRoutes.js'
+import { registerHydrationRoutes } from './hydrationRoutes.js'
+import { createManifestTracker } from './hydrationManifest.js'
 import { logRequest } from '../utils/logger.js'
 import { HTTP_STATUS } from '../constants.js'
 
@@ -80,8 +82,22 @@ export async function createApp(
     }
   }
 
-  // Register routes from manifest
-  const routes = await registerRoutes(app, manifest, scanResult, logger, verbose)
+  // Create hydration manifest tracker for client component tracking
+  const appDir = resolveRoutesDir(config, manifest.rootDir)
+  const hydrationTracker = createManifestTracker(appDir)
+
+  // Register hydration routes BEFORE other routes
+  // This ensures /__cloudwerk/* routes take precedence
+  registerHydrationRoutes(app, {
+    tracker: hydrationTracker,
+    appDir,
+    logger,
+    verbose,
+    renderer: rendererName === 'react' ? 'react' : 'hono-jsx',
+  })
+
+  // Register routes from manifest (with hydration tracking)
+  const routes = await registerRoutes(app, manifest, scanResult, logger, verbose, hydrationTracker)
 
   // Add 404 handler
   app.notFound((c) => {
