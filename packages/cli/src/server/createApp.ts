@@ -45,9 +45,8 @@ export async function createApp(
   } catch (error) {
     const available = getAvailableRenderers().join(', ')
     throw new Error(
-      `Failed to initialize UI renderer "${rendererName}". ` +
-        `Available renderers: ${available}. ` +
-        `Error: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to initialize UI renderer "${rendererName}". Available renderers: ${available}.`,
+      { cause: error }
     )
   }
 

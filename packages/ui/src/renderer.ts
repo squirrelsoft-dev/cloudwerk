@@ -133,3 +133,24 @@ export function registerRenderer(name: string, renderer: Renderer): void {
 export function getAvailableRenderers(): string[] {
   return Object.keys(renderers)
 }
+
+// ============================================================================
+// Test Utilities
+// ============================================================================
+
+/**
+ * Reset renderers to default state.
+ *
+ * @internal Used for testing only - ensures test isolation.
+ */
+export function _resetRenderers(): void {
+  // Remove all custom renderers
+  for (const name of Object.keys(renderers)) {
+    if (name !== 'hono-jsx') {
+      delete renderers[name]
+    }
+  }
+  // Reset to default
+  activeRenderer = honoJsxRenderer
+  activeRendererName = 'hono-jsx'
+}

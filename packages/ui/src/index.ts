@@ -29,6 +29,7 @@ export {
   getActiveRendererName,
   registerRenderer,
   getAvailableRenderers,
+  _resetRenderers,
 } from './renderer.js'
 
 // ============================================================================

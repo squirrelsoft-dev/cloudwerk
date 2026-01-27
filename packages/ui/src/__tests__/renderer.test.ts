@@ -12,6 +12,7 @@ import {
   registerRenderer,
   getAvailableRenderers,
   honoJsxRenderer,
+  _resetRenderers,
 } from '../index.js'
 import type { Renderer } from '../types.js'
 
@@ -55,8 +56,7 @@ function createMockRenderer(name: string): Renderer {
 
 describe('default renderer', () => {
   beforeEach(() => {
-    // Reset to default
-    setActiveRenderer('hono-jsx')
+    _resetRenderers()
   })
 
   it('uses hono-jsx by default', () => {
@@ -81,17 +81,12 @@ describe('default renderer', () => {
 
 describe('setActiveRenderer()', () => {
   beforeEach(() => {
-    setActiveRenderer('hono-jsx')
+    _resetRenderers()
   })
 
   it('switches renderer via setActiveRenderer()', () => {
-    // Register a test renderer
     const testRenderer = createMockRenderer('test-renderer')
-    try {
-      registerRenderer('test-switch', testRenderer)
-    } catch {
-      // Already registered from previous test run
-    }
+    registerRenderer('test-switch', testRenderer)
 
     setActiveRenderer('test-switch')
 
@@ -110,13 +105,8 @@ describe('setActiveRenderer()', () => {
   })
 
   it('can switch back to hono-jsx', () => {
-    // Register and switch to test renderer
     const testRenderer = createMockRenderer('test')
-    try {
-      registerRenderer('test-back', testRenderer)
-    } catch {
-      // Already registered
-    }
+    registerRenderer('test-back', testRenderer)
     setActiveRenderer('test-back')
     expect(getActiveRendererName()).toBe('test-back')
 
@@ -133,37 +123,30 @@ describe('setActiveRenderer()', () => {
 
 describe('registerRenderer()', () => {
   beforeEach(() => {
-    setActiveRenderer('hono-jsx')
+    _resetRenderers()
   })
 
   it('allows custom renderer registration', () => {
     const customRenderer = createMockRenderer('custom')
-
-    // Use unique name to avoid conflicts with other tests
-    const uniqueName = `custom-${Date.now()}`
-    registerRenderer(uniqueName, customRenderer)
+    registerRenderer('custom', customRenderer)
 
     const available = getAvailableRenderers()
-    expect(available).toContain(uniqueName)
+    expect(available).toContain('custom')
   })
 
   it('prevents duplicate renderer registration', () => {
     const customRenderer = createMockRenderer('duplicate')
+    registerRenderer('duplicate', customRenderer)
 
-    const uniqueName = `duplicate-${Date.now()}`
-    registerRenderer(uniqueName, customRenderer)
-
-    expect(() => registerRenderer(uniqueName, customRenderer)).toThrow(
-      `Renderer "${uniqueName}" is already registered`
+    expect(() => registerRenderer('duplicate', customRenderer)).toThrow(
+      'Renderer "duplicate" is already registered'
     )
   })
 
   it('registered renderer can be activated', async () => {
     const customRenderer = createMockRenderer('activatable')
-
-    const uniqueName = `activatable-${Date.now()}`
-    registerRenderer(uniqueName, customRenderer)
-    setActiveRenderer(uniqueName)
+    registerRenderer('activatable', customRenderer)
+    setActiveRenderer('activatable')
 
     const renderer = getActiveRenderer()
     const response = await renderer.render({ toString: () => '<div>Test</div>' })
@@ -171,9 +154,6 @@ describe('registerRenderer()', () => {
 
     expect(text).toContain('[activatable]')
     expect(text).toContain('<div>Test</div>')
-
-    // Reset
-    setActiveRenderer('hono-jsx')
   })
 
   it('cannot override built-in hono-jsx renderer', () => {
@@ -190,6 +170,10 @@ describe('registerRenderer()', () => {
 // ============================================================================
 
 describe('getAvailableRenderers()', () => {
+  beforeEach(() => {
+    _resetRenderers()
+  })
+
   it('returns array of renderer names', () => {
     const available = getAvailableRenderers()
 
@@ -205,12 +189,10 @@ describe('getAvailableRenderers()', () => {
 
   it('includes newly registered renderers', () => {
     const customRenderer = createMockRenderer('new')
-    const uniqueName = `new-${Date.now()}`
+    registerRenderer('new-renderer', customRenderer)
 
-    registerRenderer(uniqueName, customRenderer)
     const available = getAvailableRenderers()
-
-    expect(available).toContain(uniqueName)
+    expect(available).toContain('new-renderer')
   })
 })
 
@@ -220,7 +202,7 @@ describe('getAvailableRenderers()', () => {
 
 describe('getActiveRendererName()', () => {
   beforeEach(() => {
-    setActiveRenderer('hono-jsx')
+    _resetRenderers()
   })
 
   it('returns current renderer name', () => {
@@ -230,11 +212,10 @@ describe('getActiveRendererName()', () => {
 
   it('updates when renderer changes', () => {
     const customRenderer = createMockRenderer('named')
-    const uniqueName = `named-${Date.now()}`
-    registerRenderer(uniqueName, customRenderer)
+    registerRenderer('named-renderer', customRenderer)
 
-    setActiveRenderer(uniqueName)
-    expect(getActiveRendererName()).toBe(uniqueName)
+    setActiveRenderer('named-renderer')
+    expect(getActiveRendererName()).toBe('named-renderer')
 
     setActiveRenderer('hono-jsx')
     expect(getActiveRendererName()).toBe('hono-jsx')
@@ -247,7 +228,7 @@ describe('getActiveRendererName()', () => {
 
 describe('honoJsxRenderer', () => {
   beforeEach(() => {
-    setActiveRenderer('hono-jsx')
+    _resetRenderers()
   })
 
   it('is exported from package', () => {
