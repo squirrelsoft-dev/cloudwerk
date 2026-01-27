@@ -7,6 +7,7 @@
 
 import { program } from 'commander'
 import { dev } from './commands/dev.js'
+import { build } from './commands/build.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -31,6 +32,19 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .option('--verbose', 'Enable verbose logging')
   .action(dev)
+
+// ============================================================================
+// Build Command
+// ============================================================================
+
+program
+  .command('build [path]')
+  .description('Build project for production')
+  .option('-o, --output <dir>', 'Output directory', './dist')
+  .option('--ssg', 'Generate static pages for routes with rendering: static')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('--verbose', 'Enable verbose logging')
+  .action(build)
 
 // ============================================================================
 // Parse Arguments
