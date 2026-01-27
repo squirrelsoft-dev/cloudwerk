@@ -8,7 +8,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "check:links": "astro check && linkinator ./dist --recurse --skip 'github.com/.*/edit'"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.37.4",
@@ -18,6 +19,7 @@
     "starlight-theme-galaxy": "^0.7.0"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5"
+    "@types/node": "^22.10.5",
+    "linkinator": "^6.1.2"
   }
 }
