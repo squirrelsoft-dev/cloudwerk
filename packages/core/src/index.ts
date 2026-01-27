@@ -54,6 +54,10 @@ export type {
   // Scanner Types
   ScannedFile,
   ScanResult,
+
+  // Middleware Types
+  Middleware,
+  LoadedMiddlewareModule,
 } from './types.js'
 
 export {
@@ -186,6 +190,15 @@ export {
   createContext,
   contextMiddleware,
 } from './context.js'
+
+// ============================================================================
+// Middleware Exports
+// ============================================================================
+
+export {
+  // Middleware Adapter
+  createMiddlewareAdapter,
+} from './middleware.js'
 
 // ============================================================================
 // Response Helper Exports
