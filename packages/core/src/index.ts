@@ -90,6 +90,12 @@ export type {
   ClientComponentInfo,
   ClientComponentMeta,
   HydrationManifest,
+
+  // Component Boundary Validation Types
+  BoundaryValidationType,
+  BoundaryValidationIssue,
+  BoundaryValidationResult,
+  BoundaryValidationOptions,
 } from './types.js'
 
 export {
@@ -187,6 +193,25 @@ export {
   formatErrors,
   formatWarnings,
 } from './validator.js'
+
+// ============================================================================
+// Boundary Validator Exports
+// ============================================================================
+
+export {
+  // Validation Functions
+  validateServerComponent,
+  validateClientComponent,
+  validateComponentBoundaries,
+
+  // Formatting Functions
+  formatBoundaryError,
+  formatBoundaryErrors,
+
+  // Utility Functions
+  hasBoundaryErrors,
+  hasBoundaryWarnings,
+} from './boundary-validator.js'
 
 // ============================================================================
 // Configuration Exports
