@@ -1,0 +1,297 @@
+---
+title: Data Loading
+description: Learn how to fetch and manage data in Cloudwerk applications.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Cloudwerk provides a powerful data loading system using `loader()` functions that run on the server before rendering.
+
+## Loader Basics
+
+Export a `loader()` function from any page or layout to fetch data:
+
+```tsx
+// app/users/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const users = await context.db
+    .selectFrom('users')
+    .execute();
+
+  return { users };
+}
+
+export default function UsersPage({ users }: PageProps & { users: User[] }) {
+  return (
+    <ul>
+      {users.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Loader Arguments
+
+The `LoaderArgs` object provides access to:
+
+```typescript
+interface LoaderArgs {
+  request: Request;          // The incoming request
+  params: Record<string, string>;  // URL parameters
+  context: CloudwerkContext; // Bindings and utilities
+}
+```
+
+### Using Request Data
+
+```tsx
+export async function loader({ request }: LoaderArgs) {
+  // Access query parameters
+  const url = new URL(request.url);
+  const page = parseInt(url.searchParams.get('page') ?? '1');
+  const limit = parseInt(url.searchParams.get('limit') ?? '10');
+
+  // Access headers
+  const authHeader = request.headers.get('Authorization');
+
+  return { page, limit };
+}
+```
+
+### Using Route Parameters
+
+```tsx
+// app/users/[id]/page.tsx
+export async function loader({ params, context }: LoaderArgs) {
+  const user = await context.db
+    .selectFrom('users')
+    .where('id', '=', params.id)
+    .executeTakeFirst();
+
+  return { user };
+}
+```
+
+### Using Context
+
+The context provides access to Cloudflare bindings:
+
+```tsx
+export async function loader({ context }: LoaderArgs) {
+  // Database (D1)
+  const users = await context.db.selectFrom('users').execute();
+
+  // Key-Value store (KV)
+  const cached = await context.kv.get('cache-key');
+
+  // Object storage (R2)
+  const file = await context.r2.get('uploads/image.png');
+
+  // Environment variables
+  const apiKey = context.env.API_KEY;
+
+  return { users };
+}
+```
+
+## Error Handling
+
+### Not Found Errors
+
+Throw `NotFoundError` to trigger a 404 response:
+
+```tsx
+import { NotFoundError } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const user = await context.db
+    .selectFrom('users')
+    .where('id', '=', params.id)
+    .executeTakeFirst();
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  return { user };
+}
+```
+
+### Redirects
+
+Throw `RedirectError` to redirect:
+
+```tsx
+import { RedirectError } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+
+  if (!user) {
+    throw new RedirectError('/login');
+  }
+
+  return { user };
+}
+```
+
+### Generic Errors
+
+Any thrown error will be caught by the nearest `error.tsx` boundary:
+
+```tsx
+export async function loader({ context }: LoaderArgs) {
+  const response = await fetch('https://api.example.com/data');
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch data');
+  }
+
+  return { data: await response.json() };
+}
+```
+
+## Layout Loaders
+
+Layouts can also have loaders. They execute from parent to child:
+
+```tsx
+// app/layout.tsx
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+  return { user };
+}
+
+export default function RootLayout({ children, user }: LayoutProps & { user: User | null }) {
+  return (
+    <html>
+      <body>
+        <Header user={user} />
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+```tsx
+// app/dashboard/layout.tsx
+export async function loader({ context }: LoaderArgs) {
+  // This runs AFTER the root layout loader
+  const user = await context.auth.requireUser(); // Throws if not authenticated
+  const notifications = await getNotifications(user.id);
+  return { notifications };
+}
+```
+
+## Parallel Data Loading
+
+When a route has multiple loaders (layouts + page), they execute in parallel when possible:
+
+```
+Root Layout Loader ─┬─> Dashboard Layout Loader ─┬─> Page Loader
+                    │                            │
+                    └─> Sidebar Slot Loader ─────┘
+```
+
+<Aside type="tip">
+Structure your loaders to be independent when possible. This enables parallel execution and faster page loads.
+</Aside>
+
+## Caching
+
+### Response Caching
+
+Set cache headers in your loader:
+
+```tsx
+export async function loader({ context }: LoaderArgs) {
+  const data = await fetchExpensiveData();
+
+  return {
+    data,
+    // Will be merged with response headers
+    headers: {
+      'Cache-Control': 'public, max-age=3600',
+    },
+  };
+}
+```
+
+### KV Caching
+
+Use Cloudflare KV for server-side caching:
+
+```tsx
+export async function loader({ context }: LoaderArgs) {
+  const cacheKey = 'popular-posts';
+
+  // Try cache first
+  const cached = await context.kv.get(cacheKey, 'json');
+  if (cached) {
+    return { posts: cached };
+  }
+
+  // Fetch fresh data
+  const posts = await context.db
+    .selectFrom('posts')
+    .orderBy('views', 'desc')
+    .limit(10)
+    .execute();
+
+  // Cache for 5 minutes
+  await context.kv.put(cacheKey, JSON.stringify(posts), {
+    expirationTtl: 300,
+  });
+
+  return { posts };
+}
+```
+
+## TypeScript
+
+Define your loader return type for full type safety:
+
+```tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface LoaderData {
+  user: User;
+  posts: Post[];
+}
+
+export async function loader({ params, context }: LoaderArgs): Promise<LoaderData> {
+  const user = await context.db.selectFrom('users').where('id', '=', params.id).executeTakeFirstOrThrow();
+  const posts = await context.db.selectFrom('posts').where('author_id', '=', user.id).execute();
+  return { user, posts };
+}
+
+export default function UserPage({ user, posts }: PageProps & LoaderData) {
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+      <h2>Posts</h2>
+      <ul>
+        {posts.map(post => <li key={post.id}>{post.title}</li>)}
+      </ul>
+    </div>
+  );
+}
+```
+
+## Next Steps
+
+- **[Forms and Actions](/guides/forms-and-actions/)** - Handle form submissions
+- **[Database Guide](/guides/database/)** - Work with Cloudflare D1
+- **[Authentication](/guides/authentication/)** - Protect your routes

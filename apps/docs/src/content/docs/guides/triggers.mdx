@@ -1,0 +1,413 @@
+---
+title: Triggers
+description: Schedule recurring tasks with cron triggers in your Cloudwerk application.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Cloudwerk supports Cloudflare's cron triggers for running scheduled tasks. Use triggers for periodic data sync, cleanup jobs, report generation, and more.
+
+## Getting Started
+
+### Define a Cron Trigger
+
+<Steps>
+1. Add cron triggers to `wrangler.toml`:
+
+   ```toml
+   [triggers]
+   crons = [
+     "0 * * * *",    # Every hour
+     "0 0 * * *",    # Every day at midnight
+     "*/5 * * * *",  # Every 5 minutes
+   ]
+   ```
+
+2. Create a trigger handler:
+
+   ```typescript
+   // workers/triggers.ts
+   import type { ScheduledEvent } from '@cloudwerk/core';
+
+   export default {
+     async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+       switch (event.cron) {
+         case '0 * * * *':
+           await hourlyTask(env);
+           break;
+         case '0 0 * * *':
+           await dailyTask(env);
+           break;
+         case '*/5 * * * *':
+           await frequentTask(env);
+           break;
+       }
+     },
+   };
+
+   async function hourlyTask(env: Env) {
+     console.log('Running hourly task...');
+     // Your logic here
+   }
+
+   async function dailyTask(env: Env) {
+     console.log('Running daily task...');
+     // Your logic here
+   }
+
+   async function frequentTask(env: Env) {
+     console.log('Running frequent task...');
+     // Your logic here
+   }
+   ```
+
+3. Configure in Cloudwerk:
+
+   ```typescript
+   // cloudwerk.config.ts
+   import { defineConfig } from '@cloudwerk/core';
+
+   export default defineConfig({
+     triggers: {
+       handler: './workers/triggers.ts',
+     },
+   });
+   ```
+</Steps>
+
+## Cron Syntax
+
+Cloudflare uses standard cron syntax:
+
+```
+* * * * *
+| | | | |
+| | | | +---- Day of week (0-6, Sun=0)
+| | | +------ Month (1-12)
+| | +-------- Day of month (1-31)
+| +---------- Hour (0-23)
++------------ Minute (0-59)
+```
+
+### Common Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| `* * * * *` | Every minute |
+| `*/5 * * * *` | Every 5 minutes |
+| `0 * * * *` | Every hour |
+| `0 0 * * *` | Daily at midnight UTC |
+| `0 0 * * 0` | Weekly on Sunday |
+| `0 0 1 * *` | Monthly on the 1st |
+| `0 9 * * 1-5` | Weekdays at 9 AM |
+
+<Aside type="note">
+Cron times are in UTC. Plan your schedules accordingly.
+</Aside>
+
+## Common Use Cases
+
+### Database Cleanup
+
+```typescript
+async function cleanupExpiredSessions(env: Env) {
+  const db = env.DB;
+
+  // Delete expired sessions
+  const result = await db.prepare(`
+    DELETE FROM sessions
+    WHERE expires_at < datetime('now')
+  `).run();
+
+  console.log(`Cleaned up ${result.changes} expired sessions`);
+}
+
+async function cleanupOldLogs(env: Env) {
+  const db = env.DB;
+
+  // Keep only last 30 days of logs
+  const result = await db.prepare(`
+    DELETE FROM audit_logs
+    WHERE created_at < datetime('now', '-30 days')
+  `).run();
+
+  console.log(`Cleaned up ${result.changes} old log entries`);
+}
+```
+
+### Report Generation
+
+```typescript
+async function generateDailyReport(env: Env) {
+  const db = env.DB;
+
+  // Gather statistics
+  const stats = await db.prepare(`
+    SELECT
+      COUNT(*) as total_orders,
+      SUM(total) as revenue,
+      AVG(total) as avg_order_value
+    FROM orders
+    WHERE created_at >= datetime('now', '-1 day')
+  `).first();
+
+  // Store report
+  await db.prepare(`
+    INSERT INTO daily_reports (date, total_orders, revenue, avg_order_value)
+    VALUES (date('now', '-1 day'), ?, ?, ?)
+  `).bind(stats.total_orders, stats.revenue, stats.avg_order_value).run();
+
+  // Send notification
+  await sendSlackMessage(env.SLACK_WEBHOOK, {
+    text: `Daily Report: ${stats.total_orders} orders, $${stats.revenue} revenue`,
+  });
+}
+```
+
+### Data Synchronization
+
+```typescript
+async function syncExternalData(env: Env) {
+  // Fetch from external API
+  const response = await fetch('https://api.example.com/products', {
+    headers: { 'Authorization': `Bearer ${env.API_KEY}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  const products = await response.json();
+
+  // Update local database
+  const db = env.DB;
+
+  for (const product of products) {
+    await db.prepare(`
+      INSERT INTO products (id, name, price, updated_at)
+      VALUES (?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        price = excluded.price,
+        updated_at = datetime('now')
+    `).bind(product.id, product.name, product.price).run();
+  }
+
+  console.log(`Synced ${products.length} products`);
+}
+```
+
+### Cache Warming
+
+```typescript
+async function warmCache(env: Env) {
+  const db = env.DB;
+  const kv = env.KV;
+
+  // Fetch popular items
+  const popularItems = await db.prepare(`
+    SELECT id, data
+    FROM items
+    ORDER BY view_count DESC
+    LIMIT 100
+  `).all();
+
+  // Pre-cache in KV
+  for (const item of popularItems.results) {
+    await kv.put(`item:${item.id}`, JSON.stringify(item), {
+      expirationTtl: 3600, // 1 hour
+    });
+  }
+
+  console.log(`Warmed cache for ${popularItems.results.length} items`);
+}
+```
+
+### Health Checks
+
+```typescript
+async function healthCheck(env: Env) {
+  const checks = {
+    database: false,
+    external_api: false,
+    storage: false,
+  };
+
+  // Check database
+  try {
+    await env.DB.prepare('SELECT 1').first();
+    checks.database = true;
+  } catch (e) {
+    console.error('Database check failed:', e);
+  }
+
+  // Check external API
+  try {
+    const response = await fetch('https://api.example.com/health');
+    checks.external_api = response.ok;
+  } catch (e) {
+    console.error('External API check failed:', e);
+  }
+
+  // Check R2 storage
+  try {
+    await env.R2.head('health-check');
+    checks.storage = true;
+  } catch (e) {
+    // File might not exist, but connection works
+    checks.storage = true;
+  }
+
+  // Store health status
+  await env.KV.put('health:status', JSON.stringify({
+    checks,
+    timestamp: Date.now(),
+  }));
+
+  // Alert if any check failed
+  if (!Object.values(checks).every(Boolean)) {
+    await sendAlert(env, 'Health check failed', checks);
+  }
+}
+```
+
+## Error Handling
+
+```typescript
+export default {
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const taskName = getTaskName(event.cron);
+
+    try {
+      console.log(`Starting ${taskName}...`);
+      const start = Date.now();
+
+      await runTask(event.cron, env);
+
+      const duration = Date.now() - start;
+      console.log(`${taskName} completed in ${duration}ms`);
+
+      // Log success
+      await env.DB.prepare(`
+        INSERT INTO cron_logs (task, status, duration, run_at)
+        VALUES (?, 'success', ?, datetime('now'))
+      `).bind(taskName, duration).run();
+
+    } catch (error) {
+      console.error(`${taskName} failed:`, error);
+
+      // Log failure
+      await env.DB.prepare(`
+        INSERT INTO cron_logs (task, status, error, run_at)
+        VALUES (?, 'error', ?, datetime('now'))
+      `).bind(taskName, error.message).run();
+
+      // Alert on failure
+      await sendAlert(env, `Cron job "${taskName}" failed`, {
+        error: error.message,
+        cron: event.cron,
+        scheduledTime: event.scheduledTime,
+      });
+    }
+  },
+};
+
+function getTaskName(cron: string): string {
+  const names: Record<string, string> = {
+    '0 * * * *': 'hourly-cleanup',
+    '0 0 * * *': 'daily-report',
+    '*/5 * * * *': 'health-check',
+  };
+  return names[cron] ?? 'unknown-task';
+}
+```
+
+## Testing Triggers
+
+### Local Testing
+
+```bash
+# Trigger a specific cron manually
+wrangler dev --test-scheduled
+```
+
+Then call:
+```bash
+curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
+```
+
+### Integration Tests
+
+```typescript
+// tests/triggers.test.ts
+import { describe, it, expect, beforeEach } from 'vitest';
+import { env } from 'cloudflare:test';
+
+describe('Cron Triggers', () => {
+  it('should clean up expired sessions', async () => {
+    // Setup: create expired session
+    await env.DB.prepare(`
+      INSERT INTO sessions (id, user_id, expires_at)
+      VALUES ('test-session', 'user-1', datetime('now', '-1 hour'))
+    `).run();
+
+    // Run the task
+    await cleanupExpiredSessions(env);
+
+    // Verify cleanup
+    const session = await env.DB.prepare(`
+      SELECT * FROM sessions WHERE id = 'test-session'
+    `).first();
+
+    expect(session).toBeNull();
+  });
+});
+```
+
+## Best Practices
+
+<Aside type="tip" title="Trigger Best Practices">
+- Keep tasks idempotent (safe to run multiple times)
+- Use appropriate intervals (don't over-schedule)
+- Implement proper error handling and alerting
+- Log task execution for debugging
+- Consider using Queues for long-running tasks
+</Aside>
+
+### Idempotent Tasks
+
+```typescript
+async function processUnsentEmails(env: Env) {
+  // Mark emails as processing to prevent duplicate sends
+  const emails = await env.DB.prepare(`
+    UPDATE emails
+    SET status = 'processing', updated_at = datetime('now')
+    WHERE status = 'pending'
+    AND scheduled_at <= datetime('now')
+    RETURNING *
+  `).all();
+
+  for (const email of emails.results) {
+    try {
+      await sendEmail(email, env);
+
+      await env.DB.prepare(`
+        UPDATE emails SET status = 'sent', sent_at = datetime('now')
+        WHERE id = ?
+      `).bind(email.id).run();
+
+    } catch (error) {
+      await env.DB.prepare(`
+        UPDATE emails SET status = 'failed', error = ?
+        WHERE id = ?
+      `).bind(error.message, email.id).run();
+    }
+  }
+}
+```
+
+## Next Steps
+
+- **[Deployment Guide](/guides/deployment/)** - Deploy your scheduled tasks
+- **[Queues Guide](/guides/queues/)** - For longer-running jobs
+- **[API Reference](/api/triggers/)** - Trigger API details

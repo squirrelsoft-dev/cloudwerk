@@ -1,0 +1,404 @@
+---
+title: Bindings Reference
+description: Reference for Cloudflare bindings available in Cloudwerk.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cloudwerk provides seamless access to all Cloudflare bindings through the `context` object.
+
+## Accessing Bindings
+
+Bindings are available in loaders, handlers, and middleware:
+
+```typescript
+export async function loader({ context }: LoaderArgs) {
+  // Access bindings via context
+  const db = context.db;      // D1 Database
+  const kv = context.kv;      // KV Namespace
+  const r2 = context.r2;      // R2 Bucket
+  const env = context.env;    // Environment variables
+}
+```
+
+## D1 Database
+
+Cloudflare D1 is a serverless SQLite database.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+database_id = "your-database-id"
+```
+
+### Usage
+
+```typescript
+// Query builder (recommended)
+const users = await context.db
+  .selectFrom('users')
+  .where('status', '=', 'active')
+  .execute();
+
+// Raw queries
+const result = await context.env.DB
+  .prepare('SELECT * FROM users WHERE id = ?')
+  .bind(userId)
+  .first();
+
+// Batch queries
+const results = await context.env.DB.batch([
+  context.env.DB.prepare('SELECT * FROM users'),
+  context.env.DB.prepare('SELECT * FROM posts'),
+]);
+```
+
+### Types
+
+```typescript
+interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch<T>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  run(query: string): Promise<D1ExecResult>;
+}
+
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T>(column?: string): Promise<T | null>;
+  all<T>(): Promise<D1Result<T>>;
+  run(): Promise<D1ExecResult>;
+}
+```
+
+## KV Namespace
+
+Cloudflare Workers KV provides key-value storage.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-id"
+```
+
+### Usage
+
+```typescript
+// Get value
+const value = await context.kv.get('key');
+const jsonValue = await context.kv.get('key', 'json');
+const streamValue = await context.kv.get('key', 'stream');
+
+// Set value
+await context.kv.put('key', 'value');
+await context.kv.put('key', JSON.stringify(data));
+
+// With expiration
+await context.kv.put('key', 'value', {
+  expirationTtl: 3600, // 1 hour in seconds
+});
+
+// With metadata
+await context.kv.put('key', 'value', {
+  metadata: { createdAt: Date.now() },
+});
+
+// Delete
+await context.kv.delete('key');
+
+// List keys
+const keys = await context.kv.list();
+const prefixedKeys = await context.kv.list({ prefix: 'user:' });
+```
+
+### Types
+
+```typescript
+interface KVNamespace {
+  get(key: string, type?: 'text'): Promise<string | null>;
+  get(key: string, type: 'json'): Promise<unknown | null>;
+  get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
+  get(key: string, type: 'stream'): Promise<ReadableStream | null>;
+
+  put(key: string, value: string | ArrayBuffer | ReadableStream, options?: KVPutOptions): Promise<void>;
+
+  delete(key: string): Promise<void>;
+
+  list(options?: KVListOptions): Promise<KVListResult>;
+}
+```
+
+## R2 Object Storage
+
+Cloudflare R2 provides S3-compatible object storage.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "my-bucket"
+```
+
+### Usage
+
+```typescript
+// Get object
+const object = await context.r2.get('path/to/file.txt');
+if (object) {
+  const text = await object.text();
+  const arrayBuffer = await object.arrayBuffer();
+  const blob = await object.blob();
+}
+
+// Put object
+await context.r2.put('path/to/file.txt', 'Hello, World!');
+await context.r2.put('path/to/file.txt', fileStream, {
+  httpMetadata: {
+    contentType: 'text/plain',
+  },
+});
+
+// Delete object
+await context.r2.delete('path/to/file.txt');
+
+// List objects
+const objects = await context.r2.list();
+const prefixedObjects = await context.r2.list({
+  prefix: 'uploads/',
+  limit: 100,
+});
+
+// Head (metadata only)
+const head = await context.r2.head('path/to/file.txt');
+```
+
+### Types
+
+```typescript
+interface R2Bucket {
+  get(key: string): Promise<R2ObjectBody | null>;
+  put(key: string, value: ReadableStream | ArrayBuffer | string, options?: R2PutOptions): Promise<R2Object>;
+  delete(key: string): Promise<void>;
+  list(options?: R2ListOptions): Promise<R2Objects>;
+  head(key: string): Promise<R2Object | null>;
+}
+```
+
+## Queues
+
+Cloudflare Queues for async message processing.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[queues.producers]]
+binding = "MY_QUEUE"
+queue = "my-queue"
+```
+
+### Usage
+
+```typescript
+// Send message
+await context.queues.MY_QUEUE.send({
+  type: 'email',
+  to: 'user@example.com',
+});
+
+// Send batch
+await context.queues.MY_QUEUE.sendBatch([
+  { body: { type: 'email', to: 'user1@example.com' } },
+  { body: { type: 'email', to: 'user2@example.com' } },
+]);
+
+// With delay
+await context.queues.MY_QUEUE.send(
+  { type: 'reminder' },
+  { delaySeconds: 300 }
+);
+```
+
+### Types
+
+```typescript
+interface Queue<T = unknown> {
+  send(message: T, options?: QueueSendOptions): Promise<void>;
+  sendBatch(messages: MessageBatch<T>[], options?: QueueSendBatchOptions): Promise<void>;
+}
+```
+
+## Durable Objects
+
+Durable Objects for stateful edge computing.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[durable_objects]
+bindings = [
+  { name = "COUNTER", class_name = "Counter" }
+]
+```
+
+### Usage
+
+```typescript
+// Get stub by name
+const id = context.env.COUNTER.idFromName('my-counter');
+const stub = context.env.COUNTER.get(id);
+
+// Get stub by unique ID
+const uniqueId = context.env.COUNTER.newUniqueId();
+const stub = context.env.COUNTER.get(uniqueId);
+
+// Call the Durable Object
+const response = await stub.fetch('http://counter/increment');
+const count = await response.text();
+```
+
+### Types
+
+```typescript
+interface DurableObjectNamespace {
+  idFromName(name: string): DurableObjectId;
+  newUniqueId(): DurableObjectId;
+  get(id: DurableObjectId): DurableObjectStub;
+}
+
+interface DurableObjectStub {
+  fetch(input: RequestInfo, init?: RequestInit): Promise<Response>;
+}
+```
+
+## Environment Variables
+
+Access environment variables and secrets.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[vars]
+ENVIRONMENT = "production"
+API_URL = "https://api.example.com"
+```
+
+Set secrets:
+```bash
+wrangler secret put API_KEY
+```
+
+### Usage
+
+```typescript
+// Access variables
+const environment = context.env.ENVIRONMENT;
+const apiUrl = context.env.API_URL;
+const apiKey = context.env.API_KEY; // Secret
+```
+
+<Aside type="caution">
+Never log or expose secrets. Use `wrangler secret` for sensitive values.
+</Aside>
+
+## Service Bindings
+
+Call other Workers directly.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[services]]
+binding = "AUTH_SERVICE"
+service = "auth-worker"
+```
+
+### Usage
+
+```typescript
+// Call another Worker
+const response = await context.env.AUTH_SERVICE.fetch(
+  new Request('https://auth/validate', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  })
+);
+
+const result = await response.json();
+```
+
+## Vectorize
+
+Vector database for AI applications.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "my-index"
+```
+
+### Usage
+
+```typescript
+// Insert vectors
+await context.env.VECTORIZE.insert([
+  { id: 'doc-1', values: [0.1, 0.2, 0.3], metadata: { title: 'Doc 1' } },
+]);
+
+// Query vectors
+const results = await context.env.VECTORIZE.query(queryVector, {
+  topK: 10,
+  filter: { category: 'tech' },
+});
+```
+
+## AI
+
+Cloudflare Workers AI for inference.
+
+### Configuration
+
+```toml
+# wrangler.toml
+[ai]
+binding = "AI"
+```
+
+### Usage
+
+```typescript
+// Text generation
+const response = await context.env.AI.run('@cf/meta/llama-2-7b-chat-int8', {
+  prompt: 'Hello!',
+});
+
+// Embeddings
+const embeddings = await context.env.AI.run('@cf/baai/bge-base-en-v1.5', {
+  text: 'Hello, world!',
+});
+
+// Image classification
+const result = await context.env.AI.run('@cf/microsoft/resnet-50', {
+  image: imageArrayBuffer,
+});
+```
+
+## Next Steps
+
+- **[Database Guide](/guides/database/)** - D1 in depth
+- **[Authentication](/guides/authentication/)** - Using KV for sessions
+- **[Durable Objects](/guides/durable-objects/)** - Stateful applications

@@ -1,0 +1,443 @@
+---
+title: Durable Objects
+description: Build stateful applications at the edge with Cloudflare Durable Objects.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Durable Objects provide a way to maintain state at the edge with strong consistency guarantees. They're perfect for real-time collaboration, rate limiting, game state, and more.
+
+## Overview
+
+Durable Objects are:
+- **Strongly consistent** - Single-threaded execution per object
+- **Globally unique** - Each object has a unique ID
+- **Persistent** - State survives between requests
+- **Edge-native** - Run close to users
+
+## Getting Started
+
+### Define a Durable Object
+
+<Steps>
+1. Create a Durable Object class:
+
+   ```typescript
+   // workers/counter.ts
+   import { DurableObject } from 'cloudflare:workers';
+
+   export class Counter extends DurableObject {
+     private count: number = 0;
+
+     constructor(state: DurableObjectState, env: Env) {
+       super(state, env);
+     }
+
+     async fetch(request: Request): Promise<Response> {
+       const url = new URL(request.url);
+
+       switch (url.pathname) {
+         case '/increment':
+           this.count++;
+           await this.ctx.storage.put('count', this.count);
+           return new Response(String(this.count));
+
+         case '/decrement':
+           this.count--;
+           await this.ctx.storage.put('count', this.count);
+           return new Response(String(this.count));
+
+         case '/':
+           return new Response(String(this.count));
+
+         default:
+           return new Response('Not found', { status: 404 });
+       }
+     }
+   }
+   ```
+
+2. Add the binding to `wrangler.toml`:
+
+   ```toml
+   [durable_objects]
+   bindings = [
+     { name = "COUNTER", class_name = "Counter" }
+   ]
+
+   [[migrations]]
+   tag = "v1"
+   new_classes = ["Counter"]
+   ```
+
+3. Configure in Cloudwerk:
+
+   ```typescript
+   // cloudwerk.config.ts
+   import { defineConfig } from '@cloudwerk/core';
+
+   export default defineConfig({
+     durableObjects: {
+       COUNTER: {
+         class: './workers/counter.ts',
+         className: 'Counter',
+       },
+     },
+   });
+   ```
+</Steps>
+
+### Using Durable Objects
+
+```typescript
+// app/api/counter/[id]/route.ts
+import { json } from '@cloudwerk/core';
+
+export async function GET(request: Request, { params, context }: CloudwerkHandlerContext) {
+  const id = context.env.COUNTER.idFromName(params.id);
+  const stub = context.env.COUNTER.get(id);
+
+  const response = await stub.fetch(new Request('http://counter/'));
+  const count = await response.text();
+
+  return json({ count: parseInt(count) });
+}
+
+export async function POST(request: Request, { params, context }: CloudwerkHandlerContext) {
+  const id = context.env.COUNTER.idFromName(params.id);
+  const stub = context.env.COUNTER.get(id);
+
+  const response = await stub.fetch(new Request('http://counter/increment'));
+  const count = await response.text();
+
+  return json({ count: parseInt(count) });
+}
+```
+
+## Storage API
+
+Durable Objects have built-in transactional storage:
+
+### Key-Value Operations
+
+```typescript
+export class MyObject extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    // Get a value
+    const value = await this.ctx.storage.get('key');
+
+    // Set a value
+    await this.ctx.storage.put('key', { data: 'value' });
+
+    // Delete a value
+    await this.ctx.storage.delete('key');
+
+    // Get multiple values
+    const values = await this.ctx.storage.get(['key1', 'key2', 'key3']);
+
+    // Set multiple values
+    await this.ctx.storage.put({
+      key1: 'value1',
+      key2: 'value2',
+    });
+
+    // List keys with prefix
+    const keys = await this.ctx.storage.list({ prefix: 'user:' });
+
+    return new Response('OK');
+  }
+}
+```
+
+### Transactions
+
+```typescript
+export class BankAccount extends DurableObject {
+  async transfer(fromKey: string, toKey: string, amount: number) {
+    // Transactions ensure atomicity
+    await this.ctx.storage.transaction(async (txn) => {
+      const from = await txn.get<number>(fromKey) ?? 0;
+      const to = await txn.get<number>(toKey) ?? 0;
+
+      if (from < amount) {
+        throw new Error('Insufficient funds');
+      }
+
+      await txn.put(fromKey, from - amount);
+      await txn.put(toKey, to + amount);
+    });
+  }
+}
+```
+
+## Real-Time Collaboration
+
+### WebSocket Chat Room
+
+```typescript
+// workers/chat-room.ts
+export class ChatRoom extends DurableObject {
+  private sessions: Map<WebSocket, { username: string }> = new Map();
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('Expected WebSocket', { status: 400 });
+    }
+
+    const url = new URL(request.url);
+    const username = url.searchParams.get('username') ?? 'Anonymous';
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    this.ctx.acceptWebSocket(server);
+    this.sessions.set(server, { username });
+
+    // Notify others
+    this.broadcast(JSON.stringify({
+      type: 'join',
+      username,
+      timestamp: Date.now(),
+    }), server);
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    const session = this.sessions.get(ws);
+    if (!session) return;
+
+    const data = JSON.parse(message as string);
+
+    this.broadcast(JSON.stringify({
+      type: 'message',
+      username: session.username,
+      content: data.content,
+      timestamp: Date.now(),
+    }));
+  }
+
+  async webSocketClose(ws: WebSocket) {
+    const session = this.sessions.get(ws);
+    if (session) {
+      this.sessions.delete(ws);
+      this.broadcast(JSON.stringify({
+        type: 'leave',
+        username: session.username,
+        timestamp: Date.now(),
+      }));
+    }
+  }
+
+  private broadcast(message: string, exclude?: WebSocket) {
+    for (const ws of this.sessions.keys()) {
+      if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      }
+    }
+  }
+}
+```
+
+### Collaborative Document
+
+```typescript
+// workers/document.ts
+interface DocumentState {
+  content: string;
+  version: number;
+  cursors: Map<string, { position: number; color: string }>;
+}
+
+export class Document extends DurableObject {
+  private state: DocumentState = {
+    content: '',
+    version: 0,
+    cursors: new Map(),
+  };
+  private sessions: Map<WebSocket, string> = new Map();
+
+  async fetch(request: Request): Promise<Response> {
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return this.handleWebSocket(request);
+    }
+
+    // REST API for initial load
+    const url = new URL(request.url);
+
+    if (request.method === 'GET' && url.pathname === '/content') {
+      return new Response(JSON.stringify({
+        content: this.state.content,
+        version: this.state.version,
+      }));
+    }
+
+    return new Response('Not found', { status: 404 });
+  }
+
+  private async handleWebSocket(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const userId = url.searchParams.get('userId') ?? crypto.randomUUID();
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+
+    this.ctx.acceptWebSocket(server);
+    this.sessions.set(server, userId);
+
+    // Send current state
+    server.send(JSON.stringify({
+      type: 'init',
+      content: this.state.content,
+      version: this.state.version,
+    }));
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string) {
+    const data = JSON.parse(message);
+    const userId = this.sessions.get(ws);
+
+    switch (data.type) {
+      case 'edit':
+        this.applyEdit(data.operations, data.baseVersion);
+        this.broadcastState();
+        break;
+
+      case 'cursor':
+        this.state.cursors.set(userId!, {
+          position: data.position,
+          color: data.color,
+        });
+        this.broadcastCursors();
+        break;
+    }
+  }
+
+  private applyEdit(operations: Operation[], baseVersion: number) {
+    // Apply operational transformation
+    for (const op of operations) {
+      if (op.type === 'insert') {
+        this.state.content =
+          this.state.content.slice(0, op.position) +
+          op.text +
+          this.state.content.slice(op.position);
+      } else if (op.type === 'delete') {
+        this.state.content =
+          this.state.content.slice(0, op.position) +
+          this.state.content.slice(op.position + op.length);
+      }
+    }
+    this.state.version++;
+    this.ctx.storage.put('state', this.state);
+  }
+
+  private broadcastState() {
+    const message = JSON.stringify({
+      type: 'update',
+      content: this.state.content,
+      version: this.state.version,
+    });
+
+    for (const ws of this.sessions.keys()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      }
+    }
+  }
+
+  private broadcastCursors() {
+    const message = JSON.stringify({
+      type: 'cursors',
+      cursors: Object.fromEntries(this.state.cursors),
+    });
+
+    for (const ws of this.sessions.keys()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      }
+    }
+  }
+}
+```
+
+## Rate Limiting
+
+```typescript
+// workers/rate-limiter.ts
+export class RateLimiter extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const key = url.searchParams.get('key') ?? 'default';
+    const limit = parseInt(url.searchParams.get('limit') ?? '100');
+    const window = parseInt(url.searchParams.get('window') ?? '60');
+
+    const now = Date.now();
+    const windowStart = now - (window * 1000);
+
+    // Get current requests in window
+    const requests = await this.ctx.storage.get<number[]>(`requests:${key}`) ?? [];
+
+    // Filter to only requests in current window
+    const recentRequests = requests.filter(timestamp => timestamp > windowStart);
+
+    if (recentRequests.length >= limit) {
+      return new Response(JSON.stringify({
+        allowed: false,
+        remaining: 0,
+        resetAt: Math.min(...recentRequests) + (window * 1000),
+      }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Add this request
+    recentRequests.push(now);
+    await this.ctx.storage.put(`requests:${key}`, recentRequests);
+
+    return new Response(JSON.stringify({
+      allowed: true,
+      remaining: limit - recentRequests.length,
+      resetAt: recentRequests[0] + (window * 1000),
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+```
+
+## Best Practices
+
+<Aside type="tip" title="Durable Object Tips">
+- Use meaningful IDs (user ID, room name) not random UUIDs
+- Keep objects focused on a single concern
+- Use alarms for periodic cleanup
+- Consider hibernation for idle objects
+</Aside>
+
+### Alarms for Cleanup
+
+```typescript
+export class Session extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    // Reset alarm on activity
+    await this.ctx.storage.setAlarm(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    // Handle request...
+    return new Response('OK');
+  }
+
+  async alarm() {
+    // Clean up inactive session
+    await this.ctx.storage.deleteAll();
+  }
+}
+```
+
+## Next Steps
+
+- **[Triggers Guide](/guides/triggers/)** - Scheduled tasks
+- **[Real-time Chat Example](/examples/realtime-chat/)** - Full WebSocket example
+- **[API Reference](/api/bindings/)** - Durable Object bindings

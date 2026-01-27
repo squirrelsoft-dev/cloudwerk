@@ -1,0 +1,346 @@
+---
+title: Context API
+description: Reference for the CloudwerkContext object available in handlers and loaders.
+---
+
+The `CloudwerkContext` object provides access to bindings, utilities, and request information throughout your application.
+
+## Overview
+
+Context is available in loaders, handlers, and middleware:
+
+```typescript
+// In a loader
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.getUser();
+  return { user };
+}
+
+// In a handler
+export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
+  return context.json({ message: 'Hello' });
+}
+
+// In middleware
+export const middleware: Middleware = async (request, next, context) => {
+  console.log('Request:', request.url);
+  return next(request);
+};
+```
+
+## Properties
+
+### `env`
+
+Access to all Cloudflare bindings:
+
+```typescript
+interface CloudwerkContext {
+  env: {
+    DB: D1Database;           // D1 binding
+    KV: KVNamespace;          // KV binding
+    R2: R2Bucket;             // R2 binding
+    MY_QUEUE: Queue;          // Queue binding
+    DURABLE_OBJECT: DurableObjectNamespace;
+    [key: string]: unknown;   // Custom bindings
+  };
+}
+```
+
+### `db`
+
+Query builder for D1 database:
+
+```typescript
+// Select
+const users = await context.db
+  .selectFrom('users')
+  .where('status', '=', 'active')
+  .orderBy('created_at', 'desc')
+  .limit(10)
+  .execute();
+
+// Insert
+const user = await context.db
+  .insertInto('users')
+  .values({ email: 'user@example.com', name: 'John' })
+  .returning(['id', 'email'])
+  .executeTakeFirst();
+
+// Update
+await context.db
+  .updateTable('users')
+  .set({ name: 'Jane' })
+  .where('id', '=', userId)
+  .execute();
+
+// Delete
+await context.db
+  .deleteFrom('users')
+  .where('id', '=', userId)
+  .execute();
+```
+
+### `kv`
+
+KV namespace helper:
+
+```typescript
+// Get value
+const value = await context.kv.get('key');
+const jsonValue = await context.kv.get<User>('key', 'json');
+
+// Set value
+await context.kv.put('key', 'value');
+await context.kv.put('key', JSON.stringify(data), {
+  expirationTtl: 3600,
+});
+
+// Delete
+await context.kv.delete('key');
+```
+
+### `r2`
+
+R2 bucket helper:
+
+```typescript
+// Get object
+const object = await context.r2.get('path/to/file.txt');
+if (object) {
+  const text = await object.text();
+}
+
+// Put object
+await context.r2.put('path/to/file.txt', content, {
+  httpMetadata: { contentType: 'text/plain' },
+});
+
+// Delete
+await context.r2.delete('path/to/file.txt');
+```
+
+### `queues`
+
+Queue producers:
+
+```typescript
+// Send message
+await context.queues.MY_QUEUE.send({ type: 'email', to: 'user@example.com' });
+
+// Send batch
+await context.queues.MY_QUEUE.sendBatch([
+  { body: { type: 'email', to: 'user1@example.com' } },
+  { body: { type: 'email', to: 'user2@example.com' } },
+]);
+```
+
+### `auth`
+
+Authentication utilities:
+
+```typescript
+interface AuthContext {
+  // Get current user (null if not authenticated)
+  getUser(): Promise<User | null>;
+
+  // Require user (throws RedirectError if not authenticated)
+  requireUser(): Promise<User>;
+
+  // Session management
+  createSession(data: SessionData): Promise<void>;
+  destroySession(): Promise<void>;
+  getSession(): Promise<Session | null>;
+
+  // OAuth helpers
+  getOAuthUrl(provider: string): string;
+  exchangeOAuthCode(provider: string, code: string): Promise<OAuthTokens>;
+  getOAuthProfile(provider: string, tokens: OAuthTokens): Promise<OAuthProfile>;
+}
+```
+
+Usage:
+
+```typescript
+// Get current user
+const user = await context.auth.getUser();
+if (!user) {
+  throw new RedirectError('/login');
+}
+
+// Or use requireUser
+const user = await context.auth.requireUser(); // Throws if not authenticated
+
+// Create session
+await context.auth.createSession({
+  userId: user.id,
+  email: user.email,
+});
+
+// Destroy session (logout)
+await context.auth.destroySession();
+```
+
+### `request`
+
+The incoming Request object:
+
+```typescript
+// Access request properties
+const url = new URL(context.request.url);
+const method = context.request.method;
+const headers = context.request.headers;
+
+// Parse body
+const json = await context.request.json();
+const formData = await context.request.formData();
+const text = await context.request.text();
+```
+
+### `waitUntil`
+
+Extend request lifetime for background tasks:
+
+```typescript
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  // Respond immediately
+  const response = json({ success: true });
+
+  // Continue processing in background
+  context.waitUntil(
+    sendAnalyticsEvent({ type: 'api_call', endpoint: '/api/users' })
+  );
+
+  return response;
+}
+```
+
+### `cf`
+
+Cloudflare-specific request properties:
+
+```typescript
+interface CfProperties {
+  asn: number;                    // ASN of the incoming request
+  asOrganization: string;         // Organization name
+  city: string;                   // City
+  colo: string;                   // Cloudflare data center
+  continent: string;              // Continent code
+  country: string;                // Country code
+  latitude: string;               // Latitude
+  longitude: string;              // Longitude
+  postalCode: string;             // Postal code
+  region: string;                 // Region/state
+  regionCode: string;             // Region code
+  timezone: string;               // Timezone
+  tlsVersion: string;             // TLS version
+  tlsCipher: string;              // TLS cipher
+}
+
+// Usage
+const { country, city, timezone } = context.cf;
+console.log(`Request from ${city}, ${country} (${timezone})`);
+```
+
+## Response Helpers
+
+### `json()`
+
+Create JSON response:
+
+```typescript
+export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
+  return context.json({ message: 'Hello' });
+  return context.json({ error: 'Not found' }, { status: 404 });
+  return context.json(data, {
+    status: 201,
+    headers: { 'X-Custom': 'value' },
+  });
+}
+```
+
+### `redirect()`
+
+Create redirect response:
+
+```typescript
+return context.redirect('/dashboard');
+return context.redirect('/login', 302); // Temporary redirect
+return context.redirect('https://example.com', 301); // Permanent redirect
+```
+
+### `html()`
+
+Create HTML response:
+
+```typescript
+return context.html('<h1>Hello, World!</h1>');
+return context.html(htmlContent, { status: 200 });
+```
+
+### `text()`
+
+Create text response:
+
+```typescript
+return context.text('Hello, World!');
+return context.text('Not found', { status: 404 });
+```
+
+### `stream()`
+
+Create streaming response:
+
+```typescript
+const stream = new ReadableStream({
+  start(controller) {
+    controller.enqueue('Hello, ');
+    controller.enqueue('World!');
+    controller.close();
+  },
+});
+
+return context.stream(stream, {
+  headers: { 'Content-Type': 'text/plain' },
+});
+```
+
+## Type Definitions
+
+```typescript
+interface CloudwerkContext {
+  env: Env;
+  db: DatabaseClient;
+  kv: KVHelper;
+  r2: R2Helper;
+  queues: Record<string, Queue>;
+  auth: AuthContext;
+  request: Request;
+  waitUntil: (promise: Promise<unknown>) => void;
+  cf: CfProperties;
+
+  // Response helpers
+  json<T>(data: T, init?: ResponseInit): Response;
+  redirect(url: string, status?: number): Response;
+  html(content: string, init?: ResponseInit): Response;
+  text(content: string, init?: ResponseInit): Response;
+  stream(stream: ReadableStream, init?: ResponseInit): Response;
+}
+
+interface CloudwerkHandlerContext {
+  params: Record<string, string>;
+  context: CloudwerkContext;
+}
+
+interface LoaderArgs {
+  request: Request;
+  params: Record<string, string>;
+  context: CloudwerkContext;
+}
+```
+
+## Next Steps
+
+- **[Bindings Reference](/api/bindings/)** - All Cloudflare bindings
+- **[Authentication Guide](/guides/authentication/)** - Auth patterns
+- **[Database Guide](/guides/database/)** - D1 database usage

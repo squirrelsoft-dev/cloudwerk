@@ -1,0 +1,385 @@
+# Cloudwerk - Full Documentation
+
+> A full-stack framework for Cloudflare Workers with file-based routing that compiles to Hono.
+
+## Overview
+
+Cloudwerk is a modern web framework designed specifically for Cloudflare Workers. It provides:
+
+- **File-based routing** - Intuitive routing from your directory structure
+- **Server-side rendering** - Built-in SSR with streaming support
+- **Data loading** - `loader()` functions for server-side data fetching
+- **Cloudflare-native** - First-class D1, KV, R2, Queues, and Durable Objects support
+- **TypeScript-first** - Full type safety throughout
+- **Hono compilation** - Routes compile to Hono for optimal performance
+
+**Status**: Pre-alpha - APIs are unstable.
+
+## Installation
+
+```bash
+# Create new project
+pnpm create cloudwerk@latest my-app
+
+# Or add to existing project
+pnpm add @cloudwerk/core @cloudwerk/cli @cloudwerk/ui
+```
+
+## Project Structure
+
+```
+my-app/
+├── app/
+│   ├── page.tsx              # Home page (/)
+│   ├── layout.tsx            # Root layout
+│   ├── middleware.ts         # Global middleware
+│   ├── about/
+│   │   └── page.tsx          # /about
+│   ├── users/
+│   │   ├── page.tsx          # /users
+│   │   └── [id]/
+│   │       └── page.tsx      # /users/:id
+│   └── api/
+│       └── users/
+│           └── route.ts      # /api/users
+├── public/                   # Static assets
+├── cloudwerk.config.ts       # Configuration
+├── wrangler.toml            # Cloudflare config
+└── package.json
+```
+
+## File Conventions
+
+### page.tsx
+Defines a page at the route path:
+
+```tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const data = await context.db.selectFrom('items').execute();
+  return { data };
+}
+
+export default function Page({ data }: PageProps & { data: Item[] }) {
+  return <ul>{data.map(item => <li key={item.id}>{item.name}</li>)}</ul>;
+}
+```
+
+### route.ts
+Defines API endpoints:
+
+```typescript
+import { json } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+
+export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
+  return json({ message: 'Hello' });
+}
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const body = await request.json();
+  return json(body, { status: 201 });
+}
+```
+
+Supported methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+
+### layout.tsx
+Wraps pages with shared UI:
+
+```tsx
+import type { LayoutProps } from '@cloudwerk/core';
+
+export default function Layout({ children }: LayoutProps) {
+  return (
+    <html>
+      <body>
+        <nav>...</nav>
+        <main>{children}</main>
+      </body>
+    </html>
+  );
+}
+```
+
+### middleware.ts
+Runs before route handlers:
+
+```typescript
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next, context) => {
+  // Before
+  const response = await next(request);
+  // After
+  return response;
+};
+```
+
+### error.tsx
+Error boundary:
+
+```tsx
+export default function Error({ error, reset }: ErrorProps) {
+  return (
+    <div>
+      <h1>Error</h1>
+      <p>{error.message}</p>
+      <button onClick={reset}>Retry</button>
+    </div>
+  );
+}
+```
+
+### not-found.tsx
+404 handler:
+
+```tsx
+export default function NotFound() {
+  return <h1>Page Not Found</h1>;
+}
+```
+
+## Dynamic Routes
+
+### Single segment: `[param]`
+```
+app/users/[id]/page.tsx -> /users/:id
+```
+
+### Catch-all: `[...slug]`
+```
+app/docs/[...slug]/page.tsx -> /docs/*
+params.slug = ['guides', 'routing'] for /docs/guides/routing
+```
+
+### Optional catch-all: `[[...slug]]`
+```
+app/shop/[[...categories]]/page.tsx
+Matches: /shop, /shop/electronics, /shop/electronics/phones
+```
+
+## Route Groups
+
+Use `(groupName)` to organize without affecting URL:
+
+```
+app/(marketing)/about/page.tsx -> /about
+app/(dashboard)/settings/page.tsx -> /settings
+```
+
+## Loader Arguments
+
+```typescript
+interface LoaderArgs {
+  request: Request;              // Incoming request
+  params: Record<string, string>; // URL parameters
+  context: CloudwerkContext;     // Bindings and utilities
+}
+```
+
+## Context API
+
+Available in loaders, handlers, and middleware:
+
+```typescript
+interface CloudwerkContext {
+  // Database (D1)
+  db: DatabaseClient;
+
+  // Key-Value (KV)
+  kv: KVNamespace;
+
+  // Object Storage (R2)
+  r2: R2Bucket;
+
+  // Queues
+  queues: Record<string, Queue>;
+
+  // Authentication
+  auth: {
+    getUser(): Promise<User | null>;
+    requireUser(): Promise<User>;
+    createSession(data: SessionData): Promise<void>;
+    destroySession(): Promise<void>;
+  };
+
+  // Environment
+  env: Env;
+
+  // Cloudflare properties
+  cf: CfProperties;
+
+  // Response helpers
+  json<T>(data: T, init?: ResponseInit): Response;
+  redirect(url: string, status?: number): Response;
+  html(content: string, init?: ResponseInit): Response;
+}
+```
+
+## Database (D1)
+
+Query builder:
+
+```typescript
+// Select
+const users = await context.db
+  .selectFrom('users')
+  .where('status', '=', 'active')
+  .orderBy('created_at', 'desc')
+  .limit(10)
+  .execute();
+
+// Insert
+await context.db
+  .insertInto('users')
+  .values({ name: 'John', email: 'john@example.com' })
+  .execute();
+
+// Update
+await context.db
+  .updateTable('users')
+  .set({ name: 'Jane' })
+  .where('id', '=', userId)
+  .execute();
+
+// Delete
+await context.db
+  .deleteFrom('users')
+  .where('id', '=', userId)
+  .execute();
+```
+
+## Error Handling
+
+```typescript
+import { NotFoundError, RedirectError } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const user = await context.db.selectFrom('users').where('id', '=', params.id).executeTakeFirst();
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  if (!user.isActive) {
+    throw new RedirectError('/inactive');
+  }
+
+  return { user };
+}
+```
+
+## Authentication
+
+Session-based:
+
+```typescript
+// Login
+await context.auth.createSession({ userId: user.id });
+
+// Get user
+const user = await context.auth.getUser();
+
+// Require user (throws RedirectError if not authenticated)
+const user = await context.auth.requireUser();
+
+// Logout
+await context.auth.destroySession();
+```
+
+## Queues
+
+```typescript
+// Send message
+await context.queues.MY_QUEUE.send({ type: 'email', to: 'user@example.com' });
+
+// Send batch
+await context.queues.MY_QUEUE.sendBatch([
+  { body: { type: 'email', to: 'user1@example.com' } },
+  { body: { type: 'email', to: 'user2@example.com' } },
+]);
+```
+
+## Durable Objects
+
+```typescript
+// Get stub
+const id = context.env.CHAT_ROOM.idFromName('room-123');
+const stub = context.env.CHAT_ROOM.get(id);
+
+// Call Durable Object
+const response = await stub.fetch('http://room/join');
+```
+
+## Configuration
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  appDir: 'app',
+  publicDir: 'public',
+  outDir: '.cloudwerk',
+
+  dev: {
+    port: 8787,
+    open: true,
+  },
+
+  build: {
+    minify: true,
+    sourcemap: true,
+  },
+
+  database: {
+    binding: 'DB',
+  },
+
+  auth: {
+    session: {
+      storage: 'kv',
+      namespace: 'SESSIONS',
+      maxAge: 604800,
+    },
+  },
+});
+```
+
+## CLI Commands
+
+```bash
+cloudwerk dev      # Start development server
+cloudwerk build    # Build for production
+cloudwerk deploy   # Deploy to Cloudflare
+cloudwerk routes   # List all routes
+cloudwerk migrate  # Run database migrations
+```
+
+## Deployment
+
+```bash
+# Deploy to production
+pnpm deploy
+
+# Deploy to staging
+pnpm deploy --env staging
+```
+
+## Cloudflare Limits (Key)
+
+- CPU time: 10ms (free), 30s (paid)
+- Memory: 128MB
+- Script size: 10MB compressed
+- D1 storage: 10GB per database
+- KV value size: 25MB
+- R2 object size: 5TB
+- Queues message size: 128KB
+
+## Links
+
+- Documentation: https://cloudwerk.dev
+- GitHub: https://github.com/squirrelsoft-dev/cloudwerk
+- Discord: https://discord.gg/cloudwerk

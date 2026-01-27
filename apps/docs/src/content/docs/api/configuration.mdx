@@ -1,0 +1,333 @@
+---
+title: Configuration
+description: Complete reference for cloudwerk.config.ts configuration options.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `cloudwerk.config.ts` file is the central configuration for your Cloudwerk application.
+
+## Basic Configuration
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  // Configuration options
+});
+```
+
+## Options Reference
+
+### `appDir`
+
+The directory containing your application routes.
+
+```typescript
+export default defineConfig({
+  appDir: 'app', // default
+});
+```
+
+### `publicDir`
+
+The directory for static assets.
+
+```typescript
+export default defineConfig({
+  publicDir: 'public', // default
+});
+```
+
+### `outDir`
+
+The output directory for builds.
+
+```typescript
+export default defineConfig({
+  outDir: '.cloudwerk', // default
+});
+```
+
+### `dev`
+
+Development server configuration.
+
+```typescript
+export default defineConfig({
+  dev: {
+    port: 8787,        // default
+    host: 'localhost', // default
+    https: false,      // Enable HTTPS locally
+    open: true,        // Open browser on start
+  },
+});
+```
+
+### `build`
+
+Build configuration options.
+
+```typescript
+export default defineConfig({
+  build: {
+    minify: true,           // Minify output
+    sourcemap: true,        // Generate sourcemaps
+    treeshake: true,        // Tree shake unused code
+    target: 'es2022',       // ES target
+    external: [],           // External dependencies
+  },
+});
+```
+
+### `database`
+
+D1 database configuration.
+
+```typescript
+export default defineConfig({
+  database: {
+    binding: 'DB',          // Wrangler binding name
+    migrationsDir: 'migrations', // Migrations directory
+  },
+});
+```
+
+### `auth`
+
+Authentication configuration.
+
+```typescript
+export default defineConfig({
+  auth: {
+    session: {
+      storage: 'kv',           // 'kv' | 'durable-object'
+      namespace: 'SESSIONS',   // KV namespace binding
+      maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
+      cookie: {
+        name: 'session',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        domain: undefined,     // Auto-detect
+      },
+    },
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        scopes: ['user:email'],
+      },
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        scopes: ['email', 'profile'],
+      },
+    },
+  },
+});
+```
+
+### `queues`
+
+Queue configuration.
+
+```typescript
+export default defineConfig({
+  queues: {
+    EMAIL_QUEUE: {
+      handler: './workers/email-queue.ts',
+    },
+    WEBHOOK_QUEUE: {
+      handler: './workers/webhook-queue.ts',
+    },
+  },
+});
+```
+
+### `durableObjects`
+
+Durable Objects configuration.
+
+```typescript
+export default defineConfig({
+  durableObjects: {
+    COUNTER: {
+      class: './workers/counter.ts',
+      className: 'Counter',
+    },
+    CHAT_ROOM: {
+      class: './workers/chat-room.ts',
+      className: 'ChatRoom',
+    },
+  },
+});
+```
+
+### `triggers`
+
+Cron trigger configuration.
+
+```typescript
+export default defineConfig({
+  triggers: {
+    handler: './workers/triggers.ts',
+  },
+});
+```
+
+### `middleware`
+
+Global middleware configuration.
+
+```typescript
+export default defineConfig({
+  middleware: {
+    // Apply to all routes
+    global: ['./middleware/logging.ts', './middleware/cors.ts'],
+
+    // Apply to specific paths
+    paths: {
+      '/api/*': ['./middleware/auth.ts'],
+      '/admin/*': ['./middleware/admin.ts'],
+    },
+  },
+});
+```
+
+### `rendering`
+
+Server-side rendering configuration.
+
+```typescript
+export default defineConfig({
+  rendering: {
+    streaming: true,        // Enable streaming SSR
+    renderer: 'hono-jsx',   // 'hono-jsx' | 'react' | 'preact'
+  },
+});
+```
+
+### `experimental`
+
+Experimental features.
+
+```typescript
+export default defineConfig({
+  experimental: {
+    // Enable experimental features
+    parallelLoaders: true,
+    edgeCaching: true,
+  },
+});
+```
+
+## Full Example
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  appDir: 'app',
+  publicDir: 'public',
+  outDir: '.cloudwerk',
+
+  dev: {
+    port: 8787,
+    open: true,
+  },
+
+  build: {
+    minify: true,
+    sourcemap: true,
+    treeshake: true,
+  },
+
+  database: {
+    binding: 'DB',
+    migrationsDir: 'migrations',
+  },
+
+  auth: {
+    session: {
+      storage: 'kv',
+      namespace: 'SESSIONS',
+      maxAge: 60 * 60 * 24 * 7,
+      cookie: {
+        name: 'session',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+      },
+    },
+  },
+
+  queues: {
+    EMAIL_QUEUE: {
+      handler: './workers/email-queue.ts',
+    },
+  },
+
+  durableObjects: {
+    RATE_LIMITER: {
+      class: './workers/rate-limiter.ts',
+      className: 'RateLimiter',
+    },
+  },
+
+  triggers: {
+    handler: './workers/triggers.ts',
+  },
+
+  rendering: {
+    streaming: true,
+    renderer: 'hono-jsx',
+  },
+});
+```
+
+## TypeScript Support
+
+The `defineConfig` helper provides full TypeScript support:
+
+```typescript
+import { defineConfig, type CloudwerkConfig } from '@cloudwerk/core';
+
+// Full type inference
+export default defineConfig({
+  // TypeScript will show available options
+});
+
+// Or define separately
+const config: CloudwerkConfig = {
+  appDir: 'app',
+};
+
+export default defineConfig(config);
+```
+
+## Environment-Specific Config
+
+Use environment variables for environment-specific configuration:
+
+```typescript
+export default defineConfig({
+  build: {
+    sourcemap: process.env.NODE_ENV !== 'production',
+    minify: process.env.NODE_ENV === 'production',
+  },
+});
+```
+
+<Aside type="tip">
+Configuration is loaded at build time. Environment variables are resolved during the build process.
+</Aside>
+
+## Next Steps
+
+- **[CLI Reference](/api/cli/)** - Command-line interface
+- **[Context API](/api/context/)** - Runtime context
+- **[Bindings Reference](/api/bindings/)** - Cloudflare bindings

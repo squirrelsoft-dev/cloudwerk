@@ -1,0 +1,390 @@
+---
+title: Deployment
+description: Deploy your Cloudwerk application to Cloudflare Workers.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Deploy your Cloudwerk application to Cloudflare's global network with a single command.
+
+## Quick Deploy
+
+```bash
+pnpm deploy
+```
+
+This builds your application and deploys it to Cloudflare Workers.
+
+## Configuration
+
+### wrangler.toml
+
+Configure your deployment in `wrangler.toml`:
+
+```toml
+name = "my-cloudwerk-app"
+main = ".cloudwerk/worker.js"
+compatibility_date = "2024-01-01"
+
+# Production environment
+[env.production]
+name = "my-cloudwerk-app"
+routes = [
+  { pattern = "example.com/*", zone_name = "example.com" }
+]
+
+# Staging environment
+[env.staging]
+name = "my-cloudwerk-app-staging"
+routes = [
+  { pattern = "staging.example.com/*", zone_name = "example.com" }
+]
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "my-database"
+database_id = "your-database-id"
+
+# KV Namespace
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-id"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "my-bucket"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+```
+
+### Environment Variables
+
+Set secrets using Wrangler:
+
+```bash
+# Set a secret
+wrangler secret put API_KEY
+
+# Set for specific environment
+wrangler secret put API_KEY --env staging
+```
+
+<Aside type="caution">
+Never commit secrets to your repository. Use `wrangler secret` for sensitive values.
+</Aside>
+
+## Deployment Environments
+
+### Development
+
+Local development with hot reload:
+
+```bash
+pnpm dev
+```
+
+### Staging
+
+Deploy to staging environment:
+
+```bash
+pnpm deploy --env staging
+```
+
+### Production
+
+Deploy to production:
+
+```bash
+pnpm deploy --env production
+```
+
+Or simply:
+
+```bash
+pnpm deploy
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy to Staging
+        if: github.event_name == 'pull_request'
+        run: pnpm deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy to Production
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: pnpm deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+### GitLab CI
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  image: node:20
+  script:
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    - pnpm test
+
+deploy_staging:
+  stage: deploy
+  image: node:20
+  script:
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    - pnpm deploy --env staging
+  environment:
+    name: staging
+    url: https://staging.example.com
+  only:
+    - merge_requests
+
+deploy_production:
+  stage: deploy
+  image: node:20
+  script:
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    - pnpm deploy --env production
+  environment:
+    name: production
+    url: https://example.com
+  only:
+    - main
+```
+
+## Database Migrations
+
+Run migrations before deployment:
+
+<Steps>
+1. Create migration files:
+
+   ```bash
+   mkdir -p migrations
+   ```
+
+2. Add migration to CI/CD:
+
+   ```yaml
+   - name: Run Migrations
+     run: wrangler d1 migrations apply my-database --remote
+     env:
+       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+   ```
+
+3. Or run manually:
+
+   ```bash
+   wrangler d1 migrations apply my-database --remote
+   ```
+</Steps>
+
+## Custom Domains
+
+### Configure Domain
+
+<Steps>
+1. Add your domain to Cloudflare DNS
+
+2. Configure routes in `wrangler.toml`:
+
+   ```toml
+   routes = [
+     { pattern = "api.example.com/*", zone_name = "example.com" }
+   ]
+   ```
+
+3. Deploy:
+
+   ```bash
+   pnpm deploy
+   ```
+</Steps>
+
+### Multiple Domains
+
+```toml
+routes = [
+  { pattern = "example.com/*", zone_name = "example.com" },
+  { pattern = "www.example.com/*", zone_name = "example.com" },
+  { pattern = "api.example.com/*", zone_name = "example.com" },
+]
+```
+
+## Rollbacks
+
+### Using Wrangler
+
+```bash
+# List deployments
+wrangler deployments list
+
+# Rollback to previous version
+wrangler rollback
+```
+
+### Using Versions
+
+```bash
+# List versions
+wrangler versions list
+
+# Deploy specific version
+wrangler versions deploy VERSION_ID
+```
+
+## Monitoring
+
+### Logs
+
+View real-time logs:
+
+```bash
+wrangler tail
+```
+
+Filter logs:
+
+```bash
+# Filter by status
+wrangler tail --status error
+
+# Filter by search term
+wrangler tail --search "user-123"
+```
+
+### Analytics
+
+View analytics in the Cloudflare dashboard:
+
+1. Go to Workers & Pages
+2. Select your worker
+3. View the Analytics tab
+
+## Performance Optimization
+
+### Bundle Size
+
+Keep your bundle small:
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  build: {
+    minify: true,
+    treeshake: true,
+  },
+});
+```
+
+### Caching
+
+Configure caching headers:
+
+```typescript
+export async function loader({ context }: LoaderArgs) {
+  const data = await fetchData();
+
+  return {
+    data,
+    headers: {
+      'Cache-Control': 'public, max-age=3600',
+    },
+  };
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Build fails:**
+```bash
+# Clear cache and rebuild
+rm -rf .cloudwerk
+pnpm build
+```
+
+**Deployment fails:**
+```bash
+# Check authentication
+wrangler whoami
+
+# Verify configuration
+wrangler deploy --dry-run
+```
+
+**Runtime errors:**
+```bash
+# Check logs
+wrangler tail --status error
+```
+
+<Aside type="tip" title="Debug Tips">
+- Use `wrangler dev` to test locally before deploying
+- Check the Cloudflare dashboard for error details
+- Use `console.log` in production (visible in `wrangler tail`)
+- Test with `--dry-run` before actual deployment
+</Aside>
+
+## Next Steps
+
+- **[Configuration Reference](/api/configuration/)** - All config options
+- **[CLI Reference](/api/cli/)** - Cloudwerk CLI commands
+- **[Cloudflare Limits](/reference/cloudflare-limits/)** - Platform limits

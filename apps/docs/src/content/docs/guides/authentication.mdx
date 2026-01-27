@@ -1,0 +1,369 @@
+---
+title: Authentication
+description: Implement authentication and authorization in your Cloudwerk app.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Cloudwerk provides flexible patterns for implementing authentication using sessions, JWTs, or OAuth providers.
+
+## Session-Based Authentication
+
+### Setting Up Sessions
+
+Configure session storage using Cloudflare KV:
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  auth: {
+    session: {
+      storage: 'kv',           // Use KV for session storage
+      namespace: 'SESSIONS',   // KV namespace binding
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      cookie: {
+        name: 'session',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+      },
+    },
+  },
+});
+```
+
+### Login Handler
+
+```typescript
+// app/api/auth/login/route.ts
+import { json, redirect } from '@cloudwerk/core';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const formData = await request.formData();
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+
+  // Find user
+  const user = await context.db
+    .selectFrom('users')
+    .where('email', '=', email)
+    .executeTakeFirst();
+
+  if (!user) {
+    return json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+
+  // Verify password
+  const valid = await verifyPassword(password, user.password_hash);
+  if (!valid) {
+    return json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+
+  // Create session
+  await context.auth.createSession({
+    userId: user.id,
+    email: user.email,
+  });
+
+  return redirect('/dashboard');
+}
+```
+
+### Logout Handler
+
+```typescript
+// app/api/auth/logout/route.ts
+import { redirect } from '@cloudwerk/core';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  await context.auth.destroySession();
+  return redirect('/');
+}
+```
+
+### Protected Routes
+
+Use middleware to protect routes:
+
+```typescript
+// app/dashboard/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+import { RedirectError } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next, context) => {
+  const user = await context.auth.getUser();
+
+  if (!user) {
+    throw new RedirectError('/login');
+  }
+
+  return next(request);
+};
+```
+
+## JWT Authentication
+
+### Generating Tokens
+
+```typescript
+// app/api/auth/token/route.ts
+import { json } from '@cloudwerk/core';
+import { SignJWT } from 'jose';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const { email, password } = await request.json();
+
+  // Authenticate user
+  const user = await authenticateUser(email, password, context);
+  if (!user) {
+    return json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+
+  // Generate JWT
+  const secret = new TextEncoder().encode(context.env.JWT_SECRET);
+  const token = await new SignJWT({ sub: user.id, email: user.email })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('24h')
+    .sign(secret);
+
+  return json({ token, expiresIn: 86400 });
+}
+```
+
+### Verifying Tokens
+
+```typescript
+// app/api/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+import { jwtVerify } from 'jose';
+
+export const middleware: Middleware = async (request, next, context) => {
+  const authHeader = request.headers.get('Authorization');
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const token = authHeader.slice(7);
+  const secret = new TextEncoder().encode(context.env.JWT_SECRET);
+
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    context.auth.userId = payload.sub as string;
+    context.auth.user = payload;
+  } catch {
+    return new Response('Invalid token', { status: 401 });
+  }
+
+  return next(request);
+};
+```
+
+## OAuth / Social Login
+
+### OAuth Configuration
+
+```typescript
+// cloudwerk.config.ts
+import { defineConfig } from '@cloudwerk/core';
+
+export default defineConfig({
+  auth: {
+    providers: {
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+        scopes: ['user:email'],
+      },
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        scopes: ['email', 'profile'],
+      },
+    },
+  },
+});
+```
+
+### OAuth Routes
+
+```typescript
+// app/api/auth/[provider]/route.ts
+import { redirect } from '@cloudwerk/core';
+
+export async function GET(request: Request, { params, context }: CloudwerkHandlerContext) {
+  const { provider } = params;
+  const authUrl = context.auth.getOAuthUrl(provider);
+  return redirect(authUrl);
+}
+```
+
+```typescript
+// app/api/auth/[provider]/callback/route.ts
+import { redirect } from '@cloudwerk/core';
+
+export async function GET(request: Request, { params, context }: CloudwerkHandlerContext) {
+  const { provider } = params;
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+
+  if (!code) {
+    return redirect('/login?error=oauth_failed');
+  }
+
+  // Exchange code for tokens
+  const tokens = await context.auth.exchangeOAuthCode(provider, code);
+
+  // Get user info
+  const profile = await context.auth.getOAuthProfile(provider, tokens);
+
+  // Find or create user
+  let user = await context.db
+    .selectFrom('users')
+    .where('oauth_provider', '=', provider)
+    .where('oauth_id', '=', profile.id)
+    .executeTakeFirst();
+
+  if (!user) {
+    user = await context.db
+      .insertInto('users')
+      .values({
+        email: profile.email,
+        name: profile.name,
+        oauth_provider: provider,
+        oauth_id: profile.id,
+      })
+      .returning(['id', 'email', 'name'])
+      .executeTakeFirst();
+  }
+
+  // Create session
+  await context.auth.createSession({ userId: user.id });
+
+  return redirect('/dashboard');
+}
+```
+
+## Role-Based Access Control
+
+### Define Roles
+
+```typescript
+// lib/auth/roles.ts
+export const ROLES = {
+  ADMIN: 'admin',
+  MODERATOR: 'moderator',
+  USER: 'user',
+} as const;
+
+export type Role = (typeof ROLES)[keyof typeof ROLES];
+
+export const PERMISSIONS = {
+  [ROLES.ADMIN]: ['read', 'write', 'delete', 'admin'],
+  [ROLES.MODERATOR]: ['read', 'write', 'delete'],
+  [ROLES.USER]: ['read', 'write'],
+};
+```
+
+### Check Permissions
+
+```typescript
+// app/admin/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+import { ROLES, PERMISSIONS } from '../../lib/auth/roles';
+
+export const middleware: Middleware = async (request, next, context) => {
+  const user = await context.auth.getUser();
+
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  if (user.role !== ROLES.ADMIN) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  return next(request);
+};
+```
+
+### Loader-Level Authorization
+
+```tsx
+// app/admin/users/page.tsx
+import { ForbiddenError } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const user = await context.auth.requireUser();
+
+  if (user.role !== 'admin') {
+    throw new ForbiddenError('Admin access required');
+  }
+
+  const users = await context.db.selectFrom('users').execute();
+  return { users };
+}
+```
+
+## Security Best Practices
+
+<Aside type="caution" title="Security Checklist">
+- Always use HTTPS in production
+- Set `httpOnly` and `secure` flags on session cookies
+- Implement rate limiting on auth endpoints
+- Use constant-time comparison for password verification
+- Store password hashes, never plain text
+- Rotate session tokens after login
+- Implement CSRF protection
+</Aside>
+
+### Password Hashing
+
+```typescript
+import { hash, verify } from '@cloudwerk/auth';
+
+// Hash password
+const passwordHash = await hash(password, {
+  algorithm: 'argon2id',
+  memoryCost: 65536,
+  timeCost: 3,
+});
+
+// Verify password
+const isValid = await verify(password, passwordHash);
+```
+
+### Rate Limiting
+
+```typescript
+// app/api/auth/login/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next, context) => {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+  const key = `rate_limit:login:${ip}`;
+
+  // Check rate limit
+  const attempts = parseInt(await context.kv.get(key) ?? '0');
+  if (attempts >= 5) {
+    return new Response('Too many attempts. Try again later.', {
+      status: 429,
+      headers: { 'Retry-After': '900' },
+    });
+  }
+
+  // Increment counter
+  await context.kv.put(key, String(attempts + 1), { expirationTtl: 900 });
+
+  return next(request);
+};
+```
+
+## Next Steps
+
+- **[Database Guide](/guides/database/)** - Store user data
+- **[Middleware Guide](/api/context/)** - Request middleware patterns
+- **[Security Reference](/reference/cloudflare-limits/)** - Platform limits

@@ -1,0 +1,219 @@
+---
+title: Quick Start
+description: Build your first Cloudwerk page and API route in minutes.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+This guide walks you through building your first Cloudwerk application with pages, data loading, and API routes.
+
+## Create Your First Page
+
+<Steps>
+1. Create a new page file at `app/page.tsx`:
+
+   ```tsx
+   // app/page.tsx
+   export default function HomePage() {
+     return (
+       <div>
+         <h1>Welcome to Cloudwerk</h1>
+         <p>Your full-stack framework for Cloudflare Workers.</p>
+       </div>
+     );
+   }
+   ```
+
+2. Start the dev server:
+
+   ```bash
+   pnpm dev
+   ```
+
+3. Open [http://localhost:8787](http://localhost:8787) to see your page.
+</Steps>
+
+## Add Data Loading
+
+Cloudwerk uses `loader()` functions for server-side data fetching:
+
+```tsx
+// app/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  // Fetch data on the server
+  const posts = await context.db
+    .selectFrom('posts')
+    .orderBy('created_at', 'desc')
+    .limit(10)
+    .execute();
+
+  return { posts };
+}
+
+interface Props extends PageProps {
+  posts: Array<{ id: string; title: string; excerpt: string }>;
+}
+
+export default function HomePage({ posts }: Props) {
+  return (
+    <div>
+      <h1>Latest Posts</h1>
+      <ul>
+        {posts.map((post) => (
+          <li key={post.id}>
+            <a href={`/posts/${post.id}`}>{post.title}</a>
+            <p>{post.excerpt}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+## Create Dynamic Routes
+
+Use brackets `[param]` for dynamic route segments:
+
+```tsx
+// app/posts/[id]/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import { NotFoundError } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const post = await context.db
+    .selectFrom('posts')
+    .where('id', '=', params.id)
+    .executeTakeFirst();
+
+  if (!post) {
+    throw new NotFoundError('Post not found');
+  }
+
+  return { post };
+}
+
+interface Props extends PageProps {
+  post: { id: string; title: string; content: string };
+}
+
+export default function PostPage({ post }: Props) {
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <div>{post.content}</div>
+    </article>
+  );
+}
+```
+
+<Aside type="tip">
+  For rendering HTML content, use a sanitization library like DOMPurify to prevent XSS attacks.
+</Aside>
+
+## Add a Layout
+
+Layouts wrap pages and persist across navigation:
+
+```tsx
+// app/layout.tsx
+import type { LayoutProps } from '@cloudwerk/core';
+
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>My Cloudwerk App</title>
+      </head>
+      <body>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+        </nav>
+        <main>{children}</main>
+        <footer>
+          <p>Built with Cloudwerk</p>
+        </footer>
+      </body>
+    </html>
+  );
+}
+```
+
+## Create an API Route
+
+API routes handle HTTP requests without rendering UI:
+
+```typescript
+// app/api/posts/route.ts
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+import { json } from '@cloudwerk/core';
+
+export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
+  const posts = await context.db
+    .selectFrom('posts')
+    .orderBy('created_at', 'desc')
+    .execute();
+
+  return json(posts);
+}
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const body = await request.json();
+
+  const post = await context.db
+    .insertInto('posts')
+    .values({
+      title: body.title,
+      content: body.content,
+      created_at: new Date().toISOString(),
+    })
+    .returning(['id', 'title'])
+    .executeTakeFirst();
+
+  return json(post, { status: 201 });
+}
+```
+
+## Add Middleware
+
+Middleware runs before route handlers:
+
+```typescript
+// app/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next) => {
+  const start = Date.now();
+
+  // Run the route handler
+  const response = await next(request);
+
+  // Add timing header
+  const duration = Date.now() - start;
+  response.headers.set('X-Response-Time', `${duration}ms`);
+
+  return response;
+};
+```
+
+## Deploy to Cloudflare
+
+Deploy your application globally:
+
+```bash
+pnpm deploy
+```
+
+Your app is now live on Cloudflare Workers!
+
+## Next Steps
+
+- **[Project Structure](/getting-started/project-structure/)** - Understand file conventions
+- **[Routing Guide](/guides/routing/)** - Learn advanced routing patterns
+- **[Data Loading](/guides/data-loading/)** - Master server-side data fetching
+- **[Database Guide](/guides/database/)** - Connect to Cloudflare D1

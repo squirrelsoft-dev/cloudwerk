@@ -1,0 +1,291 @@
+---
+title: Forms and Actions
+description: Handle form submissions and mutations in Cloudwerk.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Cloudwerk provides a simple pattern for handling form submissions using actions. Actions are server-side functions that process form data and return responses.
+
+## Basic Form Handling
+
+### Simple Form
+
+Create a form that submits to an API route:
+
+```tsx
+// app/contact/page.tsx
+export default function ContactPage() {
+  return (
+    <form action="/api/contact" method="POST">
+      <label>
+        Name:
+        <input type="text" name="name" required />
+      </label>
+      <label>
+        Email:
+        <input type="email" name="email" required />
+      </label>
+      <label>
+        Message:
+        <textarea name="message" required />
+      </label>
+      <button type="submit">Send Message</button>
+    </form>
+  );
+}
+```
+
+### API Route Handler
+
+```typescript
+// app/api/contact/route.ts
+import { json, redirect } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const formData = await request.formData();
+
+  const name = formData.get('name') as string;
+  const email = formData.get('email') as string;
+  const message = formData.get('message') as string;
+
+  // Validate
+  if (!name || !email || !message) {
+    return json({ error: 'All fields are required' }, { status: 400 });
+  }
+
+  // Process the form (e.g., save to database, send email)
+  await context.db
+    .insertInto('messages')
+    .values({ name, email, message, created_at: new Date().toISOString() })
+    .execute();
+
+  // Redirect on success
+  return redirect('/contact/success');
+}
+```
+
+## Form Validation
+
+### Server-Side Validation
+
+Always validate on the server:
+
+```typescript
+// app/api/users/route.ts
+import { json } from '@cloudwerk/core';
+import { z } from 'zod';
+
+const CreateUserSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+});
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const formData = await request.formData();
+  const data = Object.fromEntries(formData);
+
+  // Validate with Zod
+  const result = CreateUserSchema.safeParse(data);
+
+  if (!result.success) {
+    return json({
+      errors: result.error.flatten().fieldErrors,
+    }, { status: 400 });
+  }
+
+  // Create user with validated data
+  const user = await context.db
+    .insertInto('users')
+    .values({
+      email: result.data.email,
+      password: await hashPassword(result.data.password),
+      name: result.data.name,
+    })
+    .returning(['id', 'email', 'name'])
+    .executeTakeFirst();
+
+  return json({ user }, { status: 201 });
+}
+```
+
+### Displaying Validation Errors
+
+```tsx
+// app/signup/page.tsx
+export default function SignupPage() {
+  return (
+    <form action="/api/users" method="POST" id="signup-form">
+      <div>
+        <label htmlFor="email">Email:</label>
+        <input type="email" id="email" name="email" required />
+        <span className="error" data-field="email"></span>
+      </div>
+
+      <div>
+        <label htmlFor="password">Password:</label>
+        <input type="password" id="password" name="password" required minLength={8} />
+        <span className="error" data-field="password"></span>
+      </div>
+
+      <div>
+        <label htmlFor="name">Name:</label>
+        <input type="text" id="name" name="name" required />
+        <span className="error" data-field="name"></span>
+      </div>
+
+      <button type="submit">Sign Up</button>
+    </form>
+  );
+}
+```
+
+## File Uploads
+
+### Uploading to R2
+
+```tsx
+// app/upload/page.tsx
+export default function UploadPage() {
+  return (
+    <form action="/api/upload" method="POST" encType="multipart/form-data">
+      <label>
+        Choose file:
+        <input type="file" name="file" accept="image/*" required />
+      </label>
+      <button type="submit">Upload</button>
+    </form>
+  );
+}
+```
+
+```typescript
+// app/api/upload/route.ts
+import { json } from '@cloudwerk/core';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  const formData = await request.formData();
+  const file = formData.get('file') as File;
+
+  if (!file) {
+    return json({ error: 'No file provided' }, { status: 400 });
+  }
+
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    return json({ error: 'Invalid file type' }, { status: 400 });
+  }
+
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    return json({ error: 'File too large (max 5MB)' }, { status: 400 });
+  }
+
+  // Generate unique filename
+  const ext = file.name.split('.').pop();
+  const filename = `${crypto.randomUUID()}.${ext}`;
+
+  // Upload to R2
+  await context.r2.put(`uploads/${filename}`, file.stream(), {
+    httpMetadata: {
+      contentType: file.type,
+    },
+  });
+
+  return json({
+    url: `https://cdn.example.com/uploads/${filename}`,
+    filename,
+  });
+}
+```
+
+## JSON APIs
+
+For API endpoints that accept JSON:
+
+```typescript
+// app/api/posts/route.ts
+import { json } from '@cloudwerk/core';
+
+export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+  // Check content type
+  const contentType = request.headers.get('Content-Type');
+  if (!contentType?.includes('application/json')) {
+    return json({ error: 'Content-Type must be application/json' }, { status: 415 });
+  }
+
+  const body = await request.json();
+
+  // Validate and process
+  const post = await context.db
+    .insertInto('posts')
+    .values({
+      title: body.title,
+      content: body.content,
+      author_id: context.auth.userId,
+    })
+    .returning(['id', 'title'])
+    .executeTakeFirst();
+
+  return json(post, { status: 201 });
+}
+```
+
+## CSRF Protection
+
+<Aside type="caution">
+Always implement CSRF protection for forms that modify data.
+</Aside>
+
+```typescript
+// app/middleware.ts
+import type { Middleware } from '@cloudwerk/core';
+
+export const middleware: Middleware = async (request, next) => {
+  // Skip for GET, HEAD, OPTIONS
+  if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+    return next(request);
+  }
+
+  // Check origin header
+  const origin = request.headers.get('Origin');
+  const host = request.headers.get('Host');
+
+  if (origin && new URL(origin).host !== host) {
+    return new Response('CSRF validation failed', { status: 403 });
+  }
+
+  return next(request);
+};
+```
+
+## Response Helpers
+
+Cloudwerk provides helpers for common responses:
+
+```typescript
+import { json, redirect, notFound, error } from '@cloudwerk/core';
+
+// JSON response
+return json({ data: 'value' });
+return json({ data: 'value' }, { status: 201 });
+
+// Redirect
+return redirect('/dashboard');
+return redirect('/login', 302);
+
+// Not found
+return notFound('Resource not found');
+
+// Error response
+return error('Something went wrong', 500);
+```
+
+## Next Steps
+
+- **[Authentication](/guides/authentication/)** - Secure your forms
+- **[Database Guide](/guides/database/)** - Store form data
+- **[API Reference](/api/context/)** - Request handling utilities

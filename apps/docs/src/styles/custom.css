@@ -1,0 +1,134 @@
+/* Custom Cloudwerk Theme */
+
+:root {
+  /* Indigo color palette for light mode */
+  --sl-color-accent-low: #e0e7ff;
+  --sl-color-accent: #4f46e5;
+  --sl-color-accent-high: #3730a3;
+
+  /* Background and text tweaks for light mode */
+  --sl-color-bg: #ffffff;
+  --sl-color-bg-nav: #f8fafc;
+  --sl-color-bg-sidebar: #f8fafc;
+
+  /* Border colors */
+  --sl-color-hairline: #e2e8f0;
+  --sl-color-hairline-light: #f1f5f9;
+
+  /* Code block styling */
+  --sl-color-bg-inline-code: #f1f5f9;
+}
+
+:root[data-theme='dark'] {
+  /* Indigo color palette for dark mode */
+  --sl-color-accent-low: #312e81;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #c7d2fe;
+
+  /* Background and text tweaks for dark mode */
+  --sl-color-bg: #0f172a;
+  --sl-color-bg-nav: #1e293b;
+  --sl-color-bg-sidebar: #1e293b;
+
+  /* Border colors */
+  --sl-color-hairline: #334155;
+  --sl-color-hairline-light: #1e293b;
+
+  /* Code block styling */
+  --sl-color-bg-inline-code: #1e293b;
+}
+
+/* Typography enhancements */
+.sl-markdown-content h1 {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.sl-markdown-content h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Code block improvements */
+.sl-markdown-content pre {
+  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-hairline);
+}
+
+/* Link hover effects */
+.sl-markdown-content a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Sidebar styling */
+nav.sidebar {
+  border-right: 1px solid var(--sl-color-hairline);
+}
+
+/* Hero section on homepage */
+.hero {
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Feature cards */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.feature-card {
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--sl-color-hairline);
+  background: var(--sl-color-bg-sidebar);
+}
+
+.feature-card h3 {
+  margin-top: 0;
+  color: var(--sl-color-accent);
+}
+
+/* Badge styling */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge.pre-alpha {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+:root[data-theme='dark'] .badge.pre-alpha {
+  background: #451a03;
+  color: #fbbf24;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero h1 {
+    font-size: 2rem;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,105 @@
+---
+title: Cloudwerk
+description: A full-stack framework for Cloudflare Workers with file-based routing that compiles to Hono.
+template: splash
+hero:
+  tagline: Build fast, deploy faster. A full-stack framework for Cloudflare Workers with file-based routing, integrated D1, KV, R2, authentication, and queues.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get Started
+      link: /getting-started/installation/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/squirrelsoft-dev/cloudwerk
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<p class="badge pre-alpha">Pre-Alpha</p>
+
+## Why Cloudwerk?
+
+Cloudwerk brings the developer experience of modern frameworks like Next.js to Cloudflare Workers. Write intuitive file-based routes, use familiar patterns for data loading, and deploy globally in seconds.
+
+<CardGrid stagger>
+  <Card title="File-Based Routing" icon="document">
+    Intuitive routing powered by your file structure. Create `page.tsx` and `route.ts` files, and Cloudwerk handles the rest.
+  </Card>
+  <Card title="Compiles to Hono" icon="rocket">
+    Your routes compile to Hono, giving you the performance and flexibility of one of the fastest web frameworks.
+  </Card>
+  <Card title="Cloudflare Native" icon="cloud">
+    First-class support for D1, KV, R2, Durable Objects, Queues, and all Cloudflare primitives.
+  </Card>
+  <Card title="Edge-First" icon="lightning">
+    Deploy to 300+ edge locations worldwide. Your code runs milliseconds from your users.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+Create a page with data loading in seconds:
+
+```tsx
+// app/users/[id]/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const user = await context.db
+    .selectFrom('users')
+    .where('id', '=', params.id)
+    .executeTakeFirst();
+
+  if (!user) throw new NotFoundError();
+  return { user };
+}
+
+export default function UserPage({ user }: PageProps & { user: User }) {
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+```
+
+## Features at a Glance
+
+- **File-based routing** - Pages, layouts, and API routes from your file structure
+- **Server-side rendering** - Built-in SSR with streaming support
+- **Data loading** - `loader()` functions for server-side data fetching
+- **Middleware** - Request middleware at any route level
+- **Authentication** - Built-in auth patterns with sessions and JWT
+- **Database** - First-class D1 integration with query builder
+- **Storage** - KV and R2 bindings made simple
+- **Queues** - Background job processing with Cloudflare Queues
+- **Type-safe** - Full TypeScript support throughout
+
+## Getting Started
+
+<CardGrid>
+  <Card title="Installation" icon="rocket">
+    Set up a new Cloudwerk project in minutes.
+
+    [Install Cloudwerk](/getting-started/installation/)
+  </Card>
+  <Card title="Quick Start" icon="pencil">
+    Build your first page and API route.
+
+    [Quick Start Guide](/getting-started/quick-start/)
+  </Card>
+  <Card title="Project Structure" icon="folder">
+    Learn the Cloudwerk file conventions.
+
+    [Project Structure](/getting-started/project-structure/)
+  </Card>
+  <Card title="Examples" icon="code">
+    Explore full example applications.
+
+    [View Examples](/examples/blog/)
+  </Card>
+</CardGrid>
