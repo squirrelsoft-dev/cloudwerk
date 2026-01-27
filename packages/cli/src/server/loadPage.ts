@@ -11,14 +11,14 @@ import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
 import { validateRouteConfig } from '@cloudwerk/core'
-import type { PageComponent, RouteConfig, LoaderFunction } from '@cloudwerk/core'
+import type { PageComponent, RouteConfig, LoaderFunction, ActionFunction } from '@cloudwerk/core'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /**
- * A loaded page module with default component export, optional config, and optional loader.
+ * A loaded page module with default component export, optional config, loader, and action.
  */
 export interface LoadedPageModule {
   /** Default export: the page component function */
@@ -27,6 +27,16 @@ export interface LoadedPageModule {
   config?: RouteConfig
   /** Optional loader function for server-side data loading */
   loader?: LoaderFunction
+  /** Optional action function for handling form submissions */
+  action?: ActionFunction
+  /** Named POST action export */
+  POST?: ActionFunction
+  /** Named PUT action export */
+  PUT?: ActionFunction
+  /** Named PATCH action export */
+  PATCH?: ActionFunction
+  /** Named DELETE action export */
+  DELETE?: ActionFunction
 }
 
 // ============================================================================
@@ -120,6 +130,11 @@ export async function loadPageModule(
       const rawModule = (await import(pathToFileURL(tempFile).href)) as LoadedPageModule & {
         config?: unknown
         loader?: unknown
+        action?: unknown
+        POST?: unknown
+        PUT?: unknown
+        PATCH?: unknown
+        DELETE?: unknown
       }
 
       // Validate that default export exists and is a function
@@ -150,11 +165,39 @@ export async function loadPageModule(
         validatedLoader = rawModule.loader as LoaderFunction
       }
 
-      // Create module with validated config and loader
+      // Validate action if present
+      let validatedAction: ActionFunction | undefined = undefined
+      if ('action' in rawModule && rawModule.action !== undefined) {
+        if (typeof rawModule.action !== 'function') {
+          throw new Error(
+            `Page action export must be a function, got ${typeof rawModule.action}`
+          )
+        }
+        validatedAction = rawModule.action as ActionFunction
+      }
+
+      // Validate named method exports (POST, PUT, PATCH, DELETE)
+      const actionMethods = ['POST', 'PUT', 'PATCH', 'DELETE'] as const
+      const validatedMethods: Partial<Record<typeof actionMethods[number], ActionFunction>> = {}
+
+      for (const method of actionMethods) {
+        if (method in rawModule && rawModule[method] !== undefined) {
+          if (typeof rawModule[method] !== 'function') {
+            throw new Error(
+              `Page ${method} export must be a function, got ${typeof rawModule[method]}`
+            )
+          }
+          validatedMethods[method] = rawModule[method] as ActionFunction
+        }
+      }
+
+      // Create module with validated config, loader, and actions
       const module: LoadedPageModule = {
         default: rawModule.default,
         config: validatedConfig,
         loader: validatedLoader,
+        action: validatedAction,
+        ...validatedMethods,
       }
 
       // Cache the compiled module with its mtime

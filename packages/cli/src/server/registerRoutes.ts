@@ -16,6 +16,8 @@ import type {
   LayoutProps,
   LoaderFunction,
   LoaderArgs,
+  ActionFunction,
+  ActionArgs,
 } from '@cloudwerk/core'
 import { createHandlerAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core'
 import { render } from '@cloudwerk/ui'
@@ -122,6 +124,55 @@ async function executeLoader(
   try {
     const data = await Promise.resolve(loader(args))
     return { data: (data ?? {}) as Record<string, unknown> }
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { response: await Promise.resolve(c.notFound()) }
+    }
+    if (error instanceof RedirectError) {
+      return { response: c.redirect(error.url, error.status as RedirectStatusCode) }
+    }
+    throw error
+  }
+}
+
+// ============================================================================
+// Action Execution
+// ============================================================================
+
+/**
+ * Result of executing an action function.
+ * Either returns data for re-rendering or an early response (redirect/json).
+ */
+type ActionResult =
+  | { data: Record<string, unknown>; response?: never }
+  | { data?: never; response: Response }
+
+/**
+ * Execute an action function with error handling for NotFoundError and RedirectError.
+ *
+ * If the action returns a Response, it's passed through directly.
+ * If the action returns data, it's returned for re-rendering the page with actionData.
+ *
+ * @param action - The action function to execute
+ * @param args - Arguments to pass to the action
+ * @param c - Hono context for creating responses
+ * @returns Data from the action or an early response
+ */
+async function executeAction(
+  action: ActionFunction,
+  args: ActionArgs,
+  c: Context
+): Promise<ActionResult> {
+  try {
+    const result = await Promise.resolve(action(args))
+
+    // If action returned a Response, pass it through
+    if (result instanceof Response) {
+      return { response: result }
+    }
+
+    // Otherwise return as data for re-rendering
+    return { data: (result ?? {}) as Record<string, unknown> }
   } catch (error) {
     if (error instanceof NotFoundError) {
       return { response: await Promise.resolve(c.notFound()) }
@@ -278,6 +329,108 @@ export async function registerRoutes(
         })
 
         logger.debug(`Registered page ${route.urlPattern}`)
+
+        // Register action handlers for mutation methods (POST, PUT, PATCH, DELETE)
+        const actionMethods: HttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE']
+
+        for (const method of actionMethods) {
+          // Prefer named export (e.g., POST) over generic action
+          const action = pageModule[method as keyof typeof pageModule] ?? pageModule.action
+
+          if (action && typeof action === 'function') {
+            const actionFn = action as ActionFunction
+
+            // Register the action handler
+            registerMethod(app, method, route.urlPattern, async (c) => {
+              try {
+                const params = c.req.param()
+                const searchParams = parseSearchParams(c)
+                const request = c.req.raw
+
+                // Execute action
+                const actionArgs: ActionArgs = { params, request, context: c }
+                const actionResult = await executeAction(actionFn, actionArgs, c)
+
+                // If action returned a Response (redirect, json, etc.), return it directly
+                if (actionResult.response) {
+                  return actionResult.response
+                }
+
+                // Action returned data - re-run loaders and render page with actionData
+
+                // Execute layout loaders sequentially (parent -> child)
+                const loaderArgs: LoaderArgs = { params, request, context: c }
+                const layoutLoaderData: Record<string, unknown>[] = []
+
+                for (let index = 0; index < layoutModules.length; index++) {
+                  const layoutModule = layoutModules[index]
+                  if (layoutModule.loader) {
+                    const result = await executeLoader(layoutModule.loader, loaderArgs, c)
+                    if (result.response) {
+                      return result.response
+                    }
+                    layoutLoaderData[index] = result.data
+                  } else {
+                    layoutLoaderData[index] = {}
+                  }
+                }
+
+                // Execute page loader
+                let pageLoaderData: Record<string, unknown> = {}
+                if (pageModule.loader) {
+                  const result = await executeLoader(pageModule.loader, loaderArgs, c)
+                  if (result.response) {
+                    return result.response
+                  }
+                  pageLoaderData = result.data
+                }
+
+                // Build page props with loader data spread and actionData
+                const pageProps: PageProps = {
+                  params,
+                  searchParams,
+                  actionData: actionResult.data,
+                  ...pageLoaderData,
+                }
+
+                // Render page component (handle async - all components are Server Components)
+                let element = await Promise.resolve(PageComponent(pageProps))
+
+                // Wrap with layouts (reverse to wrap inside-out)
+                for (let i = layouts.length - 1; i >= 0; i--) {
+                  const Layout = layouts[i]
+                  const layoutProps: LayoutProps = {
+                    children: element,
+                    params,
+                    ...layoutLoaderData[i],
+                  }
+                  element = await Promise.resolve(Layout(layoutProps))
+                }
+
+                // Use @cloudwerk/ui render function (streaming SSR)
+                return render(element)
+              } catch (error) {
+                // Log error for debugging
+                const message = error instanceof Error ? error.message : String(error)
+                logger.error(`Error executing action ${route.filePath}: ${message}`)
+
+                // Return error response (future: error.tsx boundary)
+                return c.html(
+                  `<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>`,
+                  500
+                )
+              }
+            })
+
+            registeredRoutes.push({
+              method,
+              pattern: route.urlPattern,
+              filePath: route.filePath,
+            })
+
+            logger.debug(`Registered ${method} action ${route.urlPattern}`)
+          }
+        }
       } catch (error) {
         // Log error but continue with other routes
         const message = error instanceof Error ? error.message : String(error)

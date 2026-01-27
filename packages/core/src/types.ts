@@ -245,10 +245,22 @@ export type CloudwerkUserConfig = Partial<CloudwerkConfig>
 
 /**
  * Page component props
+ *
+ * @typeParam TParams - Route parameters type (inferred from dynamic segments)
+ * @typeParam TActionData - Action data type (from action function return)
  */
-export interface PageProps<TParams = Record<string, string>> {
+export interface PageProps<
+  TParams = Record<string, string>,
+  TActionData = unknown
+> {
   params: TParams
   searchParams: Record<string, string | string[] | undefined>
+  /**
+   * Data returned from the action function (present after form submission).
+   * This is undefined on GET requests and only populated when an action
+   * returns data (not a Response).
+   */
+  actionData?: TActionData
 }
 
 /**
@@ -716,5 +728,134 @@ export type LoaderFunction<
  * ```
  */
 export type InferLoaderData<T> = T extends LoaderFunction<infer D, unknown>
+  ? Awaited<D>
+  : never
+
+// ============================================================================
+// Action Types
+// ============================================================================
+
+/**
+ * Arguments passed to action functions.
+ *
+ * Actions receive route params, the raw request (for reading formData),
+ * and the Hono context. This mirrors LoaderArgs for consistency.
+ *
+ * @example
+ * ```typescript
+ * import type { ActionArgs } from '@cloudwerk/core'
+ *
+ * export async function action({ params, request, context }: ActionArgs<{ id: string }>) {
+ *   // Read form data
+ *   const formData = await request.formData()
+ *   const name = formData.get('name')
+ *
+ *   // Access cookies
+ *   const session = context.req.cookie('session')
+ *
+ *   // Update data
+ *   await updateUser(params.id, { name })
+ *
+ *   return { success: true }
+ * }
+ * ```
+ */
+export interface ActionArgs<TParams = Record<string, string>> {
+  /** Route parameters from dynamic segments */
+  params: TParams
+
+  /** The raw Request object (use for formData(), json(), etc.) */
+  request: Request
+
+  /**
+   * Hono context for accessing cookies, headers, env, and middleware state.
+   *
+   * Common uses:
+   * - `context.req.cookie('name')` - Read cookies
+   * - `context.header('Cache-Control', '...')` - Set response headers
+   * - `context.env.DB` - Access Cloudflare bindings
+   * - `context.get('key')` - Read middleware-set values
+   */
+  context: HonoContext
+}
+
+/**
+ * Action function signature for handling form submissions and mutations.
+ *
+ * Actions run when handling POST, PUT, PATCH, or DELETE requests to a page.
+ * They can return:
+ * - A `Response` object (e.g., redirect, json response) - returned directly
+ * - Data object - page is re-rendered with `actionData` prop
+ *
+ * Special behaviors:
+ * - Throw `NotFoundError` to return a 404 response
+ * - Throw `RedirectError` to redirect to another URL
+ * - Other thrown errors will propagate and return 500
+ *
+ * @example
+ * ```typescript
+ * import type { ActionFunction } from '@cloudwerk/core'
+ * import { redirect, RedirectError } from '@cloudwerk/core'
+ *
+ * // Return redirect Response (skips page re-render)
+ * export const action: ActionFunction = async ({ request }) => {
+ *   const formData = await request.formData()
+ *   await saveData(formData)
+ *   return redirect('/success')
+ * }
+ *
+ * // Return data (re-renders page with actionData)
+ * export const action: ActionFunction<{ errors?: Record<string, string> }> = async ({
+ *   request,
+ * }) => {
+ *   const formData = await request.formData()
+ *   const errors = validate(formData)
+ *   if (errors) {
+ *     return { errors }
+ *   }
+ *   await saveData(formData)
+ *   return { success: true }
+ * }
+ * ```
+ */
+export type ActionFunction<
+  TData = unknown,
+  TParams = Record<string, string>
+> = (args: ActionArgs<TParams>) => TData | Promise<TData>
+
+/**
+ * Helper type for inferring action return data type.
+ *
+ * Use this to extract the data type from an action function for type-safe props.
+ *
+ * @example
+ * ```typescript
+ * import type { InferActionData, ActionArgs, PageProps } from '@cloudwerk/core'
+ *
+ * export async function action({ request }: ActionArgs) {
+ *   const formData = await request.formData()
+ *   const errors = validate(formData)
+ *   if (errors) return { errors }
+ *   await save(formData)
+ *   return { success: true }
+ * }
+ *
+ * type ActionData = InferActionData<typeof action>
+ * // ActionData = { errors?: Record<string, string> } | { success: boolean }
+ *
+ * export default function SettingsPage({
+ *   actionData,
+ * }: PageProps & { actionData?: ActionData }) {
+ *   return (
+ *     <form method="post">
+ *       {actionData?.errors && <p>Error: {actionData.errors.name}</p>}
+ *       {actionData?.success && <p>Saved!</p>}
+ *       ...
+ *     </form>
+ *   )
+ * }
+ * ```
+ */
+export type InferActionData<T> = T extends ActionFunction<infer D, unknown>
   ? Awaited<D>
   : never
