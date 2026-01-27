@@ -92,7 +92,7 @@ export interface HtmlOptions {
 }
 
 /**
- * Options for streaming render.
+ * Options for streaming render (loading-swap pattern).
  */
 export interface StreamRenderOptions {
   /**
@@ -106,6 +106,32 @@ export interface StreamRenderOptions {
    * These are merged with the default Content-Type and Transfer-Encoding headers.
    */
   headers?: Record<string, string>
+}
+
+/**
+ * Options for native progressive streaming render with Suspense boundaries.
+ *
+ * This is used by renderToStream() which uses Hono's renderToReadableStream
+ * for native progressive streaming with Suspense support.
+ */
+export interface RenderToStreamOptions {
+  /**
+   * HTTP status code for the response.
+   * @default 200
+   */
+  status?: number
+
+  /**
+   * Additional response headers.
+   * These are merged with the default Content-Type header.
+   */
+  headers?: Record<string, string>
+
+  /**
+   * Whether to include the <!DOCTYPE html> declaration.
+   * @default true
+   */
+  doctype?: boolean
 }
 
 // ============================================================================

@@ -32,7 +32,7 @@ import {
   resolveNotFoundBoundary,
   resolveLoadingBoundary,
 } from '@cloudwerk/core'
-import { render, renderStream } from '@cloudwerk/ui'
+import { render, renderStream, renderToStream } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
@@ -433,8 +433,9 @@ export async function registerRoutes(
               element = await Promise.resolve(Layout(layoutProps))
             }
 
-            // Use @cloudwerk/ui render function (streaming SSR)
-            return render(element)
+            // Use renderToStream for native Suspense support
+            // This enables progressive streaming for pages with Suspense boundaries
+            return renderToStream(element)
           } catch (error) {
             // Handle NotFoundError with not-found boundary
             if (error instanceof NotFoundError) {
@@ -618,8 +619,9 @@ export async function registerRoutes(
                   element = await Promise.resolve(Layout(layoutProps))
                 }
 
-                // Use @cloudwerk/ui render function (streaming SSR)
-                return render(element)
+                // Use renderToStream for native Suspense support
+                // This enables progressive streaming for pages with Suspense boundaries
+                return renderToStream(element)
               } catch (error) {
                 // Handle NotFoundError with not-found boundary
                 if (error instanceof NotFoundError) {

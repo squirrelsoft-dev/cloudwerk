@@ -4,4 +4,4 @@
  * Exports all available renderer implementations.
  */
 
-export { honoJsxRenderer, renderStream } from './hono-jsx.js'
+export { honoJsxRenderer, renderStream, renderToStream } from './hono-jsx.js'

@@ -5,7 +5,8 @@
  * Hono JSX elements have a toString() method that renders them to HTML.
  */
 
-import type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions } from '../types.js'
+import { renderToReadableStream } from 'hono/jsx/streaming'
+import type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions, RenderToStreamOptions } from '../types.js'
 
 /**
  * Hono JSX renderer implementation.
@@ -18,7 +19,8 @@ import type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions } from '
  * - Automatic doctype handling
  * - Proper Content-Type headers
  *
- * Note: Streaming support via renderToReadableStream will be added in issue #38.
+ * Native progressive streaming is available via renderToStream() using Hono's
+ * renderToReadableStream for Suspense boundary support.
  */
 export const honoJsxRenderer: Renderer = {
   /**
@@ -174,6 +176,97 @@ export function renderStream(
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Transfer-Encoding': 'chunked',
+      ...headers,
+    },
+  })
+}
+
+// ============================================================================
+// Native Progressive Streaming (Suspense Support)
+// ============================================================================
+
+/**
+ * Prepend DOCTYPE html to a ReadableStream.
+ *
+ * Uses a TransformStream to inject the doctype before the first chunk.
+ *
+ * @param stream - The original ReadableStream
+ * @returns A new ReadableStream with DOCTYPE prepended
+ */
+function prependDoctype(stream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  const doctypeBytes = encoder.encode('<!DOCTYPE html>')
+  let doctypeSent = false
+
+  return stream.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        if (!doctypeSent) {
+          controller.enqueue(doctypeBytes)
+          doctypeSent = true
+        }
+        controller.enqueue(chunk)
+      },
+    })
+  )
+}
+
+/**
+ * Render a JSX element to a streaming Response using native progressive streaming.
+ *
+ * This uses Hono's renderToReadableStream for native support of React-style
+ * Suspense boundaries. Content inside Suspense components will be progressively
+ * streamed as their async content resolves.
+ *
+ * Unlike renderStream() which uses a loading-swap pattern, this function
+ * provides true progressive streaming where:
+ * - The initial shell is sent immediately
+ * - Suspense fallbacks are shown while async content loads
+ * - Async content is streamed in-place as it resolves
+ * - No JavaScript is required for the initial render
+ *
+ * @param element - Hono JSX element to render (may contain Suspense boundaries)
+ * @param options - Render options
+ * @returns Promise resolving to Response with streaming HTML content
+ *
+ * @example
+ * // In a route handler
+ * import { Suspense } from 'hono/jsx/streaming'
+ *
+ * function Page() {
+ *   return (
+ *     <html>
+ *       <body>
+ *         <h1>Dashboard</h1>
+ *         <Suspense fallback={<p>Loading stats...</p>}>
+ *           <AsyncStats />
+ *         </Suspense>
+ *       </body>
+ *     </html>
+ *   )
+ * }
+ *
+ * export function GET() {
+ *   return renderToStream(<Page />)
+ * }
+ */
+export async function renderToStream(
+  element: unknown,
+  options: RenderToStreamOptions = {}
+): Promise<Response> {
+  const { status = 200, headers = {}, doctype = true } = options
+
+  // Use Hono's native streaming renderer
+  // The element must be a Hono JSX element (JSXNode or HtmlEscapedString)
+  const contentStream = renderToReadableStream(element as Parameters<typeof renderToReadableStream>[0])
+
+  // Optionally prepend DOCTYPE
+  const stream = doctype ? prependDoctype(contentStream) : contentStream
+
+  return new Response(stream, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
       ...headers,
     },
   })
