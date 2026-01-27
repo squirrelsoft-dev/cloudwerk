@@ -44,6 +44,7 @@ export {
 // ============================================================================
 
 export { honoJsxRenderer, renderStream, renderToStream } from './renderers/index.js'
+export { reactRenderer, reactRenderToStream } from './renderers/index.js'
 
 // ============================================================================
 // Facade Functions

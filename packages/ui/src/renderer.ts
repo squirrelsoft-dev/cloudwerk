@@ -6,6 +6,7 @@
 
 import type { Renderer } from './types.js'
 import { honoJsxRenderer } from './renderers/hono-jsx.js'
+import { reactRenderer } from './renderers/react.js'
 
 // ============================================================================
 // Renderer Registry
@@ -16,13 +17,14 @@ import { honoJsxRenderer } from './renderers/hono-jsx.js'
  *
  * Built-in renderers:
  * - 'hono-jsx': Default renderer using Hono JSX
+ * - 'react': React renderer using react-dom/server
  *
  * Future renderers (not yet implemented):
- * - 'react': React renderer
  * - 'preact': Preact renderer
  */
 const renderers: Record<string, Renderer> = {
   'hono-jsx': honoJsxRenderer,
+  'react': reactRenderer,
 }
 
 /**
@@ -128,7 +130,7 @@ export function registerRenderer(name: string, renderer: Renderer): void {
  *
  * @example
  * const available = getAvailableRenderers()
- * // ['hono-jsx']
+ * // ['hono-jsx', 'react']
  */
 export function getAvailableRenderers(): string[] {
   return Object.keys(renderers)
@@ -144,9 +146,9 @@ export function getAvailableRenderers(): string[] {
  * @internal Used for testing only - ensures test isolation.
  */
 export function _resetRenderers(): void {
-  // Remove all custom renderers
+  // Remove all custom renderers (preserve built-in renderers)
   for (const name of Object.keys(renderers)) {
-    if (name !== 'hono-jsx') {
+    if (name !== 'hono-jsx' && name !== 'react') {
       delete renderers[name]
     }
   }
