@@ -4,7 +4,13 @@
  * CLI-specific types for the development server and commands.
  */
 
-import type { CloudwerkConfig, HttpMethod, RouteConfig } from '@cloudwerk/core'
+import type {
+  CloudwerkConfig,
+  HttpMethod,
+  RouteConfig,
+  PageComponent,
+  LayoutComponent,
+} from '@cloudwerk/core'
 
 // ============================================================================
 // CLI Option Types
@@ -120,6 +126,28 @@ export interface Logger {
   error(message: string): void
   debug(message: string): void
   log(message: string): void
+}
+
+// ============================================================================
+// Page & Layout Module Types
+// ============================================================================
+
+/**
+ * A loaded page module with default component export and optional config.
+ */
+export interface LoadedPageModule {
+  /** Default export: the page component function */
+  default: PageComponent
+  /** Optional route configuration */
+  config?: RouteConfig
+}
+
+/**
+ * A loaded layout module with default component export.
+ */
+export interface LoadedLayoutModule {
+  /** Default export: the layout component function */
+  default: LayoutComponent
 }
 
 // ============================================================================
