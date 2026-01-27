@@ -2,7 +2,7 @@
  * Single user route demonstrating Cloudwerk-native handler signature.
  */
 
-import { json, notFound, noContent } from '@cloudwerk/core'
+import { json, notFoundResponse, noContent } from '@cloudwerk/core'
 import type { CloudwerkHandler } from '@cloudwerk/core'
 
 interface Params {
@@ -19,7 +19,7 @@ export const GET: CloudwerkHandler<Params> = (request, { params }) => {
   const user = users.find((u) => u.id === params.id)
 
   if (!user) {
-    return notFound('User not found')
+    return notFoundResponse('User not found')
   }
 
   return json({ user })
@@ -29,7 +29,7 @@ export const PUT: CloudwerkHandler<Params> = async (request, { params }) => {
   const index = users.findIndex((u) => u.id === params.id)
 
   if (index === -1) {
-    return notFound('User not found')
+    return notFoundResponse('User not found')
   }
 
   const body = await request.json()
@@ -42,7 +42,7 @@ export const DELETE: CloudwerkHandler<Params> = (request, { params }) => {
   const index = users.findIndex((u) => u.id === params.id)
 
   if (index === -1) {
-    return notFound('User not found')
+    return notFoundResponse('User not found')
   }
 
   users.splice(index, 1)

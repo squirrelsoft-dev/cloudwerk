@@ -139,17 +139,21 @@ export function html(
 // ============================================================================
 
 /**
- * Create a 404 Not Found response.
+ * Create a 404 Not Found JSON response.
  *
  * @param message - Error message (default: 'Not Found')
  * @returns Response with 404 status
  *
  * @example
+ * // Use in route handlers (API routes) to return a 404 response
  * if (!user) {
- *   return notFound('User not found')
+ *   return notFoundResponse('User not found')
  * }
+ *
+ * @see {@link notFound} from `@cloudwerk/core` for throwing NotFoundError in loaders/actions
+ * which triggers the not-found boundary
  */
-export function notFound(message: string = 'Not Found'): Response {
+export function notFoundResponse(message: string = 'Not Found'): Response {
   return json({ error: message }, 404)
 }
 

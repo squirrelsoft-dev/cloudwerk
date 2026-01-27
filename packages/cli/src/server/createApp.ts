@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono'
-import type { RouteManifest, CloudwerkConfig } from '@cloudwerk/core'
+import type { RouteManifest, CloudwerkConfig, ScanResult } from '@cloudwerk/core'
 import { contextMiddleware } from '@cloudwerk/core'
 import { setActiveRenderer, getAvailableRenderers } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
@@ -21,16 +21,19 @@ import { HTTP_STATUS } from '../constants.js'
  * Create a configured Hono application with registered routes.
  *
  * @param manifest - Route manifest from @cloudwerk/core
+ * @param scanResult - Scan result containing error and not-found boundaries
  * @param config - Cloudwerk configuration
  * @param logger - Logger for output
+ * @param verbose - Enable verbose logging
  * @returns Object with app instance and registered routes
  *
  * @example
- * const { app, routes } = await createApp(manifest, config, logger)
+ * const { app, routes } = await createApp(manifest, scanResult, config, logger)
  * serve({ fetch: app.fetch, port: 3000 })
  */
 export async function createApp(
   manifest: RouteManifest,
+  scanResult: ScanResult,
   config: CloudwerkConfig,
   logger: Logger,
   verbose: boolean = false
@@ -78,7 +81,7 @@ export async function createApp(
   }
 
   // Register routes from manifest
-  const routes = await registerRoutes(app, manifest, logger, verbose)
+  const routes = await registerRoutes(app, manifest, scanResult, logger, verbose)
 
   // Add 404 handler
   app.notFound((c) => {

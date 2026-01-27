@@ -18,14 +18,26 @@ import type {
   LoaderArgs,
   ActionFunction,
   ActionArgs,
+  ScanResult,
+  ErrorBoundaryProps,
+  NotFoundProps,
 } from '@cloudwerk/core'
-import { createHandlerAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core'
+import {
+  createHandlerAdapter,
+  setRouteConfig,
+  NotFoundError,
+  RedirectError,
+  resolveErrorBoundary,
+  resolveNotFoundBoundary,
+} from '@cloudwerk/core'
 import { render } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
 import { loadPageModule } from './loadPage.js'
 import { loadLayoutModule } from './loadLayout.js'
+import { loadErrorBoundaryModule } from './loadErrorBoundary.js'
+import { loadNotFoundModule } from './loadNotFound.js'
 import { parseSearchParams } from './parseSearchParams.js'
 
 // ============================================================================
@@ -109,12 +121,13 @@ type LoaderResult =
   | { data?: never; response: Response }
 
 /**
- * Execute a loader function with error handling for NotFoundError and RedirectError.
+ * Execute a loader function with error handling for RedirectError.
+ * NotFoundError is re-thrown to be handled by error boundary logic.
  *
  * @param loader - The loader function to execute
  * @param args - Arguments to pass to the loader
  * @param c - Hono context for creating responses
- * @returns Data from the loader or an early response
+ * @returns Data from the loader or an early response (redirect only)
  */
 async function executeLoader(
   loader: LoaderFunction,
@@ -125,12 +138,11 @@ async function executeLoader(
     const data = await Promise.resolve(loader(args))
     return { data: (data ?? {}) as Record<string, unknown> }
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      return { response: await Promise.resolve(c.notFound()) }
-    }
+    // RedirectError is handled here as a response
     if (error instanceof RedirectError) {
       return { response: c.redirect(error.url, error.status as RedirectStatusCode) }
     }
+    // NotFoundError and other errors are re-thrown to be handled by error boundaries
     throw error
   }
 }
@@ -174,12 +186,11 @@ async function executeAction(
     // Otherwise return as data for re-rendering
     return { data: (result ?? {}) as Record<string, unknown> }
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      return { response: await Promise.resolve(c.notFound()) }
-    }
+    // RedirectError is handled here as a response
     if (error instanceof RedirectError) {
       return { response: c.redirect(error.url, error.status as RedirectStatusCode) }
     }
+    // NotFoundError and other errors are re-thrown to be handled by error boundaries
     throw error
   }
 }
@@ -197,6 +208,7 @@ async function executeAction(
  *
  * @param app - Hono app instance
  * @param manifest - Route manifest from @cloudwerk/core
+ * @param scanResult - Scan result containing error and not-found boundaries
  * @param logger - Logger for output
  * @param verbose - Enable verbose logging
  * @returns Array of registered routes
@@ -204,6 +216,7 @@ async function executeAction(
 export async function registerRoutes(
   app: Hono,
   manifest: RouteManifest,
+  scanResult: ScanResult,
   logger: Logger,
   verbose: boolean = false
 ): Promise<RegisteredRoute[]> {
@@ -250,15 +263,16 @@ export async function registerRoutes(
 
         // Register page handler as GET route
         app.get(route.urlPattern, async (c) => {
-          try {
-            const params = c.req.param()
-            const searchParams = parseSearchParams(c)
-            const request = c.req.raw
+          // Declare variables outside try block so they're available in catch
+          const params = c.req.param()
+          const searchParams = parseSearchParams(c)
+          const request = c.req.raw
+          const layoutLoaderData: Record<string, unknown>[] = []
 
+          try {
             // Execute layout loaders sequentially (parent -> child)
             // Each layout gets its own loader data
             const loaderArgs: LoaderArgs = { params, request, context: c }
-            const layoutLoaderData: Record<string, unknown>[] = []
 
             for (let index = 0; index < layoutModules.length; index++) {
               const layoutModule = layoutModules[index]
@@ -310,11 +324,95 @@ export async function registerRoutes(
             // Use @cloudwerk/ui render function (streaming SSR)
             return render(element)
           } catch (error) {
-            // Log error for debugging
+            // Handle NotFoundError with not-found boundary
+            if (error instanceof NotFoundError) {
+              const notFoundPath = resolveNotFoundBoundary(route.filePath, scanResult.notFound)
+
+              if (notFoundPath) {
+                try {
+                  const notFoundModule = await loadNotFoundModule(notFoundPath, verbose)
+                  const NotFoundComponent = notFoundModule.default
+
+                  const notFoundProps: NotFoundProps = { params, searchParams }
+                  let notFoundElement = await Promise.resolve(NotFoundComponent(notFoundProps))
+
+                  // Wrap with layouts (all layouts loaded successfully before error)
+                  for (let i = layouts.length - 1; i >= 0; i--) {
+                    const Layout = layouts[i]
+                    const layoutProps: LayoutProps = {
+                      children: notFoundElement,
+                      params,
+                      ...layoutLoaderData[i],
+                    }
+                    notFoundElement = await Promise.resolve(Layout(layoutProps))
+                  }
+
+                  return render(notFoundElement, { status: 404 })
+                } catch (boundaryError) {
+                  const boundaryMessage =
+                    boundaryError instanceof Error ? boundaryError.message : String(boundaryError)
+                  logger.error(`Not-found boundary failed: ${boundaryMessage}`)
+                }
+              }
+
+              // Fallback to Hono's notFound
+              return c.notFound()
+            }
+
+            // Handle other errors with error boundary
+            const errorPath = resolveErrorBoundary(route.filePath, scanResult.errors)
+
+            if (errorPath) {
+              try {
+                const errorModule = await loadErrorBoundaryModule(errorPath, verbose)
+                const ErrorComponent = errorModule.default
+
+                // Generate digest for production logging
+                const digest = crypto.randomUUID().slice(0, 8)
+                const originalMessage = error instanceof Error ? error.message : String(error)
+                logger.error(`Error [${digest}] in ${route.filePath}: ${originalMessage}`)
+
+                // Sanitize error for production
+                const sanitizedError =
+                  process.env.NODE_ENV === 'production'
+                    ? Object.assign(new Error('An error occurred'), { digest })
+                    : Object.assign(
+                        error instanceof Error ? error : new Error(String(error)),
+                        { digest }
+                      )
+
+                const errorProps: ErrorBoundaryProps = {
+                  error: sanitizedError,
+                  errorType: 'loader',
+                  reset: () => {},
+                  params,
+                  searchParams,
+                }
+
+                let errorElement = await Promise.resolve(ErrorComponent(errorProps))
+
+                // Wrap with layouts (all layouts that loaded successfully)
+                for (let i = layouts.length - 1; i >= 0; i--) {
+                  const Layout = layouts[i]
+                  const layoutProps: LayoutProps = {
+                    children: errorElement,
+                    params,
+                    ...layoutLoaderData[i],
+                  }
+                  errorElement = await Promise.resolve(Layout(layoutProps))
+                }
+
+                return render(errorElement, { status: 500 })
+              } catch (boundaryError) {
+                const boundaryMessage =
+                  boundaryError instanceof Error ? boundaryError.message : String(boundaryError)
+                logger.error(`Error boundary failed: ${boundaryMessage}`)
+              }
+            }
+
+            // Fallback error response
             const message = error instanceof Error ? error.message : String(error)
             logger.error(`Error rendering page ${route.filePath}: ${message}`)
-
-            // Return error response (future: error.tsx boundary)
             return c.html(
               `<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>`,
               500
@@ -342,11 +440,13 @@ export async function registerRoutes(
 
             // Register the action handler
             registerMethod(app, method, route.urlPattern, async (c) => {
-              try {
-                const params = c.req.param()
-                const searchParams = parseSearchParams(c)
-                const request = c.req.raw
+              // Declare variables outside try block so they're available in catch
+              const params = c.req.param()
+              const searchParams = parseSearchParams(c)
+              const request = c.req.raw
+              const layoutLoaderData: Record<string, unknown>[] = []
 
+              try {
                 // Execute action
                 const actionArgs: ActionArgs = { params, request, context: c }
                 const actionResult = await executeAction(actionFn, actionArgs, c)
@@ -360,7 +460,6 @@ export async function registerRoutes(
 
                 // Execute layout loaders sequentially (parent -> child)
                 const loaderArgs: LoaderArgs = { params, request, context: c }
-                const layoutLoaderData: Record<string, unknown>[] = []
 
                 for (let index = 0; index < layoutModules.length; index++) {
                   const layoutModule = layoutModules[index]
@@ -410,11 +509,94 @@ export async function registerRoutes(
                 // Use @cloudwerk/ui render function (streaming SSR)
                 return render(element)
               } catch (error) {
-                // Log error for debugging
+                // Handle NotFoundError with not-found boundary
+                if (error instanceof NotFoundError) {
+                  const notFoundPath = resolveNotFoundBoundary(route.filePath, scanResult.notFound)
+
+                  if (notFoundPath) {
+                    try {
+                      const notFoundModule = await loadNotFoundModule(notFoundPath, verbose)
+                      const NotFoundComponent = notFoundModule.default
+
+                      const notFoundProps: NotFoundProps = { params, searchParams }
+                      let notFoundElement = await Promise.resolve(NotFoundComponent(notFoundProps))
+
+                      // Wrap with layouts
+                      for (let i = layouts.length - 1; i >= 0; i--) {
+                        const Layout = layouts[i]
+                        const layoutProps: LayoutProps = {
+                          children: notFoundElement,
+                          params,
+                          ...layoutLoaderData[i],
+                        }
+                        notFoundElement = await Promise.resolve(Layout(layoutProps))
+                      }
+
+                      return render(notFoundElement, { status: 404 })
+                    } catch (boundaryError) {
+                      const boundaryMessage =
+                        boundaryError instanceof Error ? boundaryError.message : String(boundaryError)
+                      logger.error(`Not-found boundary failed: ${boundaryMessage}`)
+                    }
+                  }
+
+                  return c.notFound()
+                }
+
+                // Handle other errors with error boundary
+                const errorPath = resolveErrorBoundary(route.filePath, scanResult.errors)
+
+                if (errorPath) {
+                  try {
+                    const errorModule = await loadErrorBoundaryModule(errorPath, verbose)
+                    const ErrorComponent = errorModule.default
+
+                    // Generate digest for production logging
+                    const digest = crypto.randomUUID().slice(0, 8)
+                    const originalMessage = error instanceof Error ? error.message : String(error)
+                    logger.error(`Error [${digest}] in ${route.filePath} action: ${originalMessage}`)
+
+                    // Sanitize error for production
+                    const sanitizedError =
+                      process.env.NODE_ENV === 'production'
+                        ? Object.assign(new Error('An error occurred'), { digest })
+                        : Object.assign(
+                            error instanceof Error ? error : new Error(String(error)),
+                            { digest }
+                          )
+
+                    const errorProps: ErrorBoundaryProps = {
+                      error: sanitizedError,
+                      errorType: 'action',
+                      reset: () => {},
+                      params,
+                      searchParams,
+                    }
+
+                    let errorElement = await Promise.resolve(ErrorComponent(errorProps))
+
+                    // Wrap with layouts
+                    for (let i = layouts.length - 1; i >= 0; i--) {
+                      const Layout = layouts[i]
+                      const layoutProps: LayoutProps = {
+                        children: errorElement,
+                        params,
+                        ...layoutLoaderData[i],
+                      }
+                      errorElement = await Promise.resolve(Layout(layoutProps))
+                    }
+
+                    return render(errorElement, { status: 500 })
+                  } catch (boundaryError) {
+                    const boundaryMessage =
+                      boundaryError instanceof Error ? boundaryError.message : String(boundaryError)
+                    logger.error(`Error boundary failed: ${boundaryMessage}`)
+                  }
+                }
+
+                // Fallback error response
                 const message = error instanceof Error ? error.message : String(error)
                 logger.error(`Error executing action ${route.filePath}: ${message}`)
-
-                // Return error response (future: error.tsx boundary)
                 return c.html(
                   `<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>`,
                   500

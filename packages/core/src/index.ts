@@ -75,6 +75,12 @@ export type {
   ActionArgs,
   ActionFunction,
   InferActionData,
+
+  // Error Boundary Types
+  ErrorBoundaryProps,
+  NotFoundProps,
+  ErrorBoundaryComponent,
+  NotFoundComponent,
 } from './types.js'
 
 export {
@@ -141,6 +147,10 @@ export {
 
   // Combined Resolution
   resolveRouteContext,
+
+  // Error Boundary Resolution
+  resolveErrorBoundary,
+  resolveNotFoundBoundary,
 } from './resolver.js'
 
 // ============================================================================
@@ -243,6 +253,9 @@ export {
   // Loader Error Classes
   NotFoundError,
   RedirectError,
+
+  // Error Helper Functions
+  notFound,
 } from './errors.js'
 
 // ============================================================================
@@ -269,7 +282,7 @@ export {
   html,
 
   // Error Response Helpers
-  notFound,
+  notFoundResponse,
   badRequest,
   unauthorized,
   forbidden,

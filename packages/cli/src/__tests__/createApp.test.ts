@@ -31,7 +31,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app, routes } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app, routes } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       expect(app).toBeDefined()
       expect(routes.length).toBeGreaterThan(0)
@@ -54,7 +54,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       // Make a request to the app
       const request = new Request('http://localhost/api/health')
@@ -78,7 +78,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users')
       const response = await app.fetch(request)
@@ -101,7 +101,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users', {
         method: 'POST',
@@ -128,7 +128,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/unknown')
       const response = await app.fetch(request)
@@ -152,7 +152,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app, routes } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app, routes } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       expect(app).toBeDefined()
 
@@ -175,7 +175,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users/1')
       const response = await app.fetch(request)
@@ -199,7 +199,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users/2', {
         method: 'PUT',
@@ -225,7 +225,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users/3', {
         method: 'DELETE',
@@ -246,7 +246,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       const request = new Request('http://localhost/api/users/999')
       const response = await app.fetch(request)
@@ -271,7 +271,7 @@ describe('createApp', () => {
       )
 
       // Create app in verbose mode
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger, true)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger, true)
 
       expect(app).toBeDefined()
 
@@ -295,7 +295,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       // Request to public endpoint
       const request = new Request('http://localhost/api')
@@ -322,7 +322,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       // Request without auth token
       const unauthRequest = new Request('http://localhost/api/protected')
@@ -360,7 +360,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       // Request with valid token - both middlewares should run
       const request = new Request('http://localhost/api/protected', {
@@ -388,7 +388,7 @@ describe('createApp', () => {
         resolveMiddleware
       )
 
-      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+      const { app } = await createApp(manifest, scanResult, DEFAULT_CONFIG, logger)
 
       // Request without auth token - should be blocked by auth middleware
       const request = new Request('http://localhost/api/protected')
