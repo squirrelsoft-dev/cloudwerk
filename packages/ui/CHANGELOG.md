@@ -1,5 +1,15 @@
 # @cloudwerk/ui
 
+## 0.4.0
+
+### Minor Changes
+
+- [#120](https://github.com/squirrelsoft-dev/cloudwerk/pull/120) [`7c1cded`](https://github.com/squirrelsoft-dev/cloudwerk/commit/7c1cded422b9d6a52ae89267fa04b97fae279df1) Thanks [@sbeardsley](https://github.com/sbeardsley)! - feat(ui): add renderToStream() for native progressive streaming with Suspense support
+  - Add `renderToStream()` function using Hono's `renderToReadableStream`
+  - Support Suspense boundaries for async component streaming
+  - Automatically prepend DOCTYPE html to streams
+  - Configure with status, headers, and doctype options
+
 ## 0.3.0
 
 ### Minor Changes
