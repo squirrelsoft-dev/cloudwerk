@@ -5,7 +5,7 @@
  */
 
 import * as path from 'node:path'
-import type { Hono, Handler, MiddlewareHandler } from 'hono'
+import type { Hono, Handler, MiddlewareHandler, Context } from 'hono'
 import type { RedirectStatusCode } from 'hono/utils/http-status'
 import type {
   RouteManifest,
@@ -14,6 +14,8 @@ import type {
   RouteConfig,
   PageProps,
   LayoutProps,
+  LoaderFunction,
+  LoaderArgs,
 } from '@cloudwerk/core'
 import { createHandlerAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core'
 import { render } from '@cloudwerk/ui'
@@ -93,6 +95,45 @@ function createConfigMiddleware(config: RouteConfig): MiddlewareHandler {
 }
 
 // ============================================================================
+// Loader Execution
+// ============================================================================
+
+/**
+ * Result of executing a loader function.
+ * Either returns data or an early response (404/redirect).
+ */
+type LoaderResult =
+  | { data: Record<string, unknown>; response?: never }
+  | { data?: never; response: Response }
+
+/**
+ * Execute a loader function with error handling for NotFoundError and RedirectError.
+ *
+ * @param loader - The loader function to execute
+ * @param args - Arguments to pass to the loader
+ * @param c - Hono context for creating responses
+ * @returns Data from the loader or an early response
+ */
+async function executeLoader(
+  loader: LoaderFunction,
+  args: LoaderArgs,
+  c: Context
+): Promise<LoaderResult> {
+  try {
+    const data = await Promise.resolve(loader(args))
+    return { data: (data ?? {}) as Record<string, unknown> }
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { response: await Promise.resolve(c.notFound()) }
+    }
+    if (error instanceof RedirectError) {
+      return { response: c.redirect(error.url, error.status as RedirectStatusCode) }
+    }
+    throw error
+  }
+}
+
+// ============================================================================
 // Route Registration
 // ============================================================================
 
@@ -165,27 +206,17 @@ export async function registerRoutes(
 
             // Execute layout loaders sequentially (parent -> child)
             // Each layout gets its own loader data
+            const loaderArgs: LoaderArgs = { params, request, context: c }
             const layoutLoaderData: Record<string, unknown>[] = []
+
             for (let index = 0; index < layoutModules.length; index++) {
               const layoutModule = layoutModules[index]
               if (layoutModule.loader) {
-                try {
-                  const data = await Promise.resolve(
-                    layoutModule.loader({ params, request, context: c })
-                  )
-                  layoutLoaderData[index] = (data ?? {}) as Record<string, unknown>
-                } catch (error) {
-                  // Handle NotFoundError - return 404 immediately
-                  if (error instanceof NotFoundError) {
-                    return c.notFound()
-                  }
-                  // Handle RedirectError - return redirect immediately
-                  if (error instanceof RedirectError) {
-                    return c.redirect(error.url, error.status as RedirectStatusCode)
-                  }
-                  // Re-throw other errors
-                  throw error
+                const result = await executeLoader(layoutModule.loader, loaderArgs, c)
+                if (result.response) {
+                  return result.response
                 }
+                layoutLoaderData[index] = result.data
               } else {
                 layoutLoaderData[index] = {}
               }
@@ -194,23 +225,11 @@ export async function registerRoutes(
             // Execute page loader
             let pageLoaderData: Record<string, unknown> = {}
             if (pageModule.loader) {
-              try {
-                const data = await Promise.resolve(
-                  pageModule.loader({ params, request, context: c })
-                )
-                pageLoaderData = (data as Record<string, unknown>) ?? {}
-              } catch (error) {
-                // Handle NotFoundError - return 404 immediately
-                if (error instanceof NotFoundError) {
-                  return c.notFound()
-                }
-                // Handle RedirectError - return redirect immediately
-                if (error instanceof RedirectError) {
-                  return c.redirect(error.url, error.status as RedirectStatusCode)
-                }
-                // Re-throw other errors
-                throw error
+              const result = await executeLoader(pageModule.loader, loaderArgs, c)
+              if (result.response) {
+                return result.response
               }
+              pageLoaderData = result.data
             }
 
             // Build page props with loader data spread

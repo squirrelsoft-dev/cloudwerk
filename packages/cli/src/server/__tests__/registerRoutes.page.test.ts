@@ -237,15 +237,19 @@ describe('registerRoutes - page support', () => {
   })
 
   describe('loader functions', () => {
+    let app: InstanceType<typeof Hono>
+    let logger: ReturnType<typeof createMockLogger>
+
+    beforeEach(async () => {
+      app = new Hono()
+      logger = createMockLogger()
+      const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
+      const manifest = await createManifest(routesDir)
+      await registerRoutes(app, manifest, logger)
+    })
+
     describe('page loaders', () => {
       it('should execute loader and pass data to page component', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/users/123')
         const html = await response.text()
 
@@ -256,13 +260,6 @@ describe('registerRoutes - page support', () => {
       })
 
       it('should handle async loaders correctly', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/posts/test-post')
         const html = await response.text()
 
@@ -272,13 +269,6 @@ describe('registerRoutes - page support', () => {
       })
 
       it('should continue working when page has no loader', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         // Home page has no loader
         const response = await app.request('http://localhost/')
         const html = await response.text()
@@ -290,13 +280,6 @@ describe('registerRoutes - page support', () => {
 
     describe('layout loaders', () => {
       it('should execute layout loaders and pass data to layout components', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/users/456')
         const html = await response.text()
 
@@ -309,13 +292,6 @@ describe('registerRoutes - page support', () => {
       })
 
       it('should execute layout loaders in parent-to-child order', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/users/789')
         const html = await response.text()
 
@@ -333,26 +309,12 @@ describe('registerRoutes - page support', () => {
 
     describe('NotFoundError handling', () => {
       it('should return 404 when page loader throws NotFoundError', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/not-found-test')
 
         expect(response.status).toBe(404)
       })
 
       it('should return 404 when page loader throws NotFoundError for specific params', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         // User page throws NotFoundError for id '404'
         const response = await app.request('http://localhost/users/404')
 
@@ -362,13 +324,6 @@ describe('registerRoutes - page support', () => {
 
     describe('RedirectError handling', () => {
       it('should redirect when loader throws RedirectError (301 permanent)', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/posts/old-post')
 
         expect(response.status).toBe(301)
@@ -376,13 +331,6 @@ describe('registerRoutes - page support', () => {
       })
 
       it('should redirect when loader throws RedirectError (302 temporary)', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/posts/maintenance')
 
         expect(response.status).toBe(302)
@@ -392,13 +340,6 @@ describe('registerRoutes - page support', () => {
 
     describe('loader args', () => {
       it('should provide params to loader', async () => {
-        const app = new Hono()
-        const logger = createMockLogger()
-        const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-        const manifest = await createManifest(routesDir)
-
-        await registerRoutes(app, manifest, logger)
-
         const response = await app.request('http://localhost/users/test-user-id')
         const html = await response.text()
 
