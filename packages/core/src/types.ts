@@ -1013,3 +1013,61 @@ export interface LoadingProps<TParams = Record<string, string>> {
 export type LoadingComponent<TParams = Record<string, string>> = (
   props: LoadingProps<TParams>
 ) => unknown | Promise<unknown>
+
+// ============================================================================
+// Client Component Types
+// ============================================================================
+
+/**
+ * Information about a detected client component.
+ */
+export interface ClientComponentInfo {
+  /** Absolute file path to the client component */
+  filePath: string
+  /** Unique ID for this component (used for hydration) */
+  componentId: string
+  /** Export name (default or named) */
+  exportName: string
+}
+
+/**
+ * Metadata for tracking client components during SSR.
+ */
+export interface ClientComponentMeta {
+  /** Unique component ID */
+  componentId: string
+  /** Bundle path for the client-side JavaScript */
+  bundlePath: string
+  /** Source file path */
+  sourceFile: string
+}
+
+/**
+ * Hydration manifest mapping component IDs to their bundle paths.
+ *
+ * This manifest is used during SSR to:
+ * 1. Track which client components are used on the page
+ * 2. Generate the appropriate script tags for hydration
+ * 3. Map component IDs to their client-side bundles
+ *
+ * @example
+ * ```typescript
+ * import { createHydrationManifest, addToHydrationManifest } from '@cloudwerk/core'
+ *
+ * const manifest = createHydrationManifest('/__cloudwerk')
+ *
+ * addToHydrationManifest(manifest, {
+ *   componentId: 'components_Counter',
+ *   filePath: '/app/components/Counter.tsx',
+ *   exportName: 'default',
+ * }, '/__cloudwerk/components_Counter.js')
+ * ```
+ */
+export interface HydrationManifest {
+  /** Map of component ID to metadata */
+  components: Map<string, ClientComponentMeta>
+  /** Base path for client bundles */
+  basePath: string
+  /** Generated timestamp */
+  generatedAt: Date
+}

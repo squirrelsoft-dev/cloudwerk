@@ -85,6 +85,11 @@ export type {
   // Loading Boundary Types
   LoadingProps,
   LoadingComponent,
+
+  // Client Component Types
+  ClientComponentInfo,
+  ClientComponentMeta,
+  HydrationManifest,
 } from './types.js'
 
 export {
@@ -264,6 +269,25 @@ export {
   // Error Helper Functions
   notFound,
 } from './errors.js'
+
+// ============================================================================
+// Client Component Exports
+// ============================================================================
+
+export {
+  // Use Client Detection
+  hasUseClientDirective,
+  generateComponentId,
+
+  // Hydration Manifest
+  createHydrationManifest,
+  addToHydrationManifest,
+  serializeHydrationManifest,
+
+  // Props Serialization
+  serializeProps,
+  deserializeProps,
+} from './client.js'
 
 // ============================================================================
 // Response Helper Exports
