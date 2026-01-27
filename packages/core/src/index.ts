@@ -65,6 +65,11 @@ export type {
   AuthRequirement,
   RateLimitConfig,
   CacheConfig,
+
+  // Loader Types
+  LoaderArgs,
+  LoaderFunction,
+  InferLoaderData,
 } from './types.js'
 
 export {
@@ -224,6 +229,16 @@ export {
   setRouteConfig,
   ROUTE_CONFIG_KEY,
 } from './route-config.js'
+
+// ============================================================================
+// Error Exports
+// ============================================================================
+
+export {
+  // Loader Error Classes
+  NotFoundError,
+  RedirectError,
+} from './errors.js'
 
 // ============================================================================
 // Response Helper Exports

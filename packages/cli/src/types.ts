@@ -10,6 +10,7 @@ import type {
   RouteConfig,
   PageComponent,
   LayoutComponent,
+  LoaderFunction,
 } from '@cloudwerk/core'
 
 // ============================================================================
@@ -133,21 +134,25 @@ export interface Logger {
 // ============================================================================
 
 /**
- * A loaded page module with default component export and optional config.
+ * A loaded page module with default component export, optional config, and optional loader.
  */
 export interface LoadedPageModule {
   /** Default export: the page component function */
   default: PageComponent
   /** Optional route configuration */
   config?: RouteConfig
+  /** Optional loader function for server-side data loading */
+  loader?: LoaderFunction
 }
 
 /**
- * A loaded layout module with default component export.
+ * A loaded layout module with default component export and optional loader.
  */
 export interface LoadedLayoutModule {
   /** Default export: the layout component function */
   default: LayoutComponent
+  /** Optional loader function for server-side data loading */
+  loader?: LoaderFunction
 }
 
 // ============================================================================
