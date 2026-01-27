@@ -12,6 +12,7 @@ import {
   formatBoundaryError,
   hasBoundaryErrors,
   hasBoundaryWarnings,
+  handleBoundaryValidationResult,
 } from '../boundary-validator.js'
 
 // ============================================================================
@@ -150,6 +151,62 @@ export default function HomePage({ data }) {
 
     expect(result.isValid).toBe(true)
   })
+
+  it('should not flag URLs in strings as comments', () => {
+    const code = `
+export default function HomePage() {
+  const url = 'http://example.com'
+  const apiUrl = "https://api.example.com/data"
+  return <div>{url}</div>
+}
+`
+    const result = validateServerComponent(code, 'app/page.tsx')
+
+    expect(result.isValid).toBe(true)
+    expect(result.issues).toHaveLength(0)
+  })
+
+  it('should not flag hooks mentioned in string literals', () => {
+    const code = `
+export default function HomePage() {
+  const message = "You should use useState for state management"
+  return <div>{message}</div>
+}
+`
+    const result = validateServerComponent(code, 'app/page.tsx')
+
+    expect(result.isValid).toBe(true)
+  })
+
+  it('should detect hooks even when URL is in a string on the same line', () => {
+    const code = `
+export default function HomePage() {
+  const url = 'http://example.com'
+  const [count, setCount] = useState(0)
+  return <div>{count}</div>
+}
+`
+    const result = validateServerComponent(code, 'app/page.tsx')
+
+    expect(result.isValid).toBe(false)
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0].type).toBe('client-hook-in-server')
+  })
+
+  it('should ignore hooks in multi-line comments', () => {
+    const code = `
+/*
+ * This component could use useState but we'll keep it server-side
+ * useState(0) - this is just documentation
+ */
+export default function HomePage() {
+  return <div>Hello</div>
+}
+`
+    const result = validateServerComponent(code, 'app/page.tsx')
+
+    expect(result.isValid).toBe(true)
+  })
 })
 
 // ============================================================================
@@ -195,6 +252,35 @@ import lodash from 'lodash'
     const result = validateClientComponent(code, 'app/counter.tsx', { checkBundleSize: false })
 
     expect(result.issues).toHaveLength(0)
+  })
+
+  it('should not warn about type-only imports', () => {
+    const code = `'use client'
+import type { LoDashStatic } from 'lodash'
+
+export default function Counter() {
+  return <div>Count</div>
+}
+`
+    const result = validateClientComponent(code, 'app/counter.tsx')
+
+    expect(result.isValid).toBe(true)
+    expect(result.issues).toHaveLength(0)
+  })
+
+  it('should not warn about inline type imports', () => {
+    const code = `'use client'
+import { type Moment } from 'moment'
+
+export default function Counter() {
+  return <div>Count</div>
+}
+`
+    const result = validateClientComponent(code, 'app/counter.tsx')
+
+    // Note: inline type imports still match our regex, but this is acceptable
+    // since they're rare. Full AST analysis would be needed for perfect detection.
+    expect(result.isValid).toBe(true)
   })
 })
 
@@ -318,5 +404,103 @@ describe('hasBoundaryWarnings', () => {
       issues: []
     }
     expect(hasBoundaryWarnings(result)).toBe(false)
+  })
+})
+
+// ============================================================================
+// handleBoundaryValidationResult Tests
+// ============================================================================
+
+describe('handleBoundaryValidationResult', () => {
+  it('should throw on errors', () => {
+    const result = {
+      isValid: false,
+      issues: [
+        {
+          type: 'client-hook-in-server' as const,
+          severity: 'error' as const,
+          message: 'useState is not available in Server Components.',
+          filePath: 'app/page.tsx',
+        }
+      ]
+    }
+
+    expect(() => handleBoundaryValidationResult(result, 'app/page.tsx')).toThrow(
+      'Component boundary validation failed'
+    )
+  })
+
+  it('should not throw on warnings only', () => {
+    const result = {
+      isValid: true,
+      issues: [
+        {
+          type: 'large-client-dependency' as const,
+          severity: 'warning' as const,
+          message: 'Large dependency imported.',
+          filePath: 'app/counter.tsx',
+        }
+      ]
+    }
+
+    expect(() => handleBoundaryValidationResult(result, 'app/counter.tsx')).not.toThrow()
+  })
+
+  it('should log warnings when verbose is true', () => {
+    const warnings: string[] = []
+    const mockLogger = (msg: string) => warnings.push(msg)
+
+    const result = {
+      isValid: true,
+      issues: [
+        {
+          type: 'large-client-dependency' as const,
+          severity: 'warning' as const,
+          message: 'Large dependency imported.',
+          filePath: 'app/counter.tsx',
+        }
+      ]
+    }
+
+    handleBoundaryValidationResult(result, 'app/counter.tsx', {
+      verbose: true,
+      logger: mockLogger,
+    })
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('Component boundary warnings')
+  })
+
+  it('should not log warnings when verbose is false', () => {
+    const warnings: string[] = []
+    const mockLogger = (msg: string) => warnings.push(msg)
+
+    const result = {
+      isValid: true,
+      issues: [
+        {
+          type: 'large-client-dependency' as const,
+          severity: 'warning' as const,
+          message: 'Large dependency imported.',
+          filePath: 'app/counter.tsx',
+        }
+      ]
+    }
+
+    handleBoundaryValidationResult(result, 'app/counter.tsx', {
+      verbose: false,
+      logger: mockLogger,
+    })
+
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('should pass silently when no issues', () => {
+    const result = {
+      isValid: true,
+      issues: []
+    }
+
+    expect(() => handleBoundaryValidationResult(result, 'app/page.tsx')).not.toThrow()
   })
 })

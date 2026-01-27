@@ -10,7 +10,7 @@ import * as path from 'node:path'
 import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
-import { validateRouteConfig, hasUseClientDirective, generateComponentId, validateComponentBoundaries, formatBoundaryErrors, hasBoundaryErrors } from '@cloudwerk/core'
+import { validateRouteConfig, hasUseClientDirective, generateComponentId, validateComponentBoundaries, handleBoundaryValidationResult } from '@cloudwerk/core'
 import type { PageComponent, RouteConfig, LoaderFunction, ActionFunction } from '@cloudwerk/core'
 
 // ============================================================================
@@ -132,15 +132,7 @@ export async function loadPageModule(
 
     // Validate component boundaries
     const validationResult = validateComponentBoundaries(sourceCode, absolutePath, isClientComponent)
-    if (hasBoundaryErrors(validationResult)) {
-      const errorMessage = formatBoundaryErrors(validationResult.issues.filter(i => i.severity === 'error'))
-      throw new Error(`Component boundary validation failed:\n\n${errorMessage}`)
-    }
-    // Log warnings if any
-    const warnings = validationResult.issues.filter(i => i.severity === 'warning')
-    if (warnings.length > 0 && verbose) {
-      console.warn(`Component boundary warnings in ${absolutePath}:\n${formatBoundaryErrors(warnings)}`)
-    }
+    handleBoundaryValidationResult(validationResult, absolutePath, { verbose })
 
     // Write to temp file in a safe location within the project tree
     // This ensures proper module resolution for external packages

@@ -93,8 +93,9 @@ function createBrowserApiRegex(apiName: string): RegExp {
 
 /**
  * Regex to find import statements.
+ * Excludes type-only imports (import type { ... }) since they don't contribute to bundle size.
  */
-const IMPORT_REGEX = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"]([^'"]+)['"]/g
+const IMPORT_REGEX = /import\s+(?!type\s)(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['"]([^'"]+)['"]/g
 
 // ============================================================================
 // Utility Functions
@@ -138,27 +139,66 @@ function getCodeSnippet(code: string, position: number, contextLines: number = 1
 
 /**
  * Check if a position is inside a comment or string.
+ *
+ * This function scans from the beginning of the current line to accurately
+ * determine if the position is within a string literal or comment, avoiding
+ * false positives from patterns like 'http://example.com' being detected as comments.
  */
 function isInCommentOrString(code: string, position: number): boolean {
-  // Simple heuristic: check for common comment/string patterns before position
-  const before = code.slice(Math.max(0, position - 100), position)
+  // Find the start of the current line
+  const lineStart = code.lastIndexOf('\n', position - 1) + 1
 
-  // Check if we're in a single-line comment
-  const lastNewline = before.lastIndexOf('\n')
-  const lineStart = lastNewline === -1 ? 0 : lastNewline
-  const currentLine = before.slice(lineStart)
-  if (currentLine.includes('//')) {
+  // Check if we're in a multi-line comment by scanning from start
+  // Look for unmatched /* before position
+  const beforePosition = code.slice(0, position)
+  let multiLineDepth = 0
+  let i = 0
+  while (i < beforePosition.length) {
+    if (beforePosition[i] === '/' && beforePosition[i + 1] === '*') {
+      multiLineDepth++
+      i += 2
+    } else if (beforePosition[i] === '*' && beforePosition[i + 1] === '/') {
+      multiLineDepth = Math.max(0, multiLineDepth - 1)
+      i += 2
+    } else {
+      i++
+    }
+  }
+  if (multiLineDepth > 0) {
     return true
   }
 
-  // Check if we're in a multi-line comment (basic check)
-  const lastCommentStart = before.lastIndexOf('/*')
-  const lastCommentEnd = before.lastIndexOf('*/')
-  if (lastCommentStart > lastCommentEnd) {
-    return true
+  // Scan the current line character by character to check for strings and comments
+  const line = code.slice(lineStart, position)
+  let inString: string | null = null // null, '"', "'", or '`'
+
+  for (let j = 0; j < line.length; j++) {
+    const char = line[j]
+    const prevChar = j > 0 ? line[j - 1] : ''
+
+    // Skip escaped characters
+    if (prevChar === '\\') {
+      continue
+    }
+
+    if (inString === null) {
+      // Not in a string - check for string start or comment
+      if (char === '"' || char === "'" || char === '`') {
+        inString = char
+      } else if (char === '/' && line[j + 1] === '/') {
+        // Single-line comment - position is in comment
+        return true
+      }
+    } else {
+      // In a string - check for string end
+      if (char === inString) {
+        inString = null
+      }
+    }
   }
 
-  return false
+  // If we're still in a string at the position, return true
+  return inString !== null
 }
 
 // ============================================================================
@@ -468,4 +508,45 @@ export function hasBoundaryErrors(result: BoundaryValidationResult): boolean {
  */
 export function hasBoundaryWarnings(result: BoundaryValidationResult): boolean {
   return result.issues.some(i => i.severity === 'warning')
+}
+
+/**
+ * Handle boundary validation results by throwing on errors and optionally logging warnings.
+ *
+ * This is a convenience function for use in module loaders (loadPage, loadLayout)
+ * to reduce code duplication.
+ *
+ * @param result - Validation result to handle
+ * @param filePath - File path for error messages
+ * @param options - Options for handling results
+ * @param options.verbose - Whether to log warnings to console
+ * @param options.logger - Optional custom logger (defaults to console.warn)
+ * @throws Error if validation result contains errors
+ *
+ * @example
+ * ```typescript
+ * const result = validateComponentBoundaries(code, filePath, isClient)
+ * handleBoundaryValidationResult(result, filePath, { verbose: true })
+ * ```
+ */
+export function handleBoundaryValidationResult(
+  result: BoundaryValidationResult,
+  filePath: string,
+  options: { verbose?: boolean; logger?: (message: string) => void } = {}
+): void {
+  const { verbose = false, logger = console.warn } = options
+
+  // Throw on errors
+  if (hasBoundaryErrors(result)) {
+    const errorMessage = formatBoundaryErrors(
+      result.issues.filter(i => i.severity === 'error')
+    )
+    throw new Error(`Component boundary validation failed:\n\n${errorMessage}`)
+  }
+
+  // Log warnings if verbose
+  const warnings = result.issues.filter(i => i.severity === 'warning')
+  if (warnings.length > 0 && verbose) {
+    logger(`Component boundary warnings in ${filePath}:\n${formatBoundaryErrors(warnings)}`)
+  }
 }

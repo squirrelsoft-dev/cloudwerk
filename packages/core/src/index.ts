@@ -211,6 +211,9 @@ export {
   // Utility Functions
   hasBoundaryErrors,
   hasBoundaryWarnings,
+
+  // Integration Helper
+  handleBoundaryValidationResult,
 } from './boundary-validator.js'
 
 // ============================================================================
