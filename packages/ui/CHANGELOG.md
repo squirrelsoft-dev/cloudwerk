@@ -1,5 +1,33 @@
 # @cloudwerk/ui
 
+## 0.6.0
+
+### Minor Changes
+
+- [#136](https://github.com/squirrelsoft-dev/cloudwerk/pull/136) [`bc0f68c`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bc0f68cb0f5054a9db929545f95394092c27c0dc) Thanks [@sbeardsley](https://github.com/sbeardsley)! - feat: release hydration utilities
+
+  Release previously implemented but unpublished hydration utilities:
+
+  **@cloudwerk/core:**
+  - `hasUseClientDirective()` - Detect 'use client' directive
+  - `generateComponentId()` - Generate unique component IDs
+  - `createHydrationManifest()` / `addToHydrationManifest()` - Manifest creation
+  - `serializeProps()` / `deserializeProps()` - Props serialization for hydration
+  - `ClientComponentInfo`, `ClientComponentMeta`, `HydrationManifest` types
+
+  **@cloudwerk/ui:**
+  - `wrapForHydration()` - Wrap components with hydration metadata
+  - `generateHydrationScript()` / `generateReactHydrationScript()` - Bootstrap scripts
+  - `generatePreloadHints()` - Preload hints generation
+  - `generateHydrationRuntime()` / `generateReactHydrationRuntime()` - Runtime code
+
+  These utilities are required by @cloudwerk/cli@0.5.0 for client component hydration.
+
+### Patch Changes
+
+- Updated dependencies [[`bc0f68c`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bc0f68cb0f5054a9db929545f95394092c27c0dc)]:
+  - @cloudwerk/core@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

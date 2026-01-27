@@ -1,5 +1,13 @@
 # @cloudwerk/cli
 
+## 0.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`bc0f68c`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bc0f68cb0f5054a9db929545f95394092c27c0dc)]:
+  - @cloudwerk/core@0.6.0
+  - @cloudwerk/ui@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
