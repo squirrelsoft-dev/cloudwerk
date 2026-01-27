@@ -5,7 +5,7 @@ description: Work with Cloudflare D1 SQL database in your Cloudwerk application.
 
 import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Cloudwerk provides first-class integration with Cloudflare D1, a serverless SQLite database that runs at the edge.
+Cloudwerk provides integration with Cloudflare D1, a serverless SQLite database that runs at the edge.
 
 ## Getting Started
 
@@ -27,18 +27,7 @@ Cloudwerk provides first-class integration with Cloudflare D1, a serverless SQLi
    database_id = "your-database-id"
    ```
 
-3. Configure Cloudwerk to use the database:
-
-   ```typescript
-   // cloudwerk.config.ts
-   import { defineConfig } from '@cloudwerk/core';
-
-   export default defineConfig({
-     database: {
-       binding: 'DB',
-     },
-   });
-   ```
+3. Your D1 database is now available via `context.env.DB` in loaders and `getContext().env.DB` in route handlers.
 </Steps>
 
 ### Database Migrations
@@ -69,103 +58,136 @@ wrangler d1 migrations apply my-database --local
 wrangler d1 migrations apply my-database --remote
 ```
 
-## Query Builder
+## Using D1 in Loaders
 
-Cloudwerk includes a type-safe query builder:
+Access D1 via `context.env.DB` in loader functions:
+
+```tsx
+// app/users/page.tsx
+import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+
+export async function loader({ context }: LoaderArgs) {
+  const db = context.env.DB;
+  const { results: users } = await db.prepare('SELECT * FROM users').all();
+  return { users };
+}
+
+export default function UsersPage({ users }: PageProps & { users: User[] }) {
+  return (
+    <ul>
+      {users.map(user => (
+        <li key={user.id}>{user.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Using D1 in Route Handlers
+
+Access D1 via `getContext().env.DB` in route handlers:
+
+```typescript
+// app/api/users/route.ts
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+import { json, getContext } from '@cloudwerk/core';
+
+export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
+  const { env } = getContext();
+  const { results: users } = await env.DB.prepare('SELECT * FROM users').all();
+  return json(users);
+}
+```
+
+## Query Patterns
 
 ### Select Queries
 
 ```typescript
-// Get all users
-const users = await context.db
-  .selectFrom('users')
-  .execute();
+// Get all rows
+const { results: users } = await db.prepare('SELECT * FROM users').all();
 
-// Get single user by ID
-const user = await context.db
-  .selectFrom('users')
-  .where('id', '=', userId)
-  .executeTakeFirst();
+// Get single row by ID
+const user = await db
+  .prepare('SELECT * FROM users WHERE id = ?')
+  .bind(userId)
+  .first();
 
 // Select specific columns
-const emails = await context.db
-  .selectFrom('users')
-  .select(['id', 'email'])
-  .execute();
+const { results: emails } = await db
+  .prepare('SELECT id, email FROM users')
+  .all();
 
 // With conditions
-const activeUsers = await context.db
-  .selectFrom('users')
-  .where('status', '=', 'active')
-  .where('created_at', '>', '2024-01-01')
-  .orderBy('created_at', 'desc')
-  .limit(10)
-  .execute();
+const { results: activeUsers } = await db
+  .prepare(`
+    SELECT * FROM users
+    WHERE status = ?
+    AND created_at > ?
+    ORDER BY created_at DESC
+    LIMIT 10
+  `)
+  .bind('active', '2024-01-01')
+  .all();
 ```
 
 ### Insert Queries
 
 ```typescript
 // Insert single row
-const user = await context.db
-  .insertInto('users')
-  .values({
-    id: crypto.randomUUID(),
-    email: 'user@example.com',
-    name: 'John Doe',
-    password_hash: hashedPassword,
-  })
-  .returning(['id', 'email', 'name'])
-  .executeTakeFirst();
+const id = crypto.randomUUID();
+await db
+  .prepare('INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)')
+  .bind(id, 'user@example.com', 'John Doe', hashedPassword)
+  .run();
 
-// Insert multiple rows
-await context.db
-  .insertInto('tags')
-  .values([
-    { id: '1', name: 'javascript' },
-    { id: '2', name: 'typescript' },
-    { id: '3', name: 'cloudflare' },
-  ])
-  .execute();
+// Insert and return the row (use a separate query)
+await db
+  .prepare('INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)')
+  .bind(id, email, name, passwordHash)
+  .run();
+
+const user = await db
+  .prepare('SELECT id, email, name FROM users WHERE id = ?')
+  .bind(id)
+  .first();
 ```
 
 ### Update Queries
 
 ```typescript
 // Update by ID
-const updated = await context.db
-  .updateTable('users')
-  .set({
-    name: 'Jane Doe',
-    updated_at: new Date().toISOString(),
-  })
-  .where('id', '=', userId)
-  .returning(['id', 'name', 'email'])
-  .executeTakeFirst();
+await db
+  .prepare('UPDATE users SET name = ?, updated_at = ? WHERE id = ?')
+  .bind('Jane Doe', new Date().toISOString(), userId)
+  .run();
 
 // Conditional update
-await context.db
-  .updateTable('posts')
-  .set({ status: 'published' })
-  .where('author_id', '=', userId)
-  .where('status', '=', 'draft')
-  .execute();
+await db
+  .prepare(`
+    UPDATE posts
+    SET status = 'published'
+    WHERE author_id = ?
+    AND status = 'draft'
+  `)
+  .bind(userId)
+  .run();
 ```
 
 ### Delete Queries
 
 ```typescript
 // Delete by ID
-await context.db
-  .deleteFrom('users')
-  .where('id', '=', userId)
-  .execute();
+await db
+  .prepare('DELETE FROM users WHERE id = ?')
+  .bind(userId)
+  .run();
 
 // Delete with conditions
-await context.db
-  .deleteFrom('sessions')
-  .where('expires_at', '<', new Date().toISOString())
-  .execute();
+await db
+  .prepare('DELETE FROM sessions WHERE expires_at < ?')
+  .bind(new Date().toISOString())
+  .run();
 ```
 
 ## Relationships
@@ -174,181 +196,98 @@ await context.db
 
 ```typescript
 // Inner join
-const postsWithAuthors = await context.db
-  .selectFrom('posts')
-  .innerJoin('users', 'users.id', 'posts.author_id')
-  .select([
-    'posts.id',
-    'posts.title',
-    'posts.content',
-    'users.name as authorName',
-    'users.email as authorEmail',
-  ])
-  .execute();
+const { results: postsWithAuthors } = await db
+  .prepare(`
+    SELECT
+      posts.id,
+      posts.title,
+      posts.content,
+      users.name as author_name,
+      users.email as author_email
+    FROM posts
+    INNER JOIN users ON users.id = posts.author_id
+  `)
+  .all();
 
 // Left join
-const usersWithPosts = await context.db
-  .selectFrom('users')
-  .leftJoin('posts', 'posts.author_id', 'users.id')
-  .select([
-    'users.id',
-    'users.name',
-    'posts.title as postTitle',
-  ])
-  .execute();
+const { results: usersWithPosts } = await db
+  .prepare(`
+    SELECT
+      users.id,
+      users.name,
+      posts.title as post_title
+    FROM users
+    LEFT JOIN posts ON posts.author_id = users.id
+  `)
+  .all();
 ```
 
 ### Subqueries
 
 ```typescript
 // Users with post count
-const usersWithCounts = await context.db
-  .selectFrom('users')
-  .select([
-    'users.id',
-    'users.name',
-    context.db
-      .selectFrom('posts')
-      .whereRef('posts.author_id', '=', 'users.id')
-      .select(context.db.fn.count('id').as('count'))
-      .as('postCount'),
-  ])
-  .execute();
+const { results: usersWithCounts } = await db
+  .prepare(`
+    SELECT
+      users.id,
+      users.name,
+      (SELECT COUNT(*) FROM posts WHERE posts.author_id = users.id) as post_count
+    FROM users
+  `)
+  .all();
 ```
 
 ## Transactions
 
-Use transactions for atomic operations:
+Use `batch()` for atomic operations:
 
 ```typescript
-await context.db.transaction(async (trx) => {
-  // Create user
-  const user = await trx
-    .insertInto('users')
-    .values({ id: userId, email, name, password_hash: hash })
-    .returning(['id'])
-    .executeTakeFirstOrThrow();
+const userId = crypto.randomUUID();
+const profileId = crypto.randomUUID();
 
-  // Create profile
-  await trx
-    .insertInto('profiles')
-    .values({ user_id: user.id, bio: '', avatar_url: null })
-    .execute();
+// All statements execute atomically
+await db.batch([
+  db.prepare('INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)')
+    .bind(userId, email, name, hash),
+  db.prepare('INSERT INTO profiles (id, user_id, bio, avatar_url) VALUES (?, ?, ?, ?)')
+    .bind(profileId, userId, '', null),
+]);
 
-  // If any query fails, all changes are rolled back
-});
+// If any statement fails, all changes are rolled back
 ```
 
-## Raw SQL
-
-For complex queries, use raw SQL:
+## Aggregations
 
 ```typescript
-// Raw query
-const results = await context.db.raw`
-  SELECT
-    strftime('%Y-%m', created_at) as month,
-    COUNT(*) as count
-  FROM posts
-  WHERE author_id = ${userId}
-  GROUP BY month
-  ORDER BY month DESC
-`.execute();
+// Count
+const countResult = await db
+  .prepare('SELECT COUNT(*) as count FROM users')
+  .first();
+const total = countResult?.count ?? 0;
 
-// With typed results
-interface MonthlyStats {
-  month: string;
-  count: number;
-}
-
-const stats = await context.db.raw<MonthlyStats>`
-  SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
-  FROM posts
-  GROUP BY month
-`.execute();
-```
-
-## TypeScript Support
-
-### Define Your Schema
-
-```typescript
-// lib/db/schema.ts
-import type { Generated, Insertable, Selectable, Updateable } from '@cloudwerk/core';
-
-export interface Database {
-  users: UsersTable;
-  posts: PostsTable;
-  comments: CommentsTable;
-}
-
-interface UsersTable {
-  id: string;
-  email: string;
-  name: string;
-  password_hash: string;
-  created_at: Generated<string>;
-  updated_at: Generated<string>;
-}
-
-export type User = Selectable<UsersTable>;
-export type NewUser = Insertable<UsersTable>;
-export type UserUpdate = Updateable<UsersTable>;
-
-interface PostsTable {
-  id: string;
-  title: string;
-  content: string;
-  author_id: string;
-  status: 'draft' | 'published';
-  created_at: Generated<string>;
-  updated_at: Generated<string>;
-}
-
-export type Post = Selectable<PostsTable>;
-export type NewPost = Insertable<PostsTable>;
-export type PostUpdate = Updateable<PostsTable>;
-```
-
-### Configure Type-Safe Database
-
-```typescript
-// cloudwerk.config.ts
-import { defineConfig } from '@cloudwerk/core';
-import type { Database } from './lib/db/schema';
-
-export default defineConfig({
-  database: {
-    binding: 'DB',
-    schema: {} as Database, // Type inference
-  },
-});
-```
-
-Now your queries are fully typed:
-
-```typescript
-// Type error: 'invalid_column' does not exist
-const users = await context.db
-  .selectFrom('users')
-  .select(['invalid_column']) // Error!
-  .execute();
-
-// Type error: missing required field
-await context.db
-  .insertInto('users')
-  .values({ name: 'John' }) // Error: missing email, password_hash
-  .execute();
+// Group by with aggregation
+const { results: monthlyStats } = await db
+  .prepare(`
+    SELECT
+      strftime('%Y-%m', created_at) as month,
+      COUNT(*) as count
+    FROM posts
+    WHERE author_id = ?
+    GROUP BY month
+    ORDER BY month DESC
+  `)
+  .bind(userId)
+  .all();
 ```
 
 ## Best Practices
 
 <Aside type="tip" title="Performance Tips">
 - Use indexes for frequently queried columns
-- Limit result sets with `.limit()` and pagination
-- Use `.select()` to fetch only needed columns
-- Batch inserts when possible
-- Use transactions for related operations
+- Use `LIMIT` and pagination for large result sets
+- Select only needed columns instead of `SELECT *`
+- Use `batch()` for multiple related operations
+- Use prepared statements with `.bind()` to prevent SQL injection
 </Aside>
 
 ### Pagination
@@ -361,21 +300,21 @@ export async function loader({ request, context }: LoaderArgs) {
   const page = parseInt(url.searchParams.get('page') ?? '1');
   const offset = (page - 1) * PAGE_SIZE;
 
-  const [users, countResult] = await Promise.all([
-    context.db
-      .selectFrom('users')
-      .orderBy('created_at', 'desc')
-      .limit(PAGE_SIZE)
-      .offset(offset)
-      .execute(),
-    context.db
-      .selectFrom('users')
-      .select(context.db.fn.count('id').as('total'))
-      .executeTakeFirst(),
+  const db = context.env.DB;
+
+  const [usersResult, countResult] = await Promise.all([
+    db.prepare(`
+      SELECT * FROM users
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `)
+      .bind(PAGE_SIZE, offset)
+      .all(),
+    db.prepare('SELECT COUNT(*) as total FROM users').first(),
   ]);
 
   return {
-    users,
+    users: usersResult.results,
     pagination: {
       page,
       pageSize: PAGE_SIZE,
@@ -386,8 +325,83 @@ export async function loader({ request, context }: LoaderArgs) {
 }
 ```
 
+### Error Handling
+
+```typescript
+export async function loader({ params, context }: LoaderArgs) {
+  const db = context.env.DB;
+
+  try {
+    const user = await db
+      .prepare('SELECT * FROM users WHERE id = ?')
+      .bind(params.id)
+      .first();
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    return { user };
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      throw error;
+    }
+    console.error('Database error:', error);
+    throw new Error('Failed to load user');
+  }
+}
+```
+
+## TypeScript Support
+
+Define types for your database rows:
+
+```typescript
+// lib/db/types.ts
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Post {
+  id: string;
+  title: string;
+  content: string;
+  author_id: string;
+  status: 'draft' | 'published';
+  created_at: string;
+  updated_at: string;
+}
+```
+
+Use generics with D1 queries:
+
+```typescript
+import type { User, Post } from '../lib/db/types';
+
+export async function loader({ params, context }: LoaderArgs) {
+  const db = context.env.DB;
+
+  const user = await db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .bind(params.id)
+    .first<User>();
+
+  const { results: posts } = await db
+    .prepare('SELECT * FROM posts WHERE author_id = ?')
+    .bind(params.id)
+    .all<Post>();
+
+  return { user, posts };
+}
+```
+
 ## Next Steps
 
-- **[Queues Guide](/guides/queues/)** - Background job processing
-- **[Storage Guide](/api/bindings/)** - KV and R2 storage
-- **[API Reference](/api/context/)** - Database context API
+- **[Data Loading](/guides/data-loading/)** - Server-side data fetching patterns
+- **[Forms and Actions](/guides/forms-and-actions/)** - Handle form submissions
+- **[Authentication](/guides/authentication/)** - Protect your routes

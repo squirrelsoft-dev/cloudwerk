@@ -42,12 +42,11 @@ Cloudwerk uses `loader()` functions for server-side data fetching:
 import type { PageProps, LoaderArgs } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  // Fetch data on the server
-  const posts = await context.db
-    .selectFrom('posts')
-    .orderBy('created_at', 'desc')
-    .limit(10)
-    .execute();
+  // Access D1 database via Cloudflare bindings
+  const db = context.env.DB;
+  const { results: posts } = await db
+    .prepare('SELECT id, title, excerpt FROM posts ORDER BY created_at DESC LIMIT 10')
+    .all();
 
   return { posts };
 }
@@ -83,10 +82,11 @@ import type { PageProps, LoaderArgs } from '@cloudwerk/core';
 import { NotFoundError } from '@cloudwerk/core';
 
 export async function loader({ params, context }: LoaderArgs) {
-  const post = await context.db
-    .selectFrom('posts')
-    .where('id', '=', params.id)
-    .executeTakeFirst();
+  const db = context.env.DB;
+  const post = await db
+    .prepare('SELECT id, title, content FROM posts WHERE id = ?')
+    .bind(params.id)
+    .first();
 
   if (!post) {
     throw new NotFoundError('Post not found');
@@ -151,31 +151,28 @@ API routes handle HTTP requests without rendering UI:
 ```typescript
 // app/api/posts/route.ts
 import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { json } from '@cloudwerk/core';
+import { json, getContext } from '@cloudwerk/core';
 
-export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
-  const posts = await context.db
-    .selectFrom('posts')
-    .orderBy('created_at', 'desc')
-    .execute();
+export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
+  const { env } = getContext();
+  const { results: posts } = await env.DB
+    .prepare('SELECT * FROM posts ORDER BY created_at DESC')
+    .all();
 
   return json(posts);
 }
 
-export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
+  const { env } = getContext();
   const body = await request.json();
+  const id = crypto.randomUUID();
 
-  const post = await context.db
-    .insertInto('posts')
-    .values({
-      title: body.title,
-      content: body.content,
-      created_at: new Date().toISOString(),
-    })
-    .returning(['id', 'title'])
-    .executeTakeFirst();
+  await env.DB
+    .prepare('INSERT INTO posts (id, title, content, created_at) VALUES (?, ?, ?, ?)')
+    .bind(id, body.title, body.content, new Date().toISOString())
+    .run();
 
-  return json(post, { status: 201 });
+  return json({ id, title: body.title }, { status: 201 });
 }
 ```
 
@@ -191,7 +188,7 @@ export const middleware: Middleware = async (request, next) => {
   const start = Date.now();
 
   // Run the route handler
-  const response = await next(request);
+  const response = await next();
 
   // Add timing header
   const duration = Date.now() - start;

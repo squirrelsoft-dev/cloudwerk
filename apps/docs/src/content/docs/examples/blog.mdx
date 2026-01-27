@@ -116,7 +116,8 @@ CREATE INDEX idx_comments_post ON comments(post_id);
 import type { LayoutProps, LoaderArgs } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  const user = await context.auth.getUser();
+  const session = context.req.cookie('session');
+  const user = session ? context.get('user') : null;
   return { user };
 }
 
@@ -165,20 +166,22 @@ export default function RootLayout({ children, user }: LayoutProps & { user: Use
 import type { PageProps, LoaderArgs } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  const posts = await context.db
-    .selectFrom('posts')
-    .innerJoin('users', 'users.id', 'posts.author_id')
-    .select([
-      'posts.slug',
-      'posts.title',
-      'posts.excerpt',
-      'posts.created_at',
-      'users.name as authorName',
-    ])
-    .where('posts.published', '=', true)
-    .orderBy('posts.created_at', 'desc')
-    .limit(10)
-    .execute();
+  const db = context.env.DB;
+  const { results: posts } = await db
+    .prepare(`
+      SELECT
+        posts.slug,
+        posts.title,
+        posts.excerpt,
+        posts.created_at,
+        users.name as author_name
+      FROM posts
+      INNER JOIN users ON users.id = posts.author_id
+      WHERE posts.published = 1
+      ORDER BY posts.created_at DESC
+      LIMIT 10
+    `)
+    .all();
 
   return { posts };
 }
@@ -196,7 +199,7 @@ export default function HomePage({ posts }: PageProps & { posts: Post[] }) {
                 <h3>{post.title}</h3>
               </a>
               <p>{post.excerpt}</p>
-              <small>By {post.authorName} on {new Date(post.created_at).toLocaleDateString()}</small>
+              <small>By {post.author_name} on {new Date(post.created_at).toLocaleDateString()}</small>
             </li>
           ))}
         </ul>
@@ -214,41 +217,47 @@ import type { PageProps, LoaderArgs } from '@cloudwerk/core';
 import { NotFoundError } from '@cloudwerk/core';
 
 export async function loader({ params, context }: LoaderArgs) {
-  const post = await context.db
-    .selectFrom('posts')
-    .innerJoin('users', 'users.id', 'posts.author_id')
-    .select([
-      'posts.id',
-      'posts.slug',
-      'posts.title',
-      'posts.content',
-      'posts.created_at',
-      'posts.author_id',
-      'users.name as authorName',
-      'users.avatar_url as authorAvatar',
-    ])
-    .where('posts.slug', '=', params.slug)
-    .where('posts.published', '=', true)
-    .executeTakeFirst();
+  const db = context.env.DB;
+
+  const post = await db
+    .prepare(`
+      SELECT
+        posts.id,
+        posts.slug,
+        posts.title,
+        posts.content,
+        posts.created_at,
+        posts.author_id,
+        users.name as author_name,
+        users.avatar_url as author_avatar
+      FROM posts
+      INNER JOIN users ON users.id = posts.author_id
+      WHERE posts.slug = ?
+      AND posts.published = 1
+    `)
+    .bind(params.slug)
+    .first();
 
   if (!post) {
     throw new NotFoundError('Post not found');
   }
 
-  const comments = await context.db
-    .selectFrom('comments')
-    .innerJoin('users', 'users.id', 'comments.author_id')
-    .select([
-      'comments.id',
-      'comments.content',
-      'comments.created_at',
-      'users.name as authorName',
-    ])
-    .where('comments.post_id', '=', post.id)
-    .orderBy('comments.created_at', 'asc')
-    .execute();
+  const { results: comments } = await db
+    .prepare(`
+      SELECT
+        comments.id,
+        comments.content,
+        comments.created_at,
+        users.name as author_name
+      FROM comments
+      INNER JOIN users ON users.id = comments.author_id
+      WHERE comments.post_id = ?
+      ORDER BY comments.created_at ASC
+    `)
+    .bind(post.id)
+    .all();
 
-  const user = await context.auth.getUser();
+  const user = context.get('user');
 
   return { post, comments, user };
 }
@@ -259,7 +268,7 @@ export default function PostPage({ post, comments, user }: PageProps & LoaderDat
       <header>
         <h1>{post.title}</h1>
         <div>
-          By {post.authorName} on {new Date(post.created_at).toLocaleDateString()}
+          By {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
         </div>
       </header>
 
@@ -278,7 +287,7 @@ export default function PostPage({ post, comments, user }: PageProps & LoaderDat
         <ul>
           {comments.map((comment) => (
             <li key={comment.id}>
-              <strong>{comment.authorName}</strong>
+              <strong>{comment.author_name}</strong>
               <p>{comment.content}</p>
               <small>{new Date(comment.created_at).toLocaleDateString()}</small>
             </li>
@@ -295,9 +304,13 @@ export default function PostPage({ post, comments, user }: PageProps & LoaderDat
 ```tsx
 // app/posts/new/page.tsx
 import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import { RedirectError } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  await context.auth.requireUser();
+  const user = context.get('user');
+  if (!user) {
+    throw new RedirectError('/login');
+  }
   return {};
 }
 
@@ -335,8 +348,8 @@ export default function NewPostPage() {
 
 ```typescript
 // app/api/posts/route.ts
-import { json, redirect } from '@cloudwerk/core';
 import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+import { json, getContext } from '@cloudwerk/core';
 
 function slugify(text: string): string {
   return text
@@ -345,8 +358,13 @@ function slugify(text: string): string {
     .replace(/(^-|-$)/g, '');
 }
 
-export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
-  const user = await context.auth.requireUser();
+export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
+  const ctx = getContext();
+  const user = ctx.get('user');
+
+  if (!user) {
+    return json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const formData = await request.formData();
   const title = formData.get('title') as string;
@@ -354,22 +372,21 @@ export async function POST(request: Request, { context }: CloudwerkHandlerContex
   const content = formData.get('content') as string;
   const published = formData.get('published') === 'true';
 
+  const id = crypto.randomUUID();
   const slug = slugify(title) + '-' + Date.now().toString(36);
 
-  await context.db
-    .insertInto('posts')
-    .values({
-      id: crypto.randomUUID(),
-      slug,
-      title,
-      excerpt,
-      content,
-      published,
-      author_id: user.id,
-    })
-    .execute();
+  await ctx.env.DB
+    .prepare(`
+      INSERT INTO posts (id, slug, title, excerpt, content, published, author_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    .bind(id, slug, title, excerpt, content, published ? 1 : 0, user.id)
+    .run();
 
-  return redirect(`/posts/${slug}`);
+  return new Response(null, {
+    status: 302,
+    headers: { 'Location': `/posts/${slug}` },
+  });
 }
 ```
 
@@ -377,17 +394,21 @@ export async function POST(request: Request, { context }: CloudwerkHandlerContex
 
 ```typescript
 // app/api/posts/[slug]/comments/route.ts
-import { json, redirect } from '@cloudwerk/core';
 import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+import { json, getContext } from '@cloudwerk/core';
 
-export async function POST(request: Request, { params, context }: CloudwerkHandlerContext) {
-  const user = await context.auth.requireUser();
+export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
+  const ctx = getContext();
+  const user = ctx.get('user');
 
-  const post = await context.db
-    .selectFrom('posts')
-    .select(['id'])
-    .where('slug', '=', params.slug)
-    .executeTakeFirst();
+  if (!user) {
+    return json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const post = await ctx.env.DB
+    .prepare('SELECT id FROM posts WHERE slug = ?')
+    .bind(params.slug)
+    .first();
 
   if (!post) {
     return json({ error: 'Post not found' }, { status: 404 });
@@ -396,17 +417,16 @@ export async function POST(request: Request, { params, context }: CloudwerkHandl
   const formData = await request.formData();
   const content = formData.get('content') as string;
 
-  await context.db
-    .insertInto('comments')
-    .values({
-      id: crypto.randomUUID(),
-      content,
-      post_id: post.id,
-      author_id: user.id,
-    })
-    .execute();
+  const id = crypto.randomUUID();
+  await ctx.env.DB
+    .prepare('INSERT INTO comments (id, content, post_id, author_id) VALUES (?, ?, ?, ?)')
+    .bind(id, content, post.id, user.id)
+    .run();
 
-  return redirect(`/posts/${params.slug}`);
+  return new Response(null, {
+    status: 302,
+    headers: { 'Location': `/posts/${params.slug}` },
+  });
 }
 ```
 
@@ -415,7 +435,7 @@ export async function POST(request: Request, { params, context }: CloudwerkHandl
 <Steps>
 1. Clone or create the project:
    ```bash
-   pnpm create cloudwerk@latest my-blog --template blog
+   pnpm create cloudwerk-app@latest my-blog --template blog
    ```
 
 2. Set up the database:

@@ -84,7 +84,9 @@ Layouts can also have their own `loader()` functions:
 
 ```tsx
 export async function loader({ context }: LoaderArgs) {
-  const user = await context.auth.getUser();
+  // Access session from cookies or middleware-set values
+  const session = context.req.cookie('session');
+  const user = session ? context.get('user') : null;
   return { user };
 }
 
@@ -104,17 +106,24 @@ The `route.ts` file defines API endpoints that handle HTTP methods:
 
 ```typescript
 // app/api/users/route.ts
-import { json } from '@cloudwerk/core';
+import type { CloudwerkHandlerContext } from '@cloudwerk/core';
+import { json, getContext } from '@cloudwerk/core';
 
-export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
-  const users = await context.db.selectFrom('users').execute();
+export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
+  const { env } = getContext();
+  const { results: users } = await env.DB.prepare('SELECT * FROM users').all();
   return json(users);
 }
 
-export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
+export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
+  const { env } = getContext();
   const body = await request.json();
-  const user = await context.db.insertInto('users').values(body).execute();
-  return json(user, { status: 201 });
+  const id = crypto.randomUUID();
+  await env.DB
+    .prepare('INSERT INTO users (id, name, email) VALUES (?, ?, ?)')
+    .bind(id, body.name, body.email)
+    .run();
+  return json({ id, ...body }, { status: 201 });
 }
 ```
 
@@ -132,7 +141,7 @@ export const middleware: Middleware = async (request, next) => {
   // Run before the route handler
   console.log(`${request.method} ${request.url}`);
 
-  const response = await next(request);
+  const response = await next();
 
   // Run after the route handler
   return response;
@@ -155,14 +164,15 @@ The `error.tsx` file handles errors in that route segment:
 
 ```tsx
 // app/error.tsx
-'use client';
+import type { ErrorBoundaryProps } from '@cloudwerk/core';
 
-export default function ErrorPage({ error, reset }: ErrorProps) {
+export default function ErrorPage({ error, errorType }: ErrorBoundaryProps) {
   return (
     <div>
       <h1>Something went wrong</h1>
       <p>{error.message}</p>
-      <button onClick={reset}>Try again</button>
+      {error.digest && <p>Error ID: {error.digest}</p>}
+      <a href="/">Go home</a>
     </div>
   );
 }
