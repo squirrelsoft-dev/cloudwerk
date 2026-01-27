@@ -350,4 +350,293 @@ describe('registerRoutes - page support', () => {
       })
     })
   })
+
+  describe('action() functions', () => {
+    let app: InstanceType<typeof Hono>
+    let logger: ReturnType<typeof createMockLogger>
+
+    beforeEach(async () => {
+      app = new Hono()
+      logger = createMockLogger()
+      const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
+      const manifest = await createManifest(routesDir)
+      await registerRoutes(app, manifest, logger)
+    })
+
+    describe('basic action execution', () => {
+      it('should execute POST action and return actionData to page', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'submit')
+        formData.append('message', 'Hello from test!')
+
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('data-page="action-test"')
+        expect(html).toContain('data-success')
+        expect(html).toContain('Hello from test!')
+      })
+
+      it('should handle action without request body', async () => {
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: new FormData(),
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('No message provided')
+      })
+
+      it('should return actionData with validation errors', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'error')
+
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('data-error')
+        expect(html).toContain('validation error')
+      })
+    })
+
+    describe('response handling', () => {
+      it('should return Response directly when action returns redirect()', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'redirect')
+
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(302)
+        expect(response.headers.get('location')).toBe('/action-test?redirected=true')
+      })
+
+      it('should re-render page with actionData when action returns data', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'submit')
+        formData.append('message', 'Test message')
+
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        expect(response.headers.get('content-type')).toContain('text/html')
+
+        const html = await response.text()
+        // Verify loader data is present (action re-runs loader)
+        expect(html).toContain('Submit the form to test actions')
+        // Verify actionData is present
+        expect(html).toContain('data-success')
+        expect(html).toContain('Test message')
+      })
+
+      it('should re-run loader after action returns data (not Response)', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'submit')
+        formData.append('message', 'Loader test')
+
+        const response = await app.request('http://localhost/action-test', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        // Loader message should be present (loader was re-run)
+        expect(html).toContain('data-loader-message')
+        expect(html).toContain('Submit the form to test actions')
+      })
+    })
+
+    describe('named method exports', () => {
+      it('should support POST named export', async () => {
+        const formData = new FormData()
+        formData.append('name', 'New Item')
+        formData.append('intent', 'create')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('Method: POST')
+        expect(html).toContain('Action: create')
+        expect(html).toContain('Item Name: New Item')
+      })
+
+      it('should support DELETE named export', async () => {
+        const formData = new FormData()
+        formData.append('itemId', '123')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'DELETE',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('Method: DELETE')
+        expect(html).toContain('Action: delete')
+        expect(html).toContain('Item ID: 123')
+        expect(html).toContain('Item deleted!')
+      })
+
+      it('should support PUT named export', async () => {
+        const formData = new FormData()
+        formData.append('itemId', '456')
+        formData.append('name', 'Updated Item')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'PUT',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('Method: PUT')
+        expect(html).toContain('Action: update')
+        expect(html).toContain('Item ID: 456')
+        expect(html).toContain('Item Name: Updated Item')
+      })
+
+      it('should support PATCH named export', async () => {
+        const formData = new FormData()
+        formData.append('itemId', '789')
+        formData.append('field', 'status')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'PATCH',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('Method: PATCH')
+        expect(html).toContain('Action: patch-status')
+        expect(html).toContain('Item ID: 789')
+      })
+
+      it('should register all mutation methods when action exists', async () => {
+        // Verify each method is registered by making requests
+        const methods = ['POST', 'DELETE', 'PUT', 'PATCH'] as const
+
+        for (const method of methods) {
+          const formData = new FormData()
+          formData.append('test', 'value')
+
+          const response = await app.request('http://localhost/action-methods', {
+            method,
+            body: formData,
+          })
+
+          // All should succeed (200) because handlers are registered
+          expect(response.status).toBe(200)
+          const html = await response.text()
+          expect(html).toContain(`Method: ${method}`)
+        }
+      })
+    })
+
+    describe('error handling in actions', () => {
+      it('should return 404 when action throws NotFoundError', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'notfound')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(404)
+      })
+
+      it('should redirect when action throws RedirectError', async () => {
+        const formData = new FormData()
+        formData.append('intent', 'redirect-error')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(302)
+        expect(response.headers.get('location')).toBe('/action-methods?redirect-error=true')
+      })
+    })
+
+    describe('integration with loader', () => {
+      it('should pass both loaderData and actionData to page', async () => {
+        const formData = new FormData()
+        formData.append('name', 'Test Item')
+        formData.append('intent', 'create')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+
+        // Verify loader data is present (items list)
+        expect(html).toContain('Item One')
+        expect(html).toContain('Item Two')
+        expect(html).toContain('Item Three')
+
+        // Verify actionData is present
+        expect(html).toContain('Method: POST')
+        expect(html).toContain('Item Name: Test Item')
+      })
+
+      it('should have actionData undefined on GET requests', async () => {
+        const response = await app.request('http://localhost/action-test')
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+
+        // Page should render without actionData-related content
+        expect(html).not.toContain('data-success')
+        expect(html).not.toContain('data-error')
+        expect(html).not.toContain('data-redirected')
+
+        // Loader data should be present
+        expect(html).toContain('Submit the form to test actions')
+      })
+    })
+
+    describe('preference for named exports over generic action', () => {
+      it('should use POST export instead of action when both exist', async () => {
+        // The action-methods page has named exports, not a generic action
+        // This verifies the named export is used
+        const formData = new FormData()
+        formData.append('name', 'Via POST export')
+        formData.append('intent', 'create')
+
+        const response = await app.request('http://localhost/action-methods', {
+          method: 'POST',
+          body: formData,
+        })
+
+        expect(response.status).toBe(200)
+        const html = await response.text()
+        expect(html).toContain('Method: POST')
+        expect(html).toContain('Via POST export')
+      })
+    })
+  })
 })

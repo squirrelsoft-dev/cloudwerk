@@ -70,6 +70,11 @@ export type {
   LoaderArgs,
   LoaderFunction,
   InferLoaderData,
+
+  // Action Types
+  ActionArgs,
+  ActionFunction,
+  InferActionData,
 } from './types.js'
 
 export {
