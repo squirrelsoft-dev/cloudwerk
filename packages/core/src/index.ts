@@ -81,6 +81,10 @@ export type {
   NotFoundProps,
   ErrorBoundaryComponent,
   NotFoundComponent,
+
+  // Loading Boundary Types
+  LoadingProps,
+  LoadingComponent,
 } from './types.js'
 
 export {
@@ -151,6 +155,9 @@ export {
   // Error Boundary Resolution
   resolveErrorBoundary,
   resolveNotFoundBoundary,
+
+  // Loading Boundary Resolution
+  resolveLoadingBoundary,
 } from './resolver.js'
 
 // ============================================================================

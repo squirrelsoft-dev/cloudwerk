@@ -21,6 +21,7 @@ import type {
   ScanResult,
   ErrorBoundaryProps,
   NotFoundProps,
+  LoadingProps,
 } from '@cloudwerk/core'
 import {
   createHandlerAdapter,
@@ -29,8 +30,9 @@ import {
   RedirectError,
   resolveErrorBoundary,
   resolveNotFoundBoundary,
+  resolveLoadingBoundary,
 } from '@cloudwerk/core'
-import { render } from '@cloudwerk/ui'
+import { render, renderStream } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
@@ -38,6 +40,7 @@ import { loadPageModule } from './loadPage.js'
 import { loadLayoutModule } from './loadLayout.js'
 import { loadErrorBoundaryModule } from './loadErrorBoundary.js'
 import { loadNotFoundModule } from './loadNotFound.js'
+import { loadLoadingModule, type LoadedLoadingModule } from './loadLoading.js'
 import { parseSearchParams } from './parseSearchParams.js'
 
 // ============================================================================
@@ -237,6 +240,23 @@ export async function registerRoutes(
         )
         const layouts = layoutModules.map((m) => m.default)
 
+        // Load loading component if one exists for this route
+        const loadingPath = resolveLoadingBoundary(route.filePath, scanResult.loading)
+        let loadingModule: LoadedLoadingModule | null = null
+        if (loadingPath) {
+          try {
+            loadingModule = await loadLoadingModule(loadingPath, verbose)
+            if (verbose) {
+              logger.info(`Loaded loading boundary: ${loadingPath} -> ${route.urlPattern}`)
+            }
+          } catch (loadingError) {
+            const loadingMessage =
+              loadingError instanceof Error ? loadingError.message : String(loadingError)
+            logger.error(`Failed to load loading boundary: ${loadingMessage}`)
+            // Continue without streaming - fall back to non-streaming behavior
+          }
+        }
+
         // Apply middleware first (same as route.ts)
         for (const middlewarePath of route.middleware) {
           const middlewareHandler = await loadMiddlewareModule(middlewarePath, verbose)
@@ -267,8 +287,100 @@ export async function registerRoutes(
           const params = c.req.param()
           const searchParams = parseSearchParams(c)
           const request = c.req.raw
+          const pathname = new URL(request.url).pathname
           const layoutLoaderData: Record<string, unknown>[] = []
 
+          // Determine if streaming is enabled for this route
+          // Streaming is enabled if: loading.tsx exists AND streaming !== false in config
+          const streamingDisabled = pageModule.config?.streaming === false
+          const useStreaming = loadingModule && !streamingDisabled
+
+          if (useStreaming) {
+            // STREAMING MODE: Show loading UI immediately, stream content when ready
+            try {
+              const LoadingComponent = loadingModule.default
+
+              // Create loading props
+              const loadingProps: LoadingProps = { params, searchParams, pathname }
+
+              // Render loading component
+              let loadingElement = await Promise.resolve(LoadingComponent(loadingProps))
+
+              // Wrap loading component with layouts (without loader data since loaders haven't run yet)
+              // Layouts are rendered with empty objects for loader data - they should handle undefined gracefully
+              for (let i = layouts.length - 1; i >= 0; i--) {
+                const Layout = layouts[i]
+                const layoutProps: LayoutProps = {
+                  children: loadingElement,
+                  params,
+                  // Pass empty objects for layout loader data since loaders haven't run
+                }
+                loadingElement = await Promise.resolve(Layout(layoutProps))
+              }
+
+              // Create a promise that resolves to the full content (with loaders executed)
+              const contentPromise = (async () => {
+                // Execute layout loaders sequentially (parent -> child)
+                const loaderArgs: LoaderArgs = { params, request, context: c }
+
+                for (let index = 0; index < layoutModules.length; index++) {
+                  const layoutModule = layoutModules[index]
+                  if (layoutModule.loader) {
+                    const result = await executeLoader(layoutModule.loader, loaderArgs, c)
+                    if (result.response) {
+                      // Redirect/response from loader - render error message in stream
+                      // We can't redirect during streaming, so render error boundary
+                      throw new Error('Redirect during streaming not supported')
+                    }
+                    layoutLoaderData[index] = result.data
+                  } else {
+                    layoutLoaderData[index] = {}
+                  }
+                }
+
+                // Execute page loader
+                let pageLoaderData: Record<string, unknown> = {}
+                if (pageModule.loader) {
+                  const result = await executeLoader(pageModule.loader, loaderArgs, c)
+                  if (result.response) {
+                    throw new Error('Redirect during streaming not supported')
+                  }
+                  pageLoaderData = result.data
+                }
+
+                // Build page props with loader data spread
+                const pageProps: PageProps = { params, searchParams, ...pageLoaderData }
+
+                // Render page component
+                let element = await Promise.resolve(PageComponent(pageProps))
+
+                // Wrap with layouts (with loader data now available)
+                for (let i = layouts.length - 1; i >= 0; i--) {
+                  const Layout = layouts[i]
+                  const layoutProps: LayoutProps = {
+                    children: element,
+                    params,
+                    ...layoutLoaderData[i],
+                  }
+                  element = await Promise.resolve(Layout(layoutProps))
+                }
+
+                return element
+              })()
+
+              // Use streaming render - sends loading UI first, then streams content
+              return renderStream(loadingElement, contentPromise)
+            } catch (error) {
+              // Handle errors during streaming setup (loading component render)
+              // Fall through to non-streaming error handling
+              const message = error instanceof Error ? error.message : String(error)
+              logger.error(`Streaming error in ${route.filePath}: ${message}`)
+
+              // Fall through to non-streaming mode on error
+            }
+          }
+
+          // NON-STREAMING MODE: Wait for all loaders, then render
           try {
             // Execute layout loaders sequentially (parent -> child)
             // Each layout gets its own loader data

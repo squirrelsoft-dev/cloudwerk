@@ -704,6 +704,15 @@ export interface RouteConfig {
   /** Caching configuration */
   cache?: CacheConfig
 
+  /**
+   * Whether to enable streaming for this route.
+   * When true (default when loading.tsx exists), loading UI is sent immediately
+   * while loaders execute in the background.
+   * Set to false to disable streaming and wait for all loaders to complete.
+   * @default true (when loading.tsx exists)
+   */
+  streaming?: boolean
+
   /** Custom metadata (for plugins/middleware) */
   [key: string]: unknown
 }
@@ -959,3 +968,48 @@ export type ActionFunction<
 export type InferActionData<T> = T extends ActionFunction<infer D, unknown>
   ? Awaited<D>
   : never
+
+// ============================================================================
+// Loading Boundary Types
+// ============================================================================
+
+/**
+ * Props passed to loading boundary components.
+ *
+ * Loading boundaries display while loaders are running, providing
+ * immediate visual feedback during navigation.
+ *
+ * @example
+ * ```typescript
+ * // app/loading.tsx
+ * import type { LoadingProps } from '@cloudwerk/core'
+ *
+ * export default function Loading({ params, pathname }: LoadingProps) {
+ *   return (
+ *     <div class="animate-pulse">
+ *       <div class="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+ *       <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+ *       <p>Loading {pathname}...</p>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export interface LoadingProps<TParams = Record<string, string>> {
+  /** Route parameters */
+  params: TParams
+  /** URL search parameters */
+  searchParams: Record<string, string | string[] | undefined>
+  /** Current pathname for context-aware loading states */
+  pathname: string
+}
+
+/**
+ * Loading boundary component signature.
+ *
+ * Loading components are rendered immediately during navigation while
+ * loaders fetch data in the background.
+ */
+export type LoadingComponent<TParams = Record<string, string>> = (
+  props: LoadingProps<TParams>
+) => unknown | Promise<unknown>

@@ -355,3 +355,52 @@ export function resolveNotFoundBoundary(
 
   return null
 }
+
+// ============================================================================
+// Loading Boundary Resolution
+// ============================================================================
+
+/**
+ * Resolve the nearest loading boundary for a given route path.
+ * Walks from closest directory to root, returning first match.
+ *
+ * Unlike layouts and middleware which accumulate from root to closest,
+ * loading boundaries return only the nearest one (closest wins).
+ *
+ * @param relativePath - Relative path of the route file
+ * @param allLoading - All discovered loading boundary files
+ * @returns Absolute path to loading boundary, or null if none found
+ *
+ * @example
+ * // Given loading boundaries at:
+ * //   app/loading.tsx (root)
+ * //   app/dashboard/loading.tsx
+ * //
+ * // For route at app/dashboard/settings/page.tsx:
+ * resolveLoadingBoundary('dashboard/settings/page.tsx', loading)
+ * // Returns: '/abs/app/dashboard/loading.tsx' (closest boundary)
+ */
+export function resolveLoadingBoundary(
+  relativePath: string,
+  allLoading: ScannedFile[]
+): string | null {
+  const ancestors = getAncestorDirs(relativePath)
+
+  // Build map of directory -> loading boundary for quick lookup
+  const loadingMap = new Map<string, ScannedFile>()
+  for (const loading of allLoading) {
+    const dir = normalizeDir(path.posix.dirname(loading.relativePath))
+    loadingMap.set(dir, loading)
+  }
+
+  // Walk from closest to root (reverse order)
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const dir = normalizeDir(ancestors[i])
+    const boundary = loadingMap.get(dir)
+    if (boundary) {
+      return boundary.absolutePath
+    }
+  }
+
+  return null
+}
