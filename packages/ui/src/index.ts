@@ -17,7 +17,14 @@ import type { RenderOptions, HtmlOptions } from './types.js'
 // Type Exports
 // ============================================================================
 
-export type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions, PropsWithChildren } from './types.js'
+export type {
+  Renderer,
+  RenderOptions,
+  HtmlOptions,
+  StreamRenderOptions,
+  RenderToStreamOptions,
+  PropsWithChildren,
+} from './types.js'
 
 // ============================================================================
 // Renderer Management Exports
@@ -36,7 +43,7 @@ export {
 // Renderer Implementation Exports
 // ============================================================================
 
-export { honoJsxRenderer, renderStream } from './renderers/index.js'
+export { honoJsxRenderer, renderStream, renderToStream } from './renderers/index.js'
 
 // ============================================================================
 // Facade Functions
