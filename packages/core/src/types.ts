@@ -268,6 +268,44 @@ export type LayoutComponent<TParams = Record<string, string>> = (
 ) => unknown | Promise<unknown>
 
 // ============================================================================
+// Context Types
+// ============================================================================
+
+/**
+ * Cloudflare Workers execution context
+ */
+export interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void
+  passThroughOnException(): void
+}
+
+/**
+ * Request-scoped context accessible via getContext()
+ */
+export interface CloudwerkContext<Env = Record<string, unknown>> {
+  /** Original request object */
+  request: Request
+
+  /** Cloudflare bindings (D1, KV, R2, etc.) */
+  env: Env
+
+  /** Cloudflare execution context for waitUntil */
+  executionCtx: ExecutionContext
+
+  /** Route parameters from dynamic segments */
+  params: Record<string, string>
+
+  /** Auto-generated request ID for tracing */
+  requestId: string
+
+  /** Get middleware-set data */
+  get<T>(key: string): T | undefined
+
+  /** Set data for downstream code */
+  set<T>(key: string, value: T): void
+}
+
+// ============================================================================
 // Scanner Types
 // ============================================================================
 
