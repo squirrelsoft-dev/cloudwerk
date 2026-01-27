@@ -58,9 +58,28 @@ export interface LoadedRouteModule {
 }
 
 /**
- * Route handler function type.
+ * Route handler function type (internal).
+ *
+ * This type uses `unknown` parameters intentionally because:
+ * 1. Handlers are dynamically loaded at runtime - signature unknown at compile time
+ * 2. TypeScript function type unions don't work at call sites (requires intersection)
+ * 3. User-facing type safety is provided by `CloudwerkHandler<T>` in route files
+ * 4. The actual typing happens in `createHandlerAdapter` from `@cloudwerk/core`
+ *
+ * Supports both handler signatures:
+ * - Hono style: (c: HonoContext) => Response
+ * - Cloudwerk style: (request: Request, context: CloudwerkHandlerContext) => Response
+ *
+ * Detection is based on function arity (fn.length):
+ * - Arity 1: Hono handler
+ * - Arity 2: Cloudwerk handler (wrapped via `createHandlerAdapter`)
+ *
+ * @internal
  */
-export type RouteHandlerFn = (c: unknown) => Response | Promise<Response>
+export type RouteHandlerFn = (
+  arg1: unknown,
+  arg2?: unknown
+) => Response | Promise<Response>
 
 /**
  * Registered route information for logging.

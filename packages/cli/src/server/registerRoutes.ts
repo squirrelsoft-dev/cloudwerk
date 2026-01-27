@@ -4,9 +4,9 @@
  * Registers route handlers with Hono.
  */
 
-import type { Hono, Handler, Context } from 'hono'
+import type { Hono, Handler } from 'hono'
 import type { RouteManifest, HttpMethod, CloudwerkHandler } from '@cloudwerk/core'
-import { getContext } from '@cloudwerk/core'
+import { createHandlerAdapter } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 
@@ -59,23 +59,6 @@ const HTTP_METHODS: HttpMethod[] = [
  */
 function isCloudwerkHandler(fn: unknown): fn is CloudwerkHandler {
   return typeof fn === 'function' && fn.length === 2
-}
-
-/**
- * Wrap a Cloudwerk-native handler for Hono compatibility.
- */
-function wrapCloudwerkHandler(handler: CloudwerkHandler): Handler {
-  return async (c: Context) => {
-    // Extract params from Hono
-    const params = c.req.param() as Record<string, string>
-
-    // Update CloudwerkContext params for getContext() access
-    const ctx = getContext()
-    Object.assign(ctx.params, params)
-
-    // Call native handler with standard Request
-    return handler(c.req.raw, { params })
-  }
 }
 
 // ============================================================================
@@ -160,7 +143,7 @@ function registerMethod(
 ): void {
   // Wrap Cloudwerk-native handlers for Hono compatibility
   const h: Handler = isCloudwerkHandler(handler)
-    ? wrapCloudwerkHandler(handler)
+    ? createHandlerAdapter(handler)
     : handler as Handler
 
   switch (method) {
