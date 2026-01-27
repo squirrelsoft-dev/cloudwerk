@@ -159,14 +159,11 @@ export function interpolatePath(
 ): string {
   let result = urlPattern
 
-  // Replace :param with actual values
+  // Replace :param and *param with actual values
   for (const [key, value] of Object.entries(params)) {
-    result = result.replace(`:${key}`, encodeURIComponent(value))
-  }
-
-  // Handle catch-all segments (*param)
-  for (const [key, value] of Object.entries(params)) {
-    result = result.replace(`*${key}`, encodeURIComponent(value))
+    const encodedValue = encodeURIComponent(value)
+    result = result.replace(`:${key}`, encodedValue)
+    result = result.replace(`*${key}`, encodedValue)
   }
 
   return result
@@ -188,7 +185,7 @@ export function urlPathToOutputFile(urlPath: string): string {
   }
 
   // Handle root path
-  if (normalizedPath === '' || normalizedPath === '/') {
+  if (normalizedPath === '') {
     return 'index.html'
   }
 

@@ -151,10 +151,12 @@ export async function build(
         const staticOutputDir = path.join(outputDir, STATIC_SUBDIR)
         logger.info(`Generating static pages to ${staticOutputDir}...`)
 
+        const ssgStartTime = Date.now()
         const result = await generateStaticSite(app, manifest, staticOutputDir, logger, verbose)
+        const ssgDuration = Date.now() - ssgStartTime
 
         // Report results
-        printSSGResults(result, logger, startTime)
+        printSSGResults(result, logger, ssgDuration)
 
         if (result.failureCount > 0) {
           throw new CliError(
@@ -204,14 +206,13 @@ export async function build(
  *
  * @param result - SSG result object
  * @param logger - Logger for output
- * @param startTime - Build start timestamp
+ * @param duration - SSG duration in milliseconds
  */
 function printSSGResults(
   result: Awaited<ReturnType<typeof generateStaticSite>>,
   logger: Logger,
-  startTime: number
+  duration: number
 ): void {
-  const duration = Date.now() - startTime
 
   console.log()
   logger.log('Static Site Generation Results:')
