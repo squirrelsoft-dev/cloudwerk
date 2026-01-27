@@ -351,6 +351,106 @@ export type LayoutComponent<TParams = Record<string, string>> = (
 ) => unknown | Promise<unknown>
 
 // ============================================================================
+// Error Boundary Types
+// ============================================================================
+
+/**
+ * Props passed to error boundary components.
+ *
+ * Error boundaries are used to catch and display errors from loaders, actions,
+ * and component rendering. They receive the error, its source, and contextual
+ * information about the route.
+ *
+ * @example
+ * ```typescript
+ * // app/error.tsx
+ * import type { ErrorBoundaryProps } from '@cloudwerk/core'
+ *
+ * export default function ErrorBoundary({
+ *   error,
+ *   errorType,
+ *   reset,
+ *   params,
+ * }: ErrorBoundaryProps) {
+ *   return (
+ *     <div>
+ *       <h1>Something went wrong!</h1>
+ *       <p>{error.message}</p>
+ *       {error.digest && <p>Error ID: {error.digest}</p>}
+ *       <p>Error source: {errorType}</p>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export interface ErrorBoundaryProps<TParams = Record<string, string>> {
+  /** The error that was thrown */
+  error: Error & {
+    /** Hash for matching server logs in production */
+    digest?: string
+  }
+  /** Error source for custom handling */
+  errorType: 'loader' | 'action' | 'render' | 'unknown'
+  /**
+   * Attempt to recover from the error.
+   * Note: On server-side rendering, this is a no-op function.
+   */
+  reset: () => void
+  /** Route parameters */
+  params: TParams
+  /** URL search parameters */
+  searchParams: Record<string, string | string[] | undefined>
+}
+
+/**
+ * Props passed to not-found boundary components.
+ *
+ * Not-found boundaries are rendered when a NotFoundError is thrown from a
+ * loader or action, or when notFound() is called.
+ *
+ * @example
+ * ```typescript
+ * // app/not-found.tsx
+ * import type { NotFoundProps } from '@cloudwerk/core'
+ *
+ * export default function NotFound({ params }: NotFoundProps) {
+ *   return (
+ *     <div>
+ *       <h1>404 - Not Found</h1>
+ *       <p>The requested resource could not be found.</p>
+ *     </div>
+ *   )
+ * }
+ * ```
+ */
+export interface NotFoundProps<TParams = Record<string, string>> {
+  /** Route parameters */
+  params: TParams
+  /** URL search parameters */
+  searchParams: Record<string, string | string[] | undefined>
+}
+
+/**
+ * Error boundary component signature.
+ *
+ * Error boundary components are rendered when errors occur in loaders,
+ * actions, or during component rendering.
+ */
+export type ErrorBoundaryComponent<TParams = Record<string, string>> = (
+  props: ErrorBoundaryProps<TParams>
+) => unknown | Promise<unknown>
+
+/**
+ * Not-found boundary component signature.
+ *
+ * Not-found boundary components are rendered when NotFoundError is thrown
+ * or notFound() is called.
+ */
+export type NotFoundComponent<TParams = Record<string, string>> = (
+  props: NotFoundProps<TParams>
+) => unknown | Promise<unknown>
+
+// ============================================================================
 // Context Types
 // ============================================================================
 

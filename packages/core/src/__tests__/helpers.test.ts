@@ -12,7 +12,7 @@ import {
   redirect,
   permanentRedirect,
   html,
-  notFound,
+  notFoundResponse,
   badRequest,
   unauthorized,
   forbidden,
@@ -157,9 +157,9 @@ describe('html', () => {
 // Error Response Tests
 // ============================================================================
 
-describe('notFound', () => {
+describe('notFoundResponse', () => {
   it('should create 404 response with default message', async () => {
-    const response = notFound()
+    const response = notFoundResponse()
 
     expect(response.status).toBe(404)
 
@@ -168,7 +168,7 @@ describe('notFound', () => {
   })
 
   it('should create 404 response with custom message', async () => {
-    const response = notFound('User not found')
+    const response = notFoundResponse('User not found')
 
     const body = await response.json()
     expect(body).toEqual({ error: 'User not found' })

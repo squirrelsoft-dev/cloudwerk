@@ -30,11 +30,12 @@ function createMockLogger() {
 }
 
 /**
- * Helper to create a route manifest from a fixture directory.
+ * Helper to create a route manifest and scan result from a fixture directory.
  */
-async function createManifest(routesDir: string) {
+async function createManifestAndScanResult(routesDir: string) {
   const scanResult = await scanRoutes(routesDir, { extensions: ['.ts', '.tsx'] })
-  return buildRouteManifest(scanResult, routesDir, resolveLayouts, resolveMiddleware)
+  const manifest = buildRouteManifest(scanResult, routesDir, resolveLayouts, resolveMiddleware)
+  return { manifest, scanResult }
 }
 
 describe('registerRoutes - page support', () => {
@@ -48,9 +49,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      const routes = await registerRoutes(app, manifest, logger)
+      const routes = await registerRoutes(app, manifest, scanResult, logger)
 
       // Find the root page route
       const homeRoute = routes.find((r) => r.pattern === '/' && r.method === 'GET')
@@ -62,9 +63,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/')
       expect(response.status).toBe(200)
@@ -80,9 +81,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/dashboard')
       const html = await response.text()
@@ -106,9 +107,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/async')
       const html = await response.text()
@@ -127,9 +128,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/users/123')
       const html = await response.text()
@@ -143,9 +144,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/users/456?tab=settings')
       const html = await response.text()
@@ -158,9 +159,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/users/789?ref=a&ref=b')
       const html = await response.text()
@@ -175,9 +176,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/async')
       const html = await response.text()
@@ -193,9 +194,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger, true) // verbose mode
+      await registerRoutes(app, manifest, scanResult, logger, true) // verbose mode
 
       // Verify config was applied (logged in verbose mode)
       expect(logger.info).toHaveBeenCalledWith(
@@ -209,9 +210,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       const response = await app.request('http://localhost/error-page')
       expect(response.status).toBe(500)
@@ -224,9 +225,9 @@ describe('registerRoutes - page support', () => {
       const app = new Hono()
       const logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
 
-      await registerRoutes(app, manifest, logger)
+      await registerRoutes(app, manifest, scanResult, logger)
 
       await app.request('http://localhost/error-page')
 
@@ -244,8 +245,8 @@ describe('registerRoutes - page support', () => {
       app = new Hono()
       logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
-      await registerRoutes(app, manifest, logger)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
+      await registerRoutes(app, manifest, scanResult, logger)
     })
 
     describe('page loaders', () => {
@@ -359,8 +360,8 @@ describe('registerRoutes - page support', () => {
       app = new Hono()
       logger = createMockLogger()
       const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
-      const manifest = await createManifest(routesDir)
-      await registerRoutes(app, manifest, logger)
+      const { manifest, scanResult } = await createManifestAndScanResult(routesDir)
+      await registerRoutes(app, manifest, scanResult, logger)
     })
 
     describe('basic action execution', () => {

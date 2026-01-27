@@ -100,3 +100,46 @@ export class RedirectError extends Error {
     }
   }
 }
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Trigger a 404 Not Found response.
+ * Throws NotFoundError which will be caught and rendered as not-found.tsx.
+ *
+ * This is a convenience function for throwing NotFoundError. Use it when you
+ * want to short-circuit a loader or action and show the not-found boundary.
+ *
+ * @param message - Optional error message (defaults to 'Not Found')
+ * @throws {NotFoundError} Always throws NotFoundError
+ *
+ * @example
+ * ```typescript
+ * import { notFound } from '@cloudwerk/core'
+ *
+ * export async function loader({ params }) {
+ *   const user = await getUser(params.id)
+ *   if (!user) {
+ *     notFound() // Throws NotFoundError
+ *   }
+ *   return { user }
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With custom message
+ * export async function loader({ params }) {
+ *   const post = await getPost(params.slug)
+ *   if (!post) {
+ *     notFound(`Post "${params.slug}" not found`)
+ *   }
+ *   return { post }
+ * }
+ * ```
+ */
+export function notFound(message?: string): never {
+  throw new NotFoundError(message)
+}

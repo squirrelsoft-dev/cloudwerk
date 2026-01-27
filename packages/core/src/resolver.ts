@@ -261,3 +261,97 @@ export function resolveRouteContext(
     middleware: resolveMiddleware(relativePath, allMiddleware),
   }
 }
+
+// ============================================================================
+// Error Boundary Resolution
+// ============================================================================
+
+/**
+ * Resolve the nearest error boundary for a given route path.
+ * Walks from closest directory to root, returning first match.
+ *
+ * Unlike layouts and middleware which accumulate from root to closest,
+ * error boundaries return only the nearest one (closest wins).
+ *
+ * @param relativePath - Relative path of the route file
+ * @param allErrors - All discovered error boundary files
+ * @returns Absolute path to error boundary, or null if none found
+ *
+ * @example
+ * // Given error boundaries at:
+ * //   app/error.tsx (root)
+ * //   app/dashboard/error.tsx
+ * //
+ * // For route at app/dashboard/settings/page.tsx:
+ * resolveErrorBoundary('dashboard/settings/page.tsx', errors)
+ * // Returns: '/abs/app/dashboard/error.tsx' (closest boundary)
+ */
+export function resolveErrorBoundary(
+  relativePath: string,
+  allErrors: ScannedFile[]
+): string | null {
+  const ancestors = getAncestorDirs(relativePath)
+
+  // Build map of directory -> error boundary for quick lookup
+  const errorMap = new Map<string, ScannedFile>()
+  for (const err of allErrors) {
+    const dir = normalizeDir(path.posix.dirname(err.relativePath))
+    errorMap.set(dir, err)
+  }
+
+  // Walk from closest to root (reverse order)
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const dir = normalizeDir(ancestors[i])
+    const boundary = errorMap.get(dir)
+    if (boundary) {
+      return boundary.absolutePath
+    }
+  }
+
+  return null
+}
+
+/**
+ * Resolve the nearest not-found boundary for a given route path.
+ * Walks from closest directory to root, returning first match.
+ *
+ * Unlike layouts and middleware which accumulate from root to closest,
+ * not-found boundaries return only the nearest one (closest wins).
+ *
+ * @param relativePath - Relative path of the route file
+ * @param allNotFound - All discovered not-found boundary files
+ * @returns Absolute path to not-found boundary, or null if none found
+ *
+ * @example
+ * // Given not-found boundaries at:
+ * //   app/not-found.tsx (root)
+ * //   app/dashboard/not-found.tsx
+ * //
+ * // For route at app/dashboard/settings/page.tsx:
+ * resolveNotFoundBoundary('dashboard/settings/page.tsx', notFound)
+ * // Returns: '/abs/app/dashboard/not-found.tsx' (closest boundary)
+ */
+export function resolveNotFoundBoundary(
+  relativePath: string,
+  allNotFound: ScannedFile[]
+): string | null {
+  const ancestors = getAncestorDirs(relativePath)
+
+  // Build map of directory -> not-found boundary for quick lookup
+  const notFoundMap = new Map<string, ScannedFile>()
+  for (const nf of allNotFound) {
+    const dir = normalizeDir(path.posix.dirname(nf.relativePath))
+    notFoundMap.set(dir, nf)
+  }
+
+  // Walk from closest to root (reverse order)
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const dir = normalizeDir(ancestors[i])
+    const boundary = notFoundMap.get(dir)
+    if (boundary) {
+      return boundary.absolutePath
+    }
+  }
+
+  return null
+}

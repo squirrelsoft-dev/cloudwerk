@@ -119,7 +119,7 @@ export async function dev(
 
     // Create Hono app
     logger.debug(`Creating Hono app...`)
-    const { app, routes } = await createApp(manifest, config, logger, verbose)
+    const { app, routes } = await createApp(manifest, scanResult, config, logger, verbose)
 
     // Parse port
     const port = parseInt(options.port, 10)
