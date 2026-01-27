@@ -282,4 +282,122 @@ describe('createApp', () => {
       expect(response.status).toBe(200)
     })
   })
+
+  describe('with-middleware fixture', () => {
+    it('should apply root middleware to all routes', async () => {
+      const routesDir = path.join(FIXTURES_DIR, 'with-middleware/app')
+      const scanResult = await scanRoutes(routesDir, { extensions: ['.ts', '.tsx'] })
+
+      const manifest = buildRouteManifest(
+        scanResult,
+        routesDir,
+        resolveLayouts,
+        resolveMiddleware
+      )
+
+      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+
+      // Request to public endpoint
+      const request = new Request('http://localhost/api')
+      const response = await app.fetch(request)
+
+      expect(response.status).toBe(200)
+
+      // Root middleware adds X-Response-Time header
+      expect(response.headers.get('X-Response-Time')).toMatch(/^\d+ms$/)
+
+      const data = await response.json()
+      expect(data.message).toBe('Public endpoint')
+      expect(data.hasRequestStart).toBe(true)
+    })
+
+    it('should apply nested middleware (auth) to protected routes', async () => {
+      const routesDir = path.join(FIXTURES_DIR, 'with-middleware/app')
+      const scanResult = await scanRoutes(routesDir, { extensions: ['.ts', '.tsx'] })
+
+      const manifest = buildRouteManifest(
+        scanResult,
+        routesDir,
+        resolveLayouts,
+        resolveMiddleware
+      )
+
+      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+
+      // Request without auth token
+      const unauthRequest = new Request('http://localhost/api/protected')
+      const unauthResponse = await app.fetch(unauthRequest)
+
+      expect(unauthResponse.status).toBe(401)
+      const unauthData = await unauthResponse.json()
+      expect(unauthData.error).toBe('Unauthorized')
+
+      // Request with valid auth token
+      const authRequest = new Request('http://localhost/api/protected', {
+        headers: { Authorization: 'Bearer valid-token' },
+      })
+      const authResponse = await app.fetch(authRequest)
+
+      expect(authResponse.status).toBe(200)
+
+      const authData = await authResponse.json()
+      expect(authData.message).toBe('Protected endpoint')
+      expect(authData.user).toEqual({ id: '123', name: 'Test User' })
+      expect(authData.hasRequestStart).toBe(true)
+
+      // Root middleware still applies
+      expect(authResponse.headers.get('X-Response-Time')).toMatch(/^\d+ms$/)
+    })
+
+    it('should chain middleware in correct order (root first, then nested)', async () => {
+      const routesDir = path.join(FIXTURES_DIR, 'with-middleware/app')
+      const scanResult = await scanRoutes(routesDir, { extensions: ['.ts', '.tsx'] })
+
+      const manifest = buildRouteManifest(
+        scanResult,
+        routesDir,
+        resolveLayouts,
+        resolveMiddleware
+      )
+
+      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+
+      // Request with valid token - both middlewares should run
+      const request = new Request('http://localhost/api/protected', {
+        headers: { Authorization: 'Bearer valid-token' },
+      })
+      const response = await app.fetch(request)
+
+      expect(response.status).toBe(200)
+
+      const data = await response.json()
+      // requestStart is set by root middleware
+      // user is set by protected middleware
+      expect(data.hasRequestStart).toBe(true)
+      expect(data.user).toBeDefined()
+    })
+
+    it('should short-circuit on middleware early return', async () => {
+      const routesDir = path.join(FIXTURES_DIR, 'with-middleware/app')
+      const scanResult = await scanRoutes(routesDir, { extensions: ['.ts', '.tsx'] })
+
+      const manifest = buildRouteManifest(
+        scanResult,
+        routesDir,
+        resolveLayouts,
+        resolveMiddleware
+      )
+
+      const { app } = await createApp(manifest, DEFAULT_CONFIG, logger)
+
+      // Request without auth token - should be blocked by auth middleware
+      const request = new Request('http://localhost/api/protected')
+      const response = await app.fetch(request)
+
+      expect(response.status).toBe(401)
+
+      // Root middleware runs first, so X-Response-Time should still be set
+      expect(response.headers.get('X-Response-Time')).toMatch(/^\d+ms$/)
+    })
+  })
 })

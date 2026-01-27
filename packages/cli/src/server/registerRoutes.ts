@@ -4,11 +4,13 @@
  * Registers route handlers with Hono.
  */
 
+import * as path from 'node:path'
 import type { Hono, Handler } from 'hono'
 import type { RouteManifest, HttpMethod, CloudwerkHandler } from '@cloudwerk/core'
 import { createHandlerAdapter } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
+import { loadMiddlewareModule } from './loadMiddleware.js'
 
 // ============================================================================
 // HTTP Methods
@@ -95,6 +97,21 @@ export async function registerRoutes(
     }
 
     try {
+      // Load and apply middleware for this route (in order from root to closest)
+      // The resolver already returns middleware in the correct order
+      for (const middlewarePath of route.middleware) {
+        const middlewareHandler = await loadMiddlewareModule(middlewarePath, verbose)
+
+        if (middlewareHandler) {
+          // Apply to this specific route pattern
+          app.use(route.urlPattern, middlewareHandler)
+
+          if (verbose) {
+            logger.info(`Applied middleware: ${path.basename(middlewarePath)} -> ${route.urlPattern}`)
+          }
+        }
+      }
+
       // Load the route handler module
       logger.debug(`Loading route handler: ${route.filePath}`)
       const module = await loadRouteHandler(route.absolutePath, verbose)

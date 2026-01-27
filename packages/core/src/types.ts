@@ -406,3 +406,80 @@ export interface ScanResult {
   /** All not-found files */
   notFound: ScannedFile[]
 }
+
+// ============================================================================
+// Middleware Types
+// ============================================================================
+
+/**
+ * Cloudwerk-native middleware signature.
+ *
+ * Middleware receives the raw Request object and a next() function that
+ * returns the downstream Response. Context data can be accessed and modified
+ * via getContext().
+ *
+ * @example
+ * ```typescript
+ * import type { Middleware } from '@cloudwerk/core'
+ * import { getContext, redirect } from '@cloudwerk/core'
+ *
+ * // Auth middleware that checks session and sets user data
+ * export const middleware: Middleware = async (request, next) => {
+ *   const ctx = getContext()
+ *   const session = await getSession(request)
+ *
+ *   if (!session) {
+ *     return redirect('/login')
+ *   }
+ *
+ *   ctx.set('user', session.user)
+ *   return next()
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Timing middleware that adds headers
+ * export const middleware: Middleware = async (request, next) => {
+ *   const start = Date.now()
+ *   const response = await next()
+ *
+ *   // Modify response headers
+ *   const duration = Date.now() - start
+ *   response.headers.set('X-Response-Time', `${duration}ms`)
+ *
+ *   return response
+ * }
+ * ```
+ */
+export type Middleware = (
+  request: Request,
+  next: () => Promise<Response>
+) => Response | Promise<Response>
+
+/**
+ * Module exports for middleware files.
+ * Supports both default export and named 'middleware' export.
+ *
+ * @example
+ * ```typescript
+ * // Default export
+ * export default async function (request, next) {
+ *   return next()
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Named export
+ * export const middleware = async (request, next) => {
+ *   return next()
+ * }
+ * ```
+ */
+export interface LoadedMiddlewareModule {
+  /** Default export middleware function */
+  default?: Middleware
+  /** Named 'middleware' export */
+  middleware?: Middleware
+}
