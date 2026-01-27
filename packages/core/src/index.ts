@@ -178,6 +178,9 @@ export {
   // Context Access
   getContext,
 
+  // Handler Adapter
+  createHandlerAdapter,
+
   // Internal (for middleware integration)
   runWithContext,
   createContext,

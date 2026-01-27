@@ -6,8 +6,8 @@
  */
 
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { Context, MiddlewareHandler } from 'hono'
-import type { CloudwerkContext, ExecutionContext } from './types.js'
+import type { Context, Handler, MiddlewareHandler } from 'hono'
+import type { CloudwerkContext, CloudwerkHandler, ExecutionContext } from './types.js'
 
 // ============================================================================
 // Internal Context Storage
@@ -165,5 +165,47 @@ export function contextMiddleware(): MiddlewareHandler {
     return runWithContext(ctx, async () => {
       await next()
     })
+  }
+}
+
+// ============================================================================
+// Handler Adapter
+// ============================================================================
+
+/**
+ * Create a Hono-compatible handler from a Cloudwerk-native handler.
+ *
+ * This adapter bridges the gap between Cloudwerk's handler signature
+ * `(request: Request, context: { params }) => Response` and Hono's
+ * handler signature `(c: Context) => Response`.
+ *
+ * @param handler - A Cloudwerk-native route handler
+ * @returns A Hono-compatible handler
+ *
+ * @example
+ * import { Hono } from 'hono'
+ * import { createHandlerAdapter } from '@cloudwerk/core'
+ *
+ * const app = new Hono()
+ *
+ * const myHandler: CloudwerkHandler<{ id: string }> = (request, { params }) => {
+ *   return Response.json({ userId: params.id })
+ * }
+ *
+ * app.get('/users/:id', createHandlerAdapter(myHandler))
+ */
+export function createHandlerAdapter<TParams = Record<string, string>>(
+  handler: CloudwerkHandler<TParams>
+): Handler {
+  return async (c: Context) => {
+    // Extract params from Hono context
+    const params = c.req.param() as TParams
+
+    // Update CloudwerkContext params for getContext() access
+    const ctx = getContext()
+    Object.assign(ctx.params, params)
+
+    // Call native handler with standard Request and params
+    return handler(c.req.raw, { params })
   }
 }
