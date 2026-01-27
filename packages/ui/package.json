@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/ui",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "UI rendering abstraction for Cloudwerk",
   "repository": {
     "type": "git",
