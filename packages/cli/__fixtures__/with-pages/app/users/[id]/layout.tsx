@@ -16,7 +16,7 @@ interface UserLayoutData {
  * Loader that provides navigation data for the user layout.
  */
 export async function loader({
-  params,
+  params: _params,
 }: LoaderArgs<UserLayoutParams>): Promise<UserLayoutData> {
   // Simulate async data loading
   await Promise.resolve()
