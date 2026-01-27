@@ -260,9 +260,10 @@ describe('honoJsxRenderer', () => {
     expect(text).toBe(content)
   })
 
-  it('hydrate throws with informative error', () => {
+  it('hydrate throws when called in non-browser environment', () => {
+    // In Node.js test environment, hydrate should throw because window/document are not available
     expect(() => honoJsxRenderer.hydrate({}, {} as Element)).toThrow(
-      'Client hydration requires hono/jsx/dom'
+      'hydrate() can only be called in a browser environment'
     )
   })
 })

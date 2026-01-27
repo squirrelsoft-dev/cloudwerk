@@ -11,6 +11,7 @@ import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
 import type { LayoutComponent, LoaderFunction } from '@cloudwerk/core'
+import { hasUseClientDirective, generateComponentId } from '@cloudwerk/core'
 
 // ============================================================================
 // Types
@@ -24,6 +25,10 @@ export interface LoadedLayoutModule {
   default: LayoutComponent
   /** Optional loader function for server-side data loading */
   loader?: LoaderFunction
+  /** Whether this layout is a Client Component (has 'use client' directive) */
+  isClientComponent?: boolean
+  /** Component ID for hydration (only set if isClientComponent is true) */
+  clientComponentId?: string
 }
 
 // ============================================================================
@@ -106,6 +111,13 @@ export async function loadLayoutModule(
 
     const code = result.outputFiles[0].text
 
+    // Read the original source to check for 'use client' directive
+    const sourceCode = fs.readFileSync(absolutePath, 'utf-8')
+    const isClientComponent = hasUseClientDirective(sourceCode)
+    const clientComponentId = isClientComponent
+      ? generateComponentId(absolutePath, path.dirname(absolutePath))
+      : undefined
+
     // Write to temp file in a safe location within the project tree
     // This ensures proper module resolution for external packages
     const cacheKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -140,10 +152,12 @@ export async function loadLayoutModule(
         validatedLoader = rawModule.loader as LoaderFunction
       }
 
-      // Create module with loader
+      // Create module with loader and client component info
       const module: LoadedLayoutModule = {
         default: rawModule.default,
         loader: validatedLoader,
+        isClientComponent,
+        clientComponentId,
       }
 
       // Cache the compiled module with its mtime

@@ -239,19 +239,19 @@ describe('hydrate()', () => {
     setActiveRenderer('hono-jsx')
   })
 
-  it('throws error until #39 is implemented', () => {
+  it('throws error when called in non-browser environment', () => {
     const element = createMockJsxElement('<div>Test</div>')
     const mockRoot = {} as Element
 
-    expect(() => hydrate(element, mockRoot)).toThrow('Client hydration requires hono/jsx/dom')
-    expect(() => hydrate(element, mockRoot)).toThrow('issue #39')
+    // In Node.js test environment, hydrate should throw because window/document are not available
+    expect(() => hydrate(element, mockRoot)).toThrow('browser environment')
   })
 
-  it('error message mentions hono/jsx/dom requirement', () => {
+  it('error message is informative about environment requirement', () => {
     const element = createMockJsxElement('<div>Test</div>')
     const mockRoot = {} as Element
 
-    expect(() => hydrate(element, mockRoot)).toThrow(/hono\/jsx\/dom/)
+    expect(() => hydrate(element, mockRoot)).toThrow('hydrate() can only be called in a browser environment')
   })
 })
 

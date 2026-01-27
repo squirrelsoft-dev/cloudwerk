@@ -155,6 +155,10 @@ importers:
   packages/storage: {}
 
   packages/ui:
+    dependencies:
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@vitest/coverage-v8':
         specifier: ^1.0.0

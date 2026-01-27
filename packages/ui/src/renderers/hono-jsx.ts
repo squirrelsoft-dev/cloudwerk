@@ -74,18 +74,36 @@ export const honoJsxRenderer: Renderer = {
   /**
    * Hydrate a JSX element on the client.
    *
-   * This is a placeholder that throws an informative error.
-   * Client-side hydration will be implemented in issue #39.
+   * Uses hono/jsx/dom render function to attach event handlers and state
+   * to server-rendered HTML. This is called by the client-side hydration
+   * bootstrap script for each Client Component.
    *
-   * @param _element - JSX element (unused)
-   * @param _root - DOM element (unused)
-   * @throws Error with information about when this feature will be available
+   * Note: This method is primarily used by the client-side hydration runtime.
+   * In server-side code, it will throw an error since the DOM is not available.
+   *
+   * @param element - JSX element to hydrate
+   * @param root - DOM element to hydrate into
+   * @throws Error if called in a non-browser environment
    */
-  hydrate(_element: unknown, _root: Element): void {
-    throw new Error(
-      'Client hydration requires hono/jsx/dom. ' +
-        'This feature will be available after issue #39 is implemented.'
-    )
+  hydrate(element: unknown, root: Element): void {
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      throw new Error(
+        'hydrate() can only be called in a browser environment. ' +
+          'For server-side rendering, use render() instead.'
+      )
+    }
+
+    // Dynamic import to avoid issues on server-side
+    // This will be bundled by esbuild for client-side code
+    // Note: We cast root to unknown first since hono/jsx/dom expects HTMLElement,
+    // but we accept Element for broader compatibility. At runtime, the element
+    // passed should be an HTMLElement from document.querySelector.
+    import('hono/jsx/dom').then(({ render }) => {
+      render(element as Parameters<typeof render>[0], root as unknown as HTMLElement)
+    }).catch((error) => {
+      console.error('[Cloudwerk] Failed to hydrate component:', error)
+    })
   },
 }
 

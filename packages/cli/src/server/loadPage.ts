@@ -10,7 +10,7 @@ import * as path from 'node:path'
 import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
-import { validateRouteConfig } from '@cloudwerk/core'
+import { validateRouteConfig, hasUseClientDirective, generateComponentId } from '@cloudwerk/core'
 import type { PageComponent, RouteConfig, LoaderFunction, ActionFunction } from '@cloudwerk/core'
 
 // ============================================================================
@@ -37,6 +37,10 @@ export interface LoadedPageModule {
   PATCH?: ActionFunction
   /** Named DELETE action export */
   DELETE?: ActionFunction
+  /** Whether this page is a Client Component (has 'use client' directive) */
+  isClientComponent?: boolean
+  /** Component ID for hydration (only set if isClientComponent is true) */
+  clientComponentId?: string
 }
 
 // ============================================================================
@@ -119,6 +123,13 @@ export async function loadPageModule(
 
     const code = result.outputFiles[0].text
 
+    // Read the original source to check for 'use client' directive
+    const sourceCode = fs.readFileSync(absolutePath, 'utf-8')
+    const isClientComponent = hasUseClientDirective(sourceCode)
+    const clientComponentId = isClientComponent
+      ? generateComponentId(absolutePath, path.dirname(absolutePath))
+      : undefined
+
     // Write to temp file in a safe location within the project tree
     // This ensures proper module resolution for external packages
     const cacheKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -191,13 +202,15 @@ export async function loadPageModule(
         }
       }
 
-      // Create module with validated config, loader, and actions
+      // Create module with validated config, loader, actions, and client component info
       const module: LoadedPageModule = {
         default: rawModule.default,
         config: validatedConfig,
         loader: validatedLoader,
         action: validatedAction,
         ...validatedMethods,
+        isClientComponent,
+        clientComponentId,
       }
 
       // Cache the compiled module with its mtime

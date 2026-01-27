@@ -26,6 +26,11 @@ export type {
   PropsWithChildren,
 } from './types.js'
 
+export type {
+  WrapForHydrationOptions,
+  HydrationScriptOptions,
+} from './hydration.js'
+
 // ============================================================================
 // Renderer Management Exports
 // ============================================================================
@@ -44,6 +49,17 @@ export {
 // ============================================================================
 
 export { honoJsxRenderer, renderStream, renderToStream } from './renderers/index.js'
+
+// ============================================================================
+// Hydration Exports
+// ============================================================================
+
+export {
+  wrapForHydration,
+  generateHydrationScript,
+  generatePreloadHints,
+  generateHydrationRuntime,
+} from './hydration.js'
 
 // ============================================================================
 // Facade Functions
