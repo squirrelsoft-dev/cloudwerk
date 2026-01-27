@@ -7,6 +7,7 @@
 import { Hono } from 'hono'
 import type { RouteManifest, CloudwerkConfig } from '@cloudwerk/core'
 import { contextMiddleware } from '@cloudwerk/core'
+import { setActiveRenderer, getAvailableRenderers } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { registerRoutes } from './registerRoutes.js'
 import { logRequest } from '../utils/logger.js'
@@ -34,6 +35,22 @@ export async function createApp(
   logger: Logger,
   verbose: boolean = false
 ): Promise<{ app: Hono; routes: RegisteredRoute[] }> {
+  // Initialize UI renderer from config
+  const rendererName = config.ui?.renderer ?? 'hono-jsx'
+  try {
+    setActiveRenderer(rendererName)
+    if (verbose) {
+      logger.info(`Using UI renderer: ${rendererName}`)
+    }
+  } catch (error) {
+    const available = getAvailableRenderers().join(', ')
+    throw new Error(
+      `Failed to initialize UI renderer "${rendererName}". ` +
+        `Available renderers: ${available}. ` +
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+
   // Create Hono instance
   // strict: false allows trailing slashes to be optional
   // e.g., /api/users and /api/users/ both match the same route
