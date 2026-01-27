@@ -11,7 +11,7 @@ import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
 import type { LayoutComponent, LoaderFunction } from '@cloudwerk/core'
-import { hasUseClientDirective, generateComponentId } from '@cloudwerk/core'
+import { hasUseClientDirective, generateComponentId, validateComponentBoundaries, handleBoundaryValidationResult } from '@cloudwerk/core'
 
 // ============================================================================
 // Types
@@ -117,6 +117,10 @@ export async function loadLayoutModule(
     const clientComponentId = isClientComponent
       ? generateComponentId(absolutePath, path.dirname(absolutePath))
       : undefined
+
+    // Validate component boundaries
+    const validationResult = validateComponentBoundaries(sourceCode, absolutePath, isClientComponent)
+    handleBoundaryValidationResult(validationResult, absolutePath, { verbose })
 
     // Write to temp file in a safe location within the project tree
     // This ensures proper module resolution for external packages
