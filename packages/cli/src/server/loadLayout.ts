@@ -10,18 +10,20 @@ import * as path from 'node:path'
 import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
-import type { LayoutComponent } from '@cloudwerk/core'
+import type { LayoutComponent, LoaderFunction } from '@cloudwerk/core'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /**
- * A loaded layout module with default component export.
+ * A loaded layout module with default component export and optional loader.
  */
 export interface LoadedLayoutModule {
   /** Default export: the layout component function */
   default: LayoutComponent
+  /** Optional loader function for server-side data loading */
+  loader?: LoaderFunction
 }
 
 // ============================================================================
@@ -112,7 +114,9 @@ export async function loadLayoutModule(
     fs.writeFileSync(tempFile, code)
 
     try {
-      const rawModule = (await import(pathToFileURL(tempFile).href)) as LoadedLayoutModule
+      const rawModule = (await import(pathToFileURL(tempFile).href)) as LoadedLayoutModule & {
+        loader?: unknown
+      }
 
       // Validate that default export exists and is a function
       if (!rawModule.default) {
@@ -125,9 +129,21 @@ export async function loadLayoutModule(
         )
       }
 
-      // Create module
+      // Validate loader if present
+      let validatedLoader: LoaderFunction | undefined = undefined
+      if ('loader' in rawModule && rawModule.loader !== undefined) {
+        if (typeof rawModule.loader !== 'function') {
+          throw new Error(
+            `Layout loader export must be a function, got ${typeof rawModule.loader}`
+          )
+        }
+        validatedLoader = rawModule.loader as LoaderFunction
+      }
+
+      // Create module with loader
       const module: LoadedLayoutModule = {
         default: rawModule.default,
+        loader: validatedLoader,
       }
 
       // Cache the compiled module with its mtime

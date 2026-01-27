@@ -5,15 +5,19 @@
  */
 
 import * as path from 'node:path'
-import type { Hono, Handler, MiddlewareHandler } from 'hono'
+import type { Hono, Handler, MiddlewareHandler, Context } from 'hono'
+import type { RedirectStatusCode } from 'hono/utils/http-status'
 import type {
   RouteManifest,
   HttpMethod,
   CloudwerkHandler,
   RouteConfig,
   PageProps,
+  LayoutProps,
+  LoaderFunction,
+  LoaderArgs,
 } from '@cloudwerk/core'
-import { createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
+import { createHandlerAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core'
 import { render } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
@@ -91,6 +95,45 @@ function createConfigMiddleware(config: RouteConfig): MiddlewareHandler {
 }
 
 // ============================================================================
+// Loader Execution
+// ============================================================================
+
+/**
+ * Result of executing a loader function.
+ * Either returns data or an early response (404/redirect).
+ */
+type LoaderResult =
+  | { data: Record<string, unknown>; response?: never }
+  | { data?: never; response: Response }
+
+/**
+ * Execute a loader function with error handling for NotFoundError and RedirectError.
+ *
+ * @param loader - The loader function to execute
+ * @param args - Arguments to pass to the loader
+ * @param c - Hono context for creating responses
+ * @returns Data from the loader or an early response
+ */
+async function executeLoader(
+  loader: LoaderFunction,
+  args: LoaderArgs,
+  c: Context
+): Promise<LoaderResult> {
+  try {
+    const data = await Promise.resolve(loader(args))
+    return { data: (data ?? {}) as Record<string, unknown> }
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return { response: await Promise.resolve(c.notFound()) }
+    }
+    if (error instanceof RedirectError) {
+      return { response: c.redirect(error.url, error.status as RedirectStatusCode) }
+    }
+    throw error
+  }
+}
+
+// ============================================================================
 // Route Registration
 // ============================================================================
 
@@ -159,9 +202,38 @@ export async function registerRoutes(
           try {
             const params = c.req.param()
             const searchParams = parseSearchParams(c)
+            const request = c.req.raw
 
-            // Build page props
-            const pageProps: PageProps = { params, searchParams }
+            // Execute layout loaders sequentially (parent -> child)
+            // Each layout gets its own loader data
+            const loaderArgs: LoaderArgs = { params, request, context: c }
+            const layoutLoaderData: Record<string, unknown>[] = []
+
+            for (let index = 0; index < layoutModules.length; index++) {
+              const layoutModule = layoutModules[index]
+              if (layoutModule.loader) {
+                const result = await executeLoader(layoutModule.loader, loaderArgs, c)
+                if (result.response) {
+                  return result.response
+                }
+                layoutLoaderData[index] = result.data
+              } else {
+                layoutLoaderData[index] = {}
+              }
+            }
+
+            // Execute page loader
+            let pageLoaderData: Record<string, unknown> = {}
+            if (pageModule.loader) {
+              const result = await executeLoader(pageModule.loader, loaderArgs, c)
+              if (result.response) {
+                return result.response
+              }
+              pageLoaderData = result.data
+            }
+
+            // Build page props with loader data spread
+            const pageProps: PageProps = { params, searchParams, ...pageLoaderData }
 
             // Render page component (handle async - all components are Server Components)
             let element = await Promise.resolve(PageComponent(pageProps))
@@ -173,8 +245,15 @@ export async function registerRoutes(
             // 3. Wrap with dashboard: <Dashboard><Settings><Page/></Settings></Dashboard>
             // 4. Wrap with root: <Root><Dashboard><Settings><Page/></Settings></Dashboard></Root>
             // Result: proper nesting order (root wraps all)
-            for (const Layout of [...layouts].reverse()) {
-              element = await Promise.resolve(Layout({ children: element, params }))
+            // Each layout receives its own loader data spread into props
+            for (let i = layouts.length - 1; i >= 0; i--) {
+              const Layout = layouts[i]
+              const layoutProps: LayoutProps = {
+                children: element,
+                params,
+                ...layoutLoaderData[i],
+              }
+              element = await Promise.resolve(Layout(layoutProps))
             }
 
             // Use @cloudwerk/ui render function (streaming SSR)

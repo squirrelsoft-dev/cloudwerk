@@ -235,4 +235,119 @@ describe('registerRoutes - page support', () => {
       )
     })
   })
+
+  describe('loader functions', () => {
+    let app: InstanceType<typeof Hono>
+    let logger: ReturnType<typeof createMockLogger>
+
+    beforeEach(async () => {
+      app = new Hono()
+      logger = createMockLogger()
+      const routesDir = path.join(FIXTURES_DIR, 'with-pages/app')
+      const manifest = await createManifest(routesDir)
+      await registerRoutes(app, manifest, logger)
+    })
+
+    describe('page loaders', () => {
+      it('should execute loader and pass data to page component', async () => {
+        const response = await app.request('http://localhost/users/123')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        // Verify loader data is passed to component
+        expect(html).toContain('Name: User 123')
+        expect(html).toContain('Email: user123@example.com')
+      })
+
+      it('should handle async loaders correctly', async () => {
+        const response = await app.request('http://localhost/posts/test-post')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        expect(html).toContain('Post: test-post')
+        expect(html).toContain('Content for test-post')
+      })
+
+      it('should continue working when page has no loader', async () => {
+        // Home page has no loader
+        const response = await app.request('http://localhost/')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        expect(html).toContain('Home Page')
+      })
+    })
+
+    describe('layout loaders', () => {
+      it('should execute layout loaders and pass data to layout components', async () => {
+        const response = await app.request('http://localhost/users/456')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        // Verify layout loader data
+        expect(html).toContain('data-layout="user"')
+        expect(html).toContain('Profile')
+        expect(html).toContain('Settings')
+        expect(html).toContain('Activity')
+      })
+
+      it('should execute layout loaders in parent-to-child order', async () => {
+        const response = await app.request('http://localhost/users/789')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        // Root layout should wrap user layout
+        expect(html).toContain('data-layout="root"')
+        expect(html).toContain('data-layout="user"')
+
+        // Root layout should come before user layout
+        const rootIndex = html.indexOf('data-layout="root"')
+        const userIndex = html.indexOf('data-layout="user"')
+        expect(rootIndex).toBeLessThan(userIndex)
+      })
+    })
+
+    describe('NotFoundError handling', () => {
+      it('should return 404 when page loader throws NotFoundError', async () => {
+        const response = await app.request('http://localhost/not-found-test')
+
+        expect(response.status).toBe(404)
+      })
+
+      it('should return 404 when page loader throws NotFoundError for specific params', async () => {
+        // User page throws NotFoundError for id '404'
+        const response = await app.request('http://localhost/users/404')
+
+        expect(response.status).toBe(404)
+      })
+    })
+
+    describe('RedirectError handling', () => {
+      it('should redirect when loader throws RedirectError (301 permanent)', async () => {
+        const response = await app.request('http://localhost/posts/old-post')
+
+        expect(response.status).toBe(301)
+        expect(response.headers.get('location')).toBe('/posts/new-post')
+      })
+
+      it('should redirect when loader throws RedirectError (302 temporary)', async () => {
+        const response = await app.request('http://localhost/posts/maintenance')
+
+        expect(response.status).toBe(302)
+        expect(response.headers.get('location')).toBe('/posts/temp-unavailable')
+      })
+    })
+
+    describe('loader args', () => {
+      it('should provide params to loader', async () => {
+        const response = await app.request('http://localhost/users/test-user-id')
+        const html = await response.text()
+
+        expect(response.status).toBe(200)
+        // Loader uses params.id to generate data
+        expect(html).toContain('Name: User test-user-id')
+        expect(html).toContain('Email: usertest-user-id@example.com')
+      })
+    })
+  })
 })

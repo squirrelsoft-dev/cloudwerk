@@ -4,7 +4,10 @@
  * Core types for the file-based route compiler.
  */
 
-import type { Context, MiddlewareHandler } from 'hono'
+import type { Context as HonoContext, MiddlewareHandler } from 'hono'
+
+// Re-export Context for backward compatibility
+type Context = HonoContext
 
 // ============================================================================
 // Route Segment Types
@@ -592,3 +595,126 @@ export interface RouteConfig {
   /** Custom metadata (for plugins/middleware) */
   [key: string]: unknown
 }
+
+// ============================================================================
+// Loader Types
+// ============================================================================
+
+/**
+ * Arguments passed to loader functions.
+ *
+ * Loaders receive route params, the raw request, and the Hono context
+ * which provides access to cookies, headers, environment variables,
+ * and middleware-set values.
+ *
+ * @example
+ * ```typescript
+ * import type { LoaderArgs } from '@cloudwerk/core'
+ *
+ * export async function loader({ params, request, context }: LoaderArgs<{ id: string }>) {
+ *   // Access route params
+ *   const userId = params.id
+ *
+ *   // Access cookies
+ *   const session = context.req.cookie('session')
+ *
+ *   // Access environment variables (Cloudflare bindings)
+ *   const db = context.env.DB
+ *
+ *   // Access middleware-set values
+ *   const user = context.get('user')
+ *
+ *   return { userId, user }
+ * }
+ * ```
+ */
+export interface LoaderArgs<TParams = Record<string, string>> {
+  /** Route parameters from dynamic segments */
+  params: TParams
+
+  /** The raw Request object */
+  request: Request
+
+  /**
+   * Hono context for accessing cookies, headers, env, and middleware state.
+   *
+   * Common uses:
+   * - `context.req.cookie('name')` - Read cookies
+   * - `context.header('Cache-Control', '...')` - Set response headers
+   * - `context.env.DB` - Access Cloudflare bindings
+   * - `context.get('key')` - Read middleware-set values
+   */
+  context: HonoContext
+}
+
+/**
+ * Loader function signature for server-side data loading.
+ *
+ * Loaders run before component rendering and provide data as props.
+ * They can return data synchronously or asynchronously.
+ *
+ * Special behaviors:
+ * - Throw `NotFoundError` to return a 404 response
+ * - Throw `RedirectError` to redirect to another URL
+ * - Other thrown errors will propagate and return 500
+ *
+ * @example
+ * ```typescript
+ * import type { LoaderFunction } from '@cloudwerk/core'
+ * import { NotFoundError, RedirectError } from '@cloudwerk/core'
+ *
+ * // Async loader with typed params
+ * export const loader: LoaderFunction<{ user: User }, { id: string }> = async ({
+ *   params,
+ *   context,
+ * }) => {
+ *   // Check authentication
+ *   const session = context.req.cookie('session')
+ *   if (!session) {
+ *     throw new RedirectError('/login')
+ *   }
+ *
+ *   // Fetch data
+ *   const user = await getUser(params.id)
+ *   if (!user) {
+ *     throw new NotFoundError('User not found')
+ *   }
+ *
+ *   return { user }
+ * }
+ * ```
+ */
+export type LoaderFunction<
+  TData = unknown,
+  TParams = Record<string, string>
+> = (args: LoaderArgs<TParams>) => TData | Promise<TData>
+
+/**
+ * Helper type for inferring loader return data.
+ *
+ * Use this to extract the data type from a loader function for type-safe props.
+ *
+ * @example
+ * ```typescript
+ * import type { InferLoaderData, LoaderArgs, PageProps } from '@cloudwerk/core'
+ *
+ * export async function loader({ params }: LoaderArgs<{ id: string }>) {
+ *   const user = await getUser(params.id)
+ *   return { user }
+ * }
+ *
+ * type LoaderData = InferLoaderData<typeof loader>
+ * // LoaderData = { user: User }
+ *
+ * export default function UserPage({
+ *   params,
+ *   searchParams,
+ *   user, // TypeScript knows this is User
+ * }: PageProps<{ id: string }> & LoaderData) {
+ *   return <h1>{user.name}</h1>
+ * }
+ * ```
+ */
+export type InferLoaderData<T> = T extends LoaderFunction<infer D, unknown>
+  ? Awaited<D>
+  : never
