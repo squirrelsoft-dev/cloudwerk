@@ -5,7 +5,7 @@
  * Hono JSX elements have a toString() method that renders them to HTML.
  */
 
-import type { Renderer, RenderOptions, HtmlOptions } from '../types.js'
+import type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions } from '../types.js'
 
 /**
  * Hono JSX renderer implementation.
@@ -85,4 +85,96 @@ export const honoJsxRenderer: Renderer = {
         'This feature will be available after issue #39 is implemented.'
     )
   },
+}
+
+// ============================================================================
+// Streaming Render Support
+// ============================================================================
+
+/**
+ * Create a streaming HTML Response that sends loading UI immediately,
+ * then streams the final content when the content promise resolves.
+ *
+ * This uses a chunked transfer encoding to send HTML in two parts:
+ * 1. Loading UI (sent immediately)
+ * 2. Final content with script to replace loading UI (sent when ready)
+ *
+ * Note: The innerHTML assignment in the client script is safe because we only
+ * use server-rendered content that we control. No user input is directly
+ * inserted into the HTML.
+ *
+ * @param loadingElement - Loading UI to show immediately (JSX element)
+ * @param contentPromise - Promise that resolves to final content (JSX element)
+ * @param options - Streaming render options
+ * @returns Response object with streaming HTML content
+ *
+ * @example
+ * const loadingElement = <Loading params={{}} searchParams={{}} pathname="/dashboard" />
+ * const contentPromise = (async () => {
+ *   const data = await loader()
+ *   return <Page {...data} />
+ * })()
+ *
+ * return renderStream(loadingElement, contentPromise)
+ */
+export function renderStream(
+  loadingElement: unknown,
+  contentPromise: Promise<unknown>,
+  options: StreamRenderOptions = {}
+): Response {
+  const { status = 200, headers = {} } = options
+
+  // Create a ReadableStream that sends loading UI first, then final content
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder()
+
+      try {
+        // Send loading UI immediately
+        const loadingHtml = String(loadingElement)
+        // Wrap loading content in a container that can be replaced
+        const loadingWrapper = `<!DOCTYPE html><div id="__cloudwerk_loading">${loadingHtml}</div>`
+        controller.enqueue(encoder.encode(loadingWrapper))
+
+        // Wait for content to be ready
+        const finalElement = await contentPromise
+
+        // Send final content with script to replace loading UI
+        const finalHtml = String(finalElement)
+        // The final content replaces everything - this is a full page replacement
+        // Note: innerHTML is safe here because finalHtml is server-rendered content we control
+        const replacementScript = `
+<script>
+(function() {
+  var loading = document.getElementById('__cloudwerk_loading');
+  if (loading) {
+    var content = document.getElementById('__cloudwerk_content');
+    if (content) {
+      document.body.innerHTML = content.innerHTML;
+    }
+  }
+})();
+</script>
+<div id="__cloudwerk_content" style="display:none">${finalHtml}</div>
+`
+        controller.enqueue(encoder.encode(replacementScript))
+        controller.close()
+      } catch (error) {
+        // Send error message if content promise rejects
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorHtml = `<div style="color:red;padding:20px;">Error loading content: ${errorMessage}</div>`
+        controller.enqueue(encoder.encode(errorHtml))
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      ...headers,
+    },
+  })
 }

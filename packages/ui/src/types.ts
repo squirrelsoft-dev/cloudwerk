@@ -91,6 +91,23 @@ export interface HtmlOptions {
   headers?: Record<string, string>
 }
 
+/**
+ * Options for streaming render.
+ */
+export interface StreamRenderOptions {
+  /**
+   * HTTP status code for the response.
+   * @default 200
+   */
+  status?: number
+
+  /**
+   * Additional response headers.
+   * These are merged with the default Content-Type and Transfer-Encoding headers.
+   */
+  headers?: Record<string, string>
+}
+
 // ============================================================================
 // Component Types
 // ============================================================================
