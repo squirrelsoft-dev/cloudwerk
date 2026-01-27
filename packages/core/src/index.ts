@@ -43,6 +43,10 @@ export type {
   PageComponent,
   LayoutComponent,
 
+  // Cloudwerk Native Handler Types
+  CloudwerkHandler,
+  CloudwerkHandlerContext,
+
   // Context Types
   CloudwerkContext,
   ExecutionContext,
