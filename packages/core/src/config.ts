@@ -72,6 +72,7 @@ export function mergeConfig(
     globalMiddleware: user.globalMiddleware ?? defaults.globalMiddleware,
     basePath: user.basePath ?? defaults.basePath,
     debug: user.debug ?? defaults.debug,
+    ui: user.ui ?? defaults.ui,
   }
 }
 
