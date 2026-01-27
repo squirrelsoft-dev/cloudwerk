@@ -16,9 +16,8 @@ Export a `loader()` function from any page or layout to fetch data:
 import type { PageProps, LoaderArgs } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  const users = await context.db
-    .selectFrom('users')
-    .execute();
+  const db = context.env.DB;
+  const { results: users } = await db.prepare('SELECT * FROM users').all();
 
   return { users };
 }
@@ -40,9 +39,9 @@ The `LoaderArgs` object provides access to:
 
 ```typescript
 interface LoaderArgs {
-  request: Request;          // The incoming request
+  request: Request;           // The incoming request
   params: Record<string, string>;  // URL parameters
-  context: CloudwerkContext; // Bindings and utilities
+  context: HonoContext;       // Hono context for bindings and middleware state
 }
 ```
 
@@ -67,10 +66,11 @@ export async function loader({ request }: LoaderArgs) {
 ```tsx
 // app/users/[id]/page.tsx
 export async function loader({ params, context }: LoaderArgs) {
-  const user = await context.db
-    .selectFrom('users')
-    .where('id', '=', params.id)
-    .executeTakeFirst();
+  const db = context.env.DB;
+  const user = await db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .bind(params.id)
+    .first();
 
   return { user };
 }
@@ -78,21 +78,30 @@ export async function loader({ params, context }: LoaderArgs) {
 
 ### Using Context
 
-The context provides access to Cloudflare bindings:
+The `context` is a Hono context that provides access to Cloudflare bindings and middleware-set values:
 
 ```tsx
 export async function loader({ context }: LoaderArgs) {
-  // Database (D1)
-  const users = await context.db.selectFrom('users').execute();
+  // Database (D1) - access via env bindings
+  const db = context.env.DB;
+  const { results: users } = await db.prepare('SELECT * FROM users').all();
 
-  // Key-Value store (KV)
-  const cached = await context.kv.get('cache-key');
+  // Key-Value store (KV) - access via env bindings
+  const kv = context.env.CACHE;
+  const cached = await kv.get('cache-key');
 
-  // Object storage (R2)
-  const file = await context.r2.get('uploads/image.png');
+  // Object storage (R2) - access via env bindings
+  const bucket = context.env.UPLOADS;
+  const file = await bucket.get('uploads/image.png');
 
   // Environment variables
   const apiKey = context.env.API_KEY;
+
+  // Middleware-set values
+  const user = context.get('user');
+
+  // Cookies
+  const session = context.req.cookie('session');
 
   return { users };
 }
@@ -108,10 +117,11 @@ Throw `NotFoundError` to trigger a 404 response:
 import { NotFoundError } from '@cloudwerk/core';
 
 export async function loader({ params, context }: LoaderArgs) {
-  const user = await context.db
-    .selectFrom('users')
-    .where('id', '=', params.id)
-    .executeTakeFirst();
+  const db = context.env.DB;
+  const user = await db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .bind(params.id)
+    .first();
 
   if (!user) {
     throw new NotFoundError('User not found');
@@ -129,11 +139,14 @@ Throw `RedirectError` to redirect:
 import { RedirectError } from '@cloudwerk/core';
 
 export async function loader({ context }: LoaderArgs) {
-  const user = await context.auth.getUser();
+  const session = context.req.cookie('session');
 
-  if (!user) {
+  if (!session) {
     throw new RedirectError('/login');
   }
+
+  // Validate session and get user from middleware or database
+  const user = context.get('user');
 
   return { user };
 }
@@ -162,7 +175,8 @@ Layouts can also have loaders. They execute from parent to child:
 ```tsx
 // app/layout.tsx
 export async function loader({ context }: LoaderArgs) {
-  const user = await context.auth.getUser();
+  const session = context.req.cookie('session');
+  const user = session ? context.get('user') : null;
   return { user };
 }
 
@@ -180,10 +194,21 @@ export default function RootLayout({ children, user }: LayoutProps & { user: Use
 
 ```tsx
 // app/dashboard/layout.tsx
+import { RedirectError } from '@cloudwerk/core';
+
 export async function loader({ context }: LoaderArgs) {
   // This runs AFTER the root layout loader
-  const user = await context.auth.requireUser(); // Throws if not authenticated
-  const notifications = await getNotifications(user.id);
+  const user = context.get('user');
+  if (!user) {
+    throw new RedirectError('/login');
+  }
+
+  const db = context.env.DB;
+  const { results: notifications } = await db
+    .prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10')
+    .bind(user.id)
+    .all();
+
   return { notifications };
 }
 ```
@@ -210,7 +235,8 @@ Set cache headers in your loader:
 
 ```tsx
 export async function loader({ context }: LoaderArgs) {
-  const data = await fetchExpensiveData();
+  const db = context.env.DB;
+  const { results: data } = await db.prepare('SELECT * FROM posts').all();
 
   return {
     data,
@@ -228,23 +254,23 @@ Use Cloudflare KV for server-side caching:
 
 ```tsx
 export async function loader({ context }: LoaderArgs) {
+  const kv = context.env.CACHE;
+  const db = context.env.DB;
   const cacheKey = 'popular-posts';
 
   // Try cache first
-  const cached = await context.kv.get(cacheKey, 'json');
+  const cached = await kv.get(cacheKey, 'json');
   if (cached) {
     return { posts: cached };
   }
 
   // Fetch fresh data
-  const posts = await context.db
-    .selectFrom('posts')
-    .orderBy('views', 'desc')
-    .limit(10)
-    .execute();
+  const { results: posts } = await db
+    .prepare('SELECT * FROM posts ORDER BY views DESC LIMIT 10')
+    .all();
 
   // Cache for 5 minutes
-  await context.kv.put(cacheKey, JSON.stringify(posts), {
+  await kv.put(cacheKey, JSON.stringify(posts), {
     expirationTtl: 300,
   });
 
@@ -265,14 +291,33 @@ interface User {
   email: string;
 }
 
+interface Post {
+  id: string;
+  title: string;
+}
+
 interface LoaderData {
   user: User;
   posts: Post[];
 }
 
 export async function loader({ params, context }: LoaderArgs): Promise<LoaderData> {
-  const user = await context.db.selectFrom('users').where('id', '=', params.id).executeTakeFirstOrThrow();
-  const posts = await context.db.selectFrom('posts').where('author_id', '=', user.id).execute();
+  const db = context.env.DB;
+
+  const user = await db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .bind(params.id)
+    .first();
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  const { results: posts } = await db
+    .prepare('SELECT * FROM posts WHERE author_id = ?')
+    .bind(user.id)
+    .all();
+
   return { user, posts };
 }
 

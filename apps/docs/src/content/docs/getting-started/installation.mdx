@@ -11,7 +11,7 @@ Get started with Cloudwerk by creating a new project or adding it to an existing
 
 Before you begin, ensure you have:
 
-- **Node.js 18+** - Cloudwerk requires Node.js 18 or later
+- **Node.js 20+** - Cloudwerk requires Node.js 20 or later
 - **pnpm, npm, or yarn** - Any package manager works
 - **Cloudflare account** - [Sign up for free](https://dash.cloudflare.com/sign-up)
 - **Wrangler CLI** - Cloudflare's CLI tool (installed automatically)
@@ -19,28 +19,20 @@ Before you begin, ensure you have:
 ## Create a New Project
 
 <Tabs>
-  <TabItem label="pnpm" icon="pnpm">
-    ```bash
-    pnpm create cloudwerk@latest my-app
-    cd my-app
-    pnpm install
-    pnpm dev
-    ```
-  </TabItem>
   <TabItem label="npm" icon="npm">
     ```bash
-    npx create-cloudwerk@latest my-app
+    npx @cloudwerk/create-app@latest my-app
     cd my-app
     npm install
     npm run dev
     ```
   </TabItem>
-  <TabItem label="yarn" icon="yarn">
+  <TabItem label="pnpm" icon="pnpm">
     ```bash
-    yarn create cloudwerk my-app
+    pnpm dlx @cloudwerk/create-app my-app
     cd my-app
-    yarn install
-    yarn dev
+    pnpm install
+    pnpm dev
     ```
   </TabItem>
 </Tabs>
