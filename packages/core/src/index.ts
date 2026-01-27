@@ -43,6 +43,10 @@ export type {
   PageComponent,
   LayoutComponent,
 
+  // Context Types
+  CloudwerkContext,
+  ExecutionContext,
+
   // Scanner Types
   ScannedFile,
   ScanResult,
@@ -161,6 +165,20 @@ export {
   resolveRoutesDir,
   isSupportedExtension,
 } from './config.js'
+
+// ============================================================================
+// Context Exports
+// ============================================================================
+
+export {
+  // Context Access
+  getContext,
+
+  // Internal (for middleware integration)
+  runWithContext,
+  createContext,
+  contextMiddleware,
+} from './context.js'
 
 // ============================================================================
 // Response Helper Exports

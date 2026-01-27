@@ -6,6 +6,7 @@
 
 import { Hono } from 'hono'
 import type { RouteManifest, CloudwerkConfig } from '@cloudwerk/core'
+import { contextMiddleware } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { registerRoutes } from './registerRoutes.js'
 import { logRequest } from '../utils/logger.js'
@@ -39,6 +40,9 @@ export async function createApp(
   const app = new Hono({
     strict: false,
   })
+
+  // Add context middleware (MUST be first to capture all requests)
+  app.use('*', contextMiddleware())
 
   // Add request timing middleware for verbose mode
   if (verbose) {
