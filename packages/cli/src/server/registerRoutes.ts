@@ -6,11 +6,21 @@
 
 import * as path from 'node:path'
 import type { Hono, Handler, MiddlewareHandler } from 'hono'
-import type { RouteManifest, HttpMethod, CloudwerkHandler, RouteConfig } from '@cloudwerk/core'
+import type {
+  RouteManifest,
+  HttpMethod,
+  CloudwerkHandler,
+  RouteConfig,
+  PageProps,
+} from '@cloudwerk/core'
 import { createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
+import { render } from '@cloudwerk/ui'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 import { loadMiddlewareModule } from './loadMiddleware.js'
+import { loadPageModule } from './loadPage.js'
+import { loadLayoutModule } from './loadLayout.js'
+import { parseSearchParams } from './parseSearchParams.js'
 
 // ============================================================================
 // HTTP Methods
@@ -87,10 +97,9 @@ function createConfigMiddleware(config: RouteConfig): MiddlewareHandler {
 /**
  * Register all routes from the manifest with Hono.
  *
- * For each route entry with fileType === 'route':
- * 1. Compile and load the route handler module
- * 2. Extract HTTP method exports (GET, POST, etc.)
- * 3. Register each method with Hono
+ * For each route entry:
+ * - fileType === 'route': Register API route handlers (GET, POST, etc.)
+ * - fileType === 'page': Register page component with layout wrapping
  *
  * @param app - Hono app instance
  * @param manifest - Route manifest from @cloudwerk/core
@@ -107,7 +116,99 @@ export async function registerRoutes(
   const registeredRoutes: RegisteredRoute[] = []
 
   for (const route of manifest.routes) {
-    // Only process API routes (route.ts files)
+    // Handle page files (page.tsx)
+    if (route.fileType === 'page') {
+      try {
+        // Load page component
+        logger.debug(`Loading page: ${route.filePath}`)
+        const pageModule = await loadPageModule(route.absolutePath, verbose)
+        const PageComponent = pageModule.default
+
+        // Load all layout components (already in correct order: root -> closest)
+        const layoutModules = await Promise.all(
+          route.layouts.map((layoutPath) => loadLayoutModule(layoutPath, verbose))
+        )
+        const layouts = layoutModules.map((m) => m.default)
+
+        // Apply middleware first (same as route.ts)
+        for (const middlewarePath of route.middleware) {
+          const middlewareHandler = await loadMiddlewareModule(middlewarePath, verbose)
+
+          if (middlewareHandler) {
+            app.use(route.urlPattern, middlewareHandler)
+
+            if (verbose) {
+              logger.info(
+                `Applied middleware: ${path.basename(middlewarePath)} -> ${route.urlPattern}`
+              )
+            }
+          }
+        }
+
+        // Apply config middleware if page exports config
+        if (pageModule.config) {
+          app.use(route.urlPattern, createConfigMiddleware(pageModule.config))
+
+          if (verbose) {
+            logger.info(`Applied page config: ${route.filePath} -> ${route.urlPattern}`)
+          }
+        }
+
+        // Register page handler as GET route
+        app.get(route.urlPattern, async (c) => {
+          try {
+            const params = c.req.param()
+            const searchParams = parseSearchParams(c)
+
+            // Build page props
+            const pageProps: PageProps = { params, searchParams }
+
+            // Render page component (handle async - all components are Server Components)
+            let element = await Promise.resolve(PageComponent(pageProps))
+
+            // Wrap with layouts (reverse to wrap inside-out)
+            // Given layouts [root, dashboard, settings] (root-to-leaf from resolver):
+            // 1. Reverse to [settings, dashboard, root]
+            // 2. Wrap page with settings: <Settings><Page/></Settings>
+            // 3. Wrap with dashboard: <Dashboard><Settings><Page/></Settings></Dashboard>
+            // 4. Wrap with root: <Root><Dashboard><Settings><Page/></Settings></Dashboard></Root>
+            // Result: proper nesting order (root wraps all)
+            for (const Layout of [...layouts].reverse()) {
+              element = await Promise.resolve(Layout({ children: element, params }))
+            }
+
+            // Use @cloudwerk/ui render function (streaming SSR)
+            return render(element)
+          } catch (error) {
+            // Log error for debugging
+            const message = error instanceof Error ? error.message : String(error)
+            logger.error(`Error rendering page ${route.filePath}: ${message}`)
+
+            // Return error response (future: error.tsx boundary)
+            return c.html(
+              `<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>`,
+              500
+            )
+          }
+        })
+
+        registeredRoutes.push({
+          method: 'GET',
+          pattern: route.urlPattern,
+          filePath: route.filePath,
+        })
+
+        logger.debug(`Registered page ${route.urlPattern}`)
+      } catch (error) {
+        // Log error but continue with other routes
+        const message = error instanceof Error ? error.message : String(error)
+        logger.error(`Failed to load page ${route.filePath}: ${message}`)
+      }
+
+      continue
+    }
+
+    // Handle API routes (route.ts files)
     if (route.fileType !== 'route') {
       logger.debug(`Skipping non-route file: ${route.filePath}`)
       continue
