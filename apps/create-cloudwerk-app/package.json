@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/create-app",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "Create a new Cloudwerk app",
   "repository": {
     "type": "git",

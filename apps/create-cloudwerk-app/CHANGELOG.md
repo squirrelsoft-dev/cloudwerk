@@ -1,5 +1,15 @@
 # @cloudwerk/create-app
 
+## 0.1.0
+
+### Minor Changes
+
+- [#131](https://github.com/squirrelsoft-dev/cloudwerk/pull/131) [`6d21aaf`](https://github.com/squirrelsoft-dev/cloudwerk/commit/6d21aaf3e7356b49357d092191ff7a4d4bfdbb33) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Launch documentation site with Starlight
+  - Add comprehensive Getting Started guide with installation, quick start, and project structure docs
+  - Add detailed guides for data loading, database (D1), authentication, routing, and forms
+  - Add blog example demonstrating full-stack patterns with D1 and sessions
+  - Fix installation commands in documentation
+
 ## 0.0.6
 
 ### Patch Changes
