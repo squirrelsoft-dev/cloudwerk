@@ -59,8 +59,19 @@ export interface LoadedRouteModule {
 
 /**
  * Route handler function type.
+ *
+ * Supports both handler signatures:
+ * - Hono style: (c: HonoContext) => Response
+ * - Cloudwerk style: (request: Request, context: CloudwerkHandlerContext) => Response
+ *
+ * Detection is based on function arity (fn.length):
+ * - Arity 1: Hono handler
+ * - Arity 2: Cloudwerk handler
  */
-export type RouteHandlerFn = (c: unknown) => Response | Promise<Response>
+export type RouteHandlerFn = (
+  arg1: unknown,
+  arg2?: unknown
+) => Response | Promise<Response>
 
 /**
  * Registered route information for logging.
