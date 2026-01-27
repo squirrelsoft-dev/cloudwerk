@@ -9,6 +9,7 @@ import * as path from 'node:path'
 import { builtinModules } from 'node:module'
 import { build } from 'esbuild'
 import { pathToFileURL } from 'node:url'
+import { validateRouteConfig } from '@cloudwerk/core'
 import type { LoadedRouteModule } from '../types.js'
 
 // ============================================================================
@@ -97,7 +98,19 @@ export async function loadRouteHandler(
     fs.writeFileSync(tempFile, code)
 
     try {
-      const module = (await import(pathToFileURL(tempFile).href)) as LoadedRouteModule
+      const rawModule = (await import(pathToFileURL(tempFile).href)) as LoadedRouteModule & { config?: unknown }
+
+      // Validate config if present
+      let validatedConfig: LoadedRouteModule['config'] = undefined
+      if ('config' in rawModule) {
+        validatedConfig = validateRouteConfig(rawModule.config, absolutePath)
+      }
+
+      // Create module with validated config
+      const module: LoadedRouteModule = {
+        ...rawModule,
+        config: validatedConfig,
+      }
 
       // Cache the compiled module with its mtime
       moduleCache.set(absolutePath, { module, mtime })
