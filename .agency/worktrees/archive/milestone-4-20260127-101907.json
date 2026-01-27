@@ -1,0 +1,35 @@
+{
+  "grouping_type": "milestone-github",
+  "grouping_id": "milestone-4",
+  "grouping_display": "Milestone: v0.3.0 - Hono JSX Renderer",
+  "created_at": "2026-01-27T14:10:00Z",
+  "worktrees": [
+    {
+      "issue_number": "47",
+      "issue_key": null,
+      "issue_title": "feat(core): Client/Server component boundary validation",
+      "branch_name": "feat/issue-47-client-server-component-boundary-validation",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-47-client-server-component-boundary-validation",
+      "created_at": "2026-01-27T14:10:00Z",
+      "status": "active"
+    },
+    {
+      "issue_number": "46",
+      "issue_key": null,
+      "issue_title": "feat(create-cloudwerk-app): UI renderer selection",
+      "branch_name": "feat/issue-46-create-cloudwerk-app-ui-renderer-selection",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-46-create-cloudwerk-app-ui-renderer-selection",
+      "created_at": "2026-01-27T14:10:00Z",
+      "status": "active"
+    },
+    {
+      "issue_number": "39",
+      "issue_key": null,
+      "issue_title": "feat(ui): Hono JSX client component hydration",
+      "branch_name": "feat/issue-39-hono-jsx-client-component-hydration",
+      "worktree_path": "/Users/sbeardsley/Developer/squirrelsoft-dev/feat-issue-39-hono-jsx-client-component-hydration",
+      "created_at": "2026-01-27T14:10:00Z",
+      "status": "active"
+    }
+  ]
+}
