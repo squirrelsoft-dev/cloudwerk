@@ -1,12 +1,18 @@
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import starlightThemeGalaxy from 'starlight-theme-galaxy'
+import starlightPageActions from 'starlight-page-actions'
 
 export default defineConfig({
   site: 'https://cloudwerk.dev',
   integrations: [
     starlight({
-      plugins: [starlightThemeGalaxy()],
+      plugins: [
+        starlightThemeGalaxy(),
+        starlightPageActions({
+          baseUrl: 'https://cloudwerk.dev/',
+        }),
+      ],
       title: 'Cloudwerk',
       logo: {
         src: './src/assets/logo.svg',
