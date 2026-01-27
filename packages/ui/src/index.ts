@@ -36,6 +36,7 @@ export {
   getActiveRendererName,
   registerRenderer,
   getAvailableRenderers,
+  initReactRenderer,
   _resetRenderers,
 } from './renderer.js'
 
@@ -44,7 +45,14 @@ export {
 // ============================================================================
 
 export { honoJsxRenderer, renderStream, renderToStream } from './renderers/index.js'
-export { reactRenderer, reactRenderToStream } from './renderers/index.js'
+
+// Note: React renderer exports (reactRenderer, reactRenderToStream) are not
+// re-exported here because React is an optional peer dependency. To use the
+// React renderer:
+// 1. Install react and react-dom: npm install react react-dom
+// 2. Call initReactRenderer() to register the renderer
+// 3. Call setActiveRenderer('react') to activate it
+// Or import directly: import { reactRenderer } from '@cloudwerk/ui/renderers/react'
 
 // ============================================================================
 // Facade Functions

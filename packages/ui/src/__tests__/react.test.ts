@@ -12,6 +12,7 @@ import {
   getActiveRenderer,
   getActiveRendererName,
   getAvailableRenderers,
+  initReactRenderer,
   _resetRenderers,
 } from '../renderer.js'
 
@@ -424,11 +425,13 @@ describe('reactRenderToStream()', () => {
 // ============================================================================
 
 describe('React renderer registration', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     _resetRenderers()
+    // Initialize React renderer for these tests
+    await initReactRenderer()
   })
 
-  it('react is available in renderer registry', () => {
+  it('react is available in renderer registry after init', () => {
     const available = getAvailableRenderers()
     expect(available).toContain('react')
   })
@@ -462,5 +465,35 @@ describe('React renderer registration', () => {
     // Switch back to hono-jsx
     setActiveRenderer('hono-jsx')
     expect(getActiveRendererName()).toBe('hono-jsx')
+  })
+})
+
+describe('React renderer without initialization', () => {
+  beforeEach(() => {
+    _resetRenderers()
+  })
+
+  it('react is not available before init', () => {
+    const available = getAvailableRenderers()
+    expect(available).not.toContain('react')
+  })
+
+  it('throws helpful error when setting react without init', () => {
+    expect(() => setActiveRenderer('react')).toThrow('initReactRenderer')
+  })
+
+  it('initReactRenderer makes react available', async () => {
+    expect(getAvailableRenderers()).not.toContain('react')
+
+    await initReactRenderer()
+
+    expect(getAvailableRenderers()).toContain('react')
+  })
+
+  it('initReactRenderer is idempotent', async () => {
+    await initReactRenderer()
+    await initReactRenderer() // Should not throw
+
+    expect(getAvailableRenderers()).toContain('react')
   })
 })

@@ -6,7 +6,6 @@
 
 import type { Renderer } from './types.js'
 import { honoJsxRenderer } from './renderers/hono-jsx.js'
-import { reactRenderer } from './renderers/react.js'
 
 // ============================================================================
 // Renderer Registry
@@ -17,14 +16,18 @@ import { reactRenderer } from './renderers/react.js'
  *
  * Built-in renderers:
  * - 'hono-jsx': Default renderer using Hono JSX
- * - 'react': React renderer using react-dom/server
+ *
+ * Optional renderers (require additional dependencies):
+ * - 'react': React renderer - requires react and react-dom packages
  *
  * Future renderers (not yet implemented):
  * - 'preact': Preact renderer
+ *
+ * Note: The React renderer is not auto-registered because React is an optional
+ * peer dependency. To use it, call initReactRenderer() after installing React.
  */
 const renderers: Record<string, Renderer> = {
   'hono-jsx': honoJsxRenderer,
-  'react': reactRenderer,
 }
 
 /**
@@ -73,10 +76,46 @@ export function getActiveRendererName(): string {
 // ============================================================================
 
 /**
+ * Initialize and register the React renderer.
+ *
+ * This must be called before using setActiveRenderer('react').
+ * Requires react and react-dom packages to be installed.
+ *
+ * @throws Error if React packages are not installed
+ *
+ * @example
+ * import { initReactRenderer, setActiveRenderer } from '@cloudwerk/ui'
+ *
+ * // Initialize React renderer (requires react and react-dom)
+ * await initReactRenderer()
+ *
+ * // Now you can use React
+ * setActiveRenderer('react')
+ */
+export async function initReactRenderer(): Promise<void> {
+  if (renderers['react']) {
+    return // Already registered
+  }
+
+  try {
+    const { reactRenderer } = await import('./renderers/react.js')
+    renderers['react'] = reactRenderer
+  } catch (error) {
+    throw new Error(
+      'Failed to initialize React renderer. ' +
+        'Make sure react and react-dom are installed: npm install react react-dom\n' +
+        `Original error: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
+/**
  * Set the active renderer by name.
  *
  * Called during app initialization based on the `ui.renderer` config option.
  * The renderer must be registered (either built-in or via registerRenderer).
+ *
+ * For the React renderer, you must call initReactRenderer() first.
  *
  * @param name - Renderer name from config (e.g., 'hono-jsx', 'react')
  * @throws Error if renderer is not found
@@ -89,6 +128,12 @@ export function setActiveRenderer(name: string): void {
   const renderer = renderers[name]
   if (!renderer) {
     const available = Object.keys(renderers).join(', ')
+    if (name === 'react') {
+      throw new Error(
+        `React renderer is not initialized. Call initReactRenderer() first, ` +
+          `or install react and react-dom packages.`
+      )
+    }
     throw new Error(`Unknown renderer "${name}". Available renderers: ${available}`)
   }
   activeRenderer = renderer
@@ -130,7 +175,7 @@ export function registerRenderer(name: string, renderer: Renderer): void {
  *
  * @example
  * const available = getAvailableRenderers()
- * // ['hono-jsx', 'react']
+ * // ['hono-jsx'] (or ['hono-jsx', 'react'] if initReactRenderer() was called)
  */
 export function getAvailableRenderers(): string[] {
   return Object.keys(renderers)
@@ -146,9 +191,9 @@ export function getAvailableRenderers(): string[] {
  * @internal Used for testing only - ensures test isolation.
  */
 export function _resetRenderers(): void {
-  // Remove all custom renderers (preserve built-in renderers)
+  // Remove all custom renderers (preserve only hono-jsx)
   for (const name of Object.keys(renderers)) {
-    if (name !== 'hono-jsx' && name !== 'react') {
+    if (name !== 'hono-jsx') {
       delete renderers[name]
     }
   }
