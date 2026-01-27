@@ -32,6 +32,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate changesets
+        if: github.event_name == 'pull_request'
+        run: npx tsx scripts/validate-changesets.ts
+
+      - name: Validate cross-package imports
+        run: npx tsx scripts/validate-cross-package-imports.ts
+
       - name: Build packages
         run: pnpm build
 
