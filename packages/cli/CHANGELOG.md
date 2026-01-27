@@ -1,5 +1,22 @@
 # @cloudwerk/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- [#134](https://github.com/squirrelsoft-dev/cloudwerk/pull/134) [`1a74a42`](https://github.com/squirrelsoft-dev/cloudwerk/commit/1a74a4250d0ccd135160326c360f9380afd0344b) Thanks [@sbeardsley](https://github.com/sbeardsley)! - feat(cli): wire hydration infrastructure into rendering pipeline
+
+  Client components marked with `'use client'` directive are now hydrated on the client side:
+  - Register `/__cloudwerk/*` routes to serve client bundles and hydration runtime
+  - Track client components during page and layout loading
+  - Inject hydration scripts into HTML responses for pages with client components
+  - Support both Hono JSX and React renderers
+  - Add request-scoped manifest generation for efficient per-request hydration
+
+  The Counter component in `template-hono-jsx` is now interactive - clicking increments the count.
+
+  Closes #133
+
 ## 0.4.0
 
 ### Minor Changes
