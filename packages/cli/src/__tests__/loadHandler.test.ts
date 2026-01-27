@@ -69,24 +69,16 @@ describe('loadRouteHandler', () => {
       expect(module.POST).toBeUndefined()
     })
 
-    it('should execute GET handler with param extraction', async () => {
+    it('should execute GET handler with param extraction (Cloudwerk signature)', async () => {
       const routePath = path.join(FIXTURES_DIR, 'with-dynamic-routes/app/api/users/[id]/route.ts')
       const module = await loadRouteHandler(routePath)
 
-      // Create a mock context with param method
-      const mockContext = {
-        req: {
-          param: (name: string) => name === 'id' ? '1' : undefined,
-        },
-        json: (data: unknown, status?: number) => {
-          return new Response(JSON.stringify(data), {
-            status: status ?? 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        },
-      }
+      // This fixture uses the Cloudwerk-native handler signature (arity 2)
+      // Handler signature: (request: Request, context: { params }) => Response
+      const request = new Request('http://localhost/api/users/1')
+      const context = { params: { id: '1' } }
 
-      const response = await module.GET!(mockContext)
+      const response = await module.GET!(request, context)
       expect(response).toBeInstanceOf(Response)
       expect(response.status).toBe(200)
 
@@ -96,24 +88,15 @@ describe('loadRouteHandler', () => {
       expect(data.user.name).toBe('Alice')
     })
 
-    it('should return 404 for non-existent user', async () => {
+    it('should return 404 for non-existent user (Cloudwerk signature)', async () => {
       const routePath = path.join(FIXTURES_DIR, 'with-dynamic-routes/app/api/users/[id]/route.ts')
       const module = await loadRouteHandler(routePath)
 
-      // Create a mock context with non-existent ID
-      const mockContext = {
-        req: {
-          param: (name: string) => name === 'id' ? '999' : undefined,
-        },
-        json: (data: unknown, status?: number) => {
-          return new Response(JSON.stringify(data), {
-            status: status ?? 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        },
-      }
+      // This fixture uses the Cloudwerk-native handler signature (arity 2)
+      const request = new Request('http://localhost/api/users/999')
+      const context = { params: { id: '999' } }
 
-      const response = await module.GET!(mockContext)
+      const response = await module.GET!(request, context)
       expect(response.status).toBe(404)
 
       const data = await response.json()

@@ -1,8 +1,13 @@
 /**
- * Single user route for testing dynamic routes.
+ * Single user route demonstrating Cloudwerk-native handler signature.
  */
 
-import type { Context } from 'hono'
+import { json, notFound, noContent } from '@cloudwerk/core'
+import type { CloudwerkHandler } from '@cloudwerk/core'
+
+interface Params {
+  id: string
+}
 
 const users = [
   { id: '1', name: 'Alice', email: 'alice@example.com' },
@@ -10,40 +15,37 @@ const users = [
   { id: '3', name: 'Charlie', email: 'charlie@example.com' },
 ]
 
-export const GET = (c: Context) => {
-  const id = c.req.param('id')
-  const user = users.find((u) => u.id === id)
+export const GET: CloudwerkHandler<Params> = (request, { params }) => {
+  const user = users.find((u) => u.id === params.id)
 
   if (!user) {
-    return c.json({ error: 'User not found' }, 404)
+    return notFound('User not found')
   }
 
-  return c.json({ user })
+  return json({ user })
 }
 
-export const PUT = async (c: Context) => {
-  const id = c.req.param('id')
-  const index = users.findIndex((u) => u.id === id)
+export const PUT: CloudwerkHandler<Params> = async (request, { params }) => {
+  const index = users.findIndex((u) => u.id === params.id)
 
   if (index === -1) {
-    return c.json({ error: 'User not found' }, 404)
+    return notFound('User not found')
   }
 
-  const body = await c.req.json()
+  const body = await request.json()
   users[index] = { ...users[index], ...body }
 
-  return c.json({ user: users[index] })
+  return json({ user: users[index] })
 }
 
-export const DELETE = (c: Context) => {
-  const id = c.req.param('id')
-  const index = users.findIndex((u) => u.id === id)
+export const DELETE: CloudwerkHandler<Params> = (request, { params }) => {
+  const index = users.findIndex((u) => u.id === params.id)
 
   if (index === -1) {
-    return c.json({ error: 'User not found' }, 404)
+    return notFound('User not found')
   }
 
   users.splice(index, 1)
 
-  return new Response(null, { status: 204 })
+  return noContent()
 }

@@ -4,8 +4,9 @@
  * Registers route handlers with Hono.
  */
 
-import type { Hono, Handler } from 'hono'
-import type { RouteManifest, HttpMethod } from '@cloudwerk/core'
+import type { Hono, Handler, Context } from 'hono'
+import type { RouteManifest, HttpMethod, CloudwerkHandler } from '@cloudwerk/core'
+import { getContext } from '@cloudwerk/core'
 import type { Logger, RegisteredRoute } from '../types.js'
 import { loadRouteHandler } from './loadHandler.js'
 
@@ -25,6 +26,57 @@ const HTTP_METHODS: HttpMethod[] = [
   'OPTIONS',
   'HEAD',
 ]
+
+// ============================================================================
+// Handler Detection
+// ============================================================================
+
+/**
+ * Detect if a handler uses the new Cloudwerk signature.
+ *
+ * Detection is based on function arity (number of declared parameters):
+ * - Arity 2: Cloudwerk handler `(request, context) => Response`
+ * - Arity 1: Legacy Hono handler `(c) => Response`
+ *
+ * **Important**: Cloudwerk handlers must always declare both parameters,
+ * even if context is unused. Use `_context` for unused parameters:
+ *
+ * @example
+ * // Correct - arity 2
+ * export function GET(request: Request, _context: CloudwerkHandlerContext) {
+ *   return new Response('Hello')
+ * }
+ *
+ * // Also correct - arity 2
+ * export function GET(request: Request, { params }: CloudwerkHandlerContext) {
+ *   return json({ id: params.id })
+ * }
+ *
+ * // Incorrect - arity 1, will be treated as Hono handler
+ * export function GET(request: Request) {
+ *   return new Response('Hello')
+ * }
+ */
+function isCloudwerkHandler(fn: unknown): fn is CloudwerkHandler {
+  return typeof fn === 'function' && fn.length === 2
+}
+
+/**
+ * Wrap a Cloudwerk-native handler for Hono compatibility.
+ */
+function wrapCloudwerkHandler(handler: CloudwerkHandler): Handler {
+  return async (c: Context) => {
+    // Extract params from Hono
+    const params = c.req.param() as Record<string, string>
+
+    // Update CloudwerkContext params for getContext() access
+    const ctx = getContext()
+    Object.assign(ctx.params, params)
+
+    // Call native handler with standard Request
+    return handler(c.req.raw, { params })
+  }
+}
 
 // ============================================================================
 // Route Registration
@@ -98,17 +150,18 @@ export async function registerRoutes(
  * @param app - Hono app instance
  * @param method - HTTP method
  * @param pattern - URL pattern
- * @param handler - Route handler function
+ * @param handler - Route handler function (Hono or Cloudwerk signature)
  */
 function registerMethod(
   app: Hono,
   method: HttpMethod,
   pattern: string,
-  handler: (c: unknown) => Response | Promise<Response>
+  handler: Handler | CloudwerkHandler
 ): void {
-  // Cast to Hono's Handler type for proper type compatibility
-  // The handler signature is compatible at runtime
-  const h = handler as Handler
+  // Wrap Cloudwerk-native handlers for Hono compatibility
+  const h: Handler = isCloudwerkHandler(handler)
+    ? wrapCloudwerkHandler(handler)
+    : handler as Handler
 
   switch (method) {
     case 'GET':

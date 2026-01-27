@@ -239,6 +239,8 @@ export interface LayoutProps<TParams = Record<string, string>> {
 
 /**
  * Route handler context (extends Hono context)
+ * @deprecated Use CloudwerkHandlerContext with CloudwerkHandler instead.
+ * This type will be removed in a future version.
  */
 export type RouteContext<TParams = Record<string, string>> = Context & {
   req: {
@@ -248,9 +250,56 @@ export type RouteContext<TParams = Record<string, string>> = Context & {
 
 /**
  * Route handler function signature
+ * @deprecated Use CloudwerkHandler instead, which provides a cleaner signature:
+ * `(request: Request, context: CloudwerkHandlerContext) => Response`
+ * This type will be removed in a future version.
  */
 export type RouteHandler<TParams = Record<string, string>> = (
   c: RouteContext<TParams>
+) => Response | Promise<Response>
+
+// ============================================================================
+// Cloudwerk Native Handler Types
+// ============================================================================
+
+/**
+ * Handler context passed directly to route handlers.
+ * Use getContext() for full context including env and executionCtx.
+ */
+export interface CloudwerkHandlerContext<TParams = Record<string, string>> {
+  /** Route parameters from dynamic segments */
+  params: TParams
+}
+
+/**
+ * Cloudwerk-native route handler signature.
+ *
+ * **Important**: Both parameters must be declared for automatic detection.
+ * Use `_context` if the context parameter is unused.
+ *
+ * @example
+ * // With params
+ * export function GET(request: Request, { params }: CloudwerkHandlerContext<{ id: string }>) {
+ *   return json({ userId: params.id })
+ * }
+ *
+ * @example
+ * // Without params (still need second parameter for detection)
+ * export function GET(request: Request, _context: CloudwerkHandlerContext) {
+ *   return new Response('Hello Cloudwerk')
+ * }
+ *
+ * @example
+ * // Accessing env and request together
+ * export function GET(request: Request, context: CloudwerkHandlerContext<{ id: string }>) {
+ *   const { id } = context.params
+ *   const { env } = getContext<MyEnv>()
+ *   return json({ userId: id })
+ * }
+ */
+export type CloudwerkHandler<TParams = Record<string, string>> = (
+  request: Request,
+  context: CloudwerkHandlerContext<TParams>
 ) => Response | Promise<Response>
 
 /**
