@@ -1,13 +1,12 @@
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
+import starlightThemeGalaxy from 'starlight-theme-galaxy'
 
 export default defineConfig({
   site: 'https://cloudwerk.dev',
-  legacy: {
-    collections: true,
-  },
   integrations: [
     starlight({
+      plugins: [starlightThemeGalaxy()],
       title: 'Cloudwerk',
       logo: {
         src: './src/assets/logo.svg',
