@@ -4,7 +4,7 @@
  * Configuration and internal types for the Cloudwerk Vite plugin.
  */
 
-import type { CloudwerkConfig, RouteManifest, ScanResult } from '@cloudwerk/core'
+import type { CloudwerkConfig, RouteManifest, ScanResult } from '@cloudwerk/core/build'
 
 /**
  * Options for the Cloudwerk Vite plugin.

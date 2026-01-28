@@ -16,7 +16,7 @@ import {
   resolveMiddleware,
   loadConfig,
   resolveRoutesPath,
-} from '@cloudwerk/core'
+} from '@cloudwerk/core/build'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'

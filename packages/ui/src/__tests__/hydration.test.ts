@@ -14,7 +14,7 @@ import {
   generateReactHydrationRuntime,
   generateReactHydrationScript,
 } from '../hydration.js'
-import { createHydrationManifest, addToHydrationManifest } from '@cloudwerk/core'
+import { createHydrationManifest, addToHydrationManifest } from '@cloudwerk/core/build'
 
 // ============================================================================
 // wrapForHydration Tests
