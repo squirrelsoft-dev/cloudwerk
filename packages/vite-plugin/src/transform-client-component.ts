@@ -215,16 +215,13 @@ export function transformClientComponent(
       case 'arrow': {
         // export default () => {} or export default async () => {}
         // Replace the export default with a variable assignment
-        const asyncMatch = transformed.match(/export\s+default\s+(async\s+)?(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/)
-        if (asyncMatch) {
-          const isAsync = !!asyncMatch[1]
-          transformed = transformed.replace(
-            /export\s+default\s+(async\s+)?(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/,
-            `const __OriginalComponent = ${isAsync ? 'async ' : ''}$2 =>`
-          )
-          transformed = wrapperImport + transformed
-          transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
-        }
+        // Since AST already confirmed this is an arrow function, we can use a simple replacement
+        transformed = transformed.replace(
+          /export\s+default/,
+          'const __OriginalComponent ='
+        )
+        transformed = wrapperImport + transformed
+        transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
         break
       }
 
