@@ -144,6 +144,10 @@ export function generateHydrationScript(
   const elements = document.querySelectorAll('[data-hydrate-id]');
   if (elements.length === 0) return;
 
+  // Import the runtime which includes jsx function and render
+  const runtime = await import('${hydrationEndpoint}/runtime.js');
+  const { render, jsx } = runtime;
+
   // Cache for loaded modules
   const moduleCache = new Map();
 
@@ -181,12 +185,13 @@ export function generateHydrationScript(
         continue;
       }
 
-      // Import hono/jsx/dom for hydration
-      const { render } = await import('${hydrationEndpoint}/runtime.js');
+      // Create a proper JSX element using the jsx runtime function
+      // This allows hono/jsx/dom to manage the component lifecycle and re-renders
+      const element = jsx(Component, props);
 
       // Hydrate the component using hono/jsx/dom render
       // This safely replaces content using virtual DOM diffing
-      render(Component(props), el);
+      render(element, el);
 
       // Remove hydration attributes after successful hydration
       el.removeAttribute('data-hydrate-id');
@@ -208,15 +213,36 @@ export function generateHydrationScript(
  * This adds modulepreload hints for better performance.
  *
  * @param manifest - Hydration manifest with component metadata
+ * @param options - Options for generating hints
  * @returns Link tags for modulepreload
  */
-export function generatePreloadHints(manifest: HydrationManifest): string {
+export function generatePreloadHints(
+  manifest: HydrationManifest,
+  options: { hydrationEndpoint?: string } = {}
+): string {
+  const { hydrationEndpoint = '/__cloudwerk' } = options
+
   if (manifest.components.size === 0) {
     return ''
   }
 
   const hints: string[] = []
 
+  // Add import map to redirect hono/jsx/dom imports to the shared runtime
+  // This is critical for state management - all components must share the same runtime instance
+  const importMap = {
+    imports: {
+      'hono/jsx/dom': `${hydrationEndpoint}/runtime.js`,
+      'hono/jsx/dom/jsx-runtime': `${hydrationEndpoint}/runtime.js`,
+      'hono/jsx/dom/jsx-dev-runtime': `${hydrationEndpoint}/runtime.js`,
+    }
+  }
+  hints.push(`<script type="importmap">${JSON.stringify(importMap)}</script>`)
+
+  // Preload the runtime
+  hints.push(`<link rel="modulepreload" href="${hydrationEndpoint}/runtime.js">`)
+
+  // Preload component bundles
   for (const meta of manifest.components.values()) {
     hints.push(`<link rel="modulepreload" href="${meta.bundlePath}">`)
   }
