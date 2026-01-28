@@ -7,8 +7,14 @@
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { build as viteBuild, type InlineConfig } from 'vite'
-import cloudflareWorkersBuild from '@hono/vite-build/cloudflare-workers'
-import cloudwerk from '@cloudwerk/vite-plugin'
+import cloudwerk, { generateServerEntry } from '@cloudwerk/vite-plugin'
+import {
+  scanRoutes,
+  buildRouteManifest,
+  resolveLayouts,
+  resolveMiddleware,
+  loadConfig,
+} from '@cloudwerk/core'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
@@ -88,15 +94,52 @@ export async function build(
     // ========================================================================
     // Generate temporary entry file
     // ========================================================================
-    // @hono/vite-build needs a real file path, not a virtual module ID
-    // So we create a temp file that re-exports from the virtual module
+    // @hono/vite-build needs a real file path with actual code, not a virtual module
+    // So we generate the server entry content directly
     tempDir = path.join(cwd, BUILD_TEMP_DIR)
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true })
     }
 
+    // Load config and scan routes to generate server entry
+    const cloudwerkConfig = await loadConfig(cwd)
+    const appDir = 'app'
+    const routesDir = cloudwerkConfig.routesDir ?? 'routes'
+    const routesPath = routesDir.includes('/') || routesDir.includes(path.sep)
+      ? path.resolve(cwd, routesDir)
+      : path.resolve(cwd, appDir, routesDir)
+
+    logger.debug(`Scanning routes from: ${routesPath}`)
+
+    const scanResult = await scanRoutes(routesPath, {
+      extensions: cloudwerkConfig.extensions,
+    })
+
+    const manifest = buildRouteManifest(
+      scanResult,
+      routesPath,
+      resolveLayouts,
+      resolveMiddleware
+    )
+
+    logger.debug(`Found ${manifest.routes.length} routes`)
+
+    // Generate the server entry code
+    const renderer = (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx'
+    const serverEntryCode = generateServerEntry(manifest, scanResult, {
+      appDir,
+      routesDir,
+      config: cloudwerkConfig,
+      serverEntry: null,
+      clientEntry: null,
+      verbose,
+      hydrationEndpoint: '/__cloudwerk',
+      renderer,
+      root: cwd,
+    })
+
     const tempEntryPath = path.join(tempDir, '_server-entry.ts')
-    fs.writeFileSync(tempEntryPath, `export { default } from 'virtual:cloudwerk/server-entry'\n`)
+    fs.writeFileSync(tempEntryPath, serverEntryCode)
     logger.debug(`Generated temp entry: ${tempEntryPath}`)
 
     // ========================================================================
@@ -149,15 +192,34 @@ export async function build(
       logLevel: verbose ? 'info' : 'warn',
       plugins: [
         cloudwerk({ verbose }),
-        cloudflareWorkersBuild({
-          entry: tempEntryPath,
-        }),
       ],
       build: {
         outDir: outputDir,
         emptyOutDir: false, // Don't clear - client assets are already there
         minify: minify ? 'esbuild' : false,
         sourcemap,
+        ssr: true, // Enable SSR mode for proper externalization
+        rollupOptions: {
+          input: tempEntryPath,
+          output: {
+            format: 'esm',
+            entryFileNames: 'index.js',
+            inlineDynamicImports: true, // Important: inline all imports for Workers
+          },
+          // Don't externalize anything - bundle everything for Workers
+          external: [],
+        },
+        // Target Cloudflare Workers runtime
+        target: 'esnext',
+      },
+      // Cloudflare Workers compatibility
+      ssr: {
+        target: 'webworker',
+        noExternal: true, // Bundle all dependencies
+      },
+      resolve: {
+        // Prefer browser/worker fields in package.json
+        conditions: ['workerd', 'worker', 'browser', 'import', 'module', 'default'],
       },
     }
 

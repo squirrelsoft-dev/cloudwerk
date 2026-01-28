@@ -19,5 +19,9 @@ export {
   RESOLVED_VIRTUAL_IDS,
 } from './types.js'
 
+// Export virtual module generators for build tooling
+export { generateServerEntry } from './virtual-modules/server-entry.js'
+export { generateClientEntry } from './virtual-modules/client-entry.js'
+
 // Default export for convenient usage
 export { cloudwerkPlugin as default } from './plugin.js'
