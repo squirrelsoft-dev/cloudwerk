@@ -32,90 +32,7 @@ import {
 } from './types.js'
 import { generateServerEntry } from './virtual-modules/server-entry.js'
 import { generateClientEntry } from './virtual-modules/client-entry.js'
-
-/**
- * Transform a client component to wrap its default export with hydration wrapper.
- *
- * This transforms:
- * ```ts
- * 'use client'
- * export default function Counter() { ... }
- * ```
- *
- * To:
- * ```ts
- * import { createClientComponentWrapper } from '@cloudwerk/ui'
- * function Counter() { ... }
- * const __WrappedComponent = createClientComponentWrapper(Counter, { ... })
- * export default __WrappedComponent
- * ```
- *
- * TODO: Replace regex-based parsing with a proper AST parser (Babel or SWC) for
- * more robust handling of edge cases like comments, string literals containing
- * export patterns, and complex export syntax. Regex parsing is fragile and may
- * fail on valid but unusual code patterns.
- */
-function transformClientComponent(
-  code: string,
-  componentId: string,
-  bundlePath: string
-): string {
-  // Remove the 'use client' directive
-  let transformed = code.replace(/['"]use client['"]\s*;?\s*\n?/g, '')
-
-  // Check for different export patterns
-  const defaultExportFunctionMatch = transformed.match(
-    /export\s+default\s+function\s+(\w+)/
-  )
-  const defaultExportConstMatch = transformed.match(
-    /export\s+default\s+(\w+)\s*;?\s*$/m
-  )
-  const defaultExportArrowMatch = transformed.match(
-    /export\s+default\s+(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/
-  )
-
-  // Add the wrapper import at the top
-  // Use @cloudwerk/ui/client which has no Node.js dependencies and is browser-safe
-  const wrapperImport = `import { createClientComponentWrapper as __createWrapper } from '@cloudwerk/ui/client'\n`
-
-  // Meta object for the wrapper
-  const metaObj = JSON.stringify({ componentId, bundlePath })
-
-  if (defaultExportFunctionMatch) {
-    // export default function Counter() { ... }
-    const funcName = defaultExportFunctionMatch[1]
-    transformed = transformed.replace(
-      /export\s+default\s+function/,
-      'function'
-    )
-    transformed = wrapperImport + transformed
-    transformed += `\nconst __WrappedComponent = __createWrapper(${funcName}, ${metaObj})\nexport default __WrappedComponent\n`
-  } else if (defaultExportConstMatch && !defaultExportArrowMatch) {
-    // export default Counter (where Counter is defined elsewhere)
-    const varName = defaultExportConstMatch[1]
-    transformed = transformed.replace(
-      /export\s+default\s+\w+\s*;?\s*$/m,
-      ''
-    )
-    transformed = wrapperImport + transformed
-    transformed += `\nconst __WrappedComponent = __createWrapper(${varName}, ${metaObj})\nexport default __WrappedComponent\n`
-  } else if (defaultExportArrowMatch) {
-    // export default () => { ... } or export default (props) => { ... }
-    // Extract the arrow function and assign to a variable
-    transformed = transformed.replace(
-      /export\s+default\s+((?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>)/,
-      'const __OriginalComponent = $1'
-    )
-    transformed = wrapperImport + transformed
-    transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
-  } else {
-    // Fallback: just add a comment that we couldn't transform
-    console.warn(`[cloudwerk] Could not transform client component: ${componentId}`)
-    transformed = wrapperImport + code
-  }
-
-  return transformed
-}
+import { transformClientComponent } from './transform-client-component.js'
 
 /**
  * Create the Cloudwerk Vite plugin.
@@ -257,7 +174,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Resolve options
       const resolvedOptions: ResolvedCloudwerkOptions = {
-        appDir: options.appDir ?? 'app',
+        appDir: options.appDir ?? cloudwerkConfig.appDir,
         routesDir: options.routesDir ?? cloudwerkConfig.routesDir ?? 'routes',
         config: { ...cloudwerkConfig, ...options.config } as CloudwerkConfig,
         serverEntry: detectedServerEntry,
@@ -448,9 +365,17 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         // Transform the client component to wrap its default export
         // This adds the hydration wrapper for server-side rendering
         // Use the actual file path for Vite to resolve in dev mode
-        const transformedCode = transformClientComponent(code, componentId, id)
+        const result = transformClientComponent(code, {
+          componentId,
+          bundlePath: id, // Use file path for Vite to resolve in dev mode
+        })
+
+        if (!result.success && state.options.verbose) {
+          console.warn(`[cloudwerk] ${result.error}`)
+        }
+
         return {
-          code: transformedCode,
+          code: result.code,
           map: null,
         }
       }

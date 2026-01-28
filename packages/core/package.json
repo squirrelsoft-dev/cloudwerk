@@ -24,6 +24,7 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
+    "@cloudwerk/utils": "workspace:*",
     "esbuild": "^0.25.0",
     "fast-glob": "^3.3.0",
     "hono": "^4.0.0"

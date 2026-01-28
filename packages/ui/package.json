@@ -30,7 +30,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cloudwerk/core": "workspace:*"
+    "@cloudwerk/core": "workspace:*",
+    "@cloudwerk/utils": "workspace:*"
   },
   "peerDependencies": {
     "hono": "^4.0.0",

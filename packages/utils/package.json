@@ -1,0 +1,30 @@
+{
+  "name": "@cloudwerk/utils",
+  "version": "0.6.0",
+  "description": "Shared browser-safe utilities for Cloudwerk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/squirrelsoft-dev/cloudwerk.git",
+    "directory": "packages/utils"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest --run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
