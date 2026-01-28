@@ -14,6 +14,7 @@ import {
   resolveLayouts,
   resolveMiddleware,
   loadConfig,
+  resolveRoutesPath,
   hasUseClientDirective,
   generateComponentId,
   ROUTE_FILE_NAMES,
@@ -48,6 +49,11 @@ import { generateClientEntry } from './virtual-modules/client-entry.js'
  * const __WrappedComponent = createClientComponentWrapper(Counter, { ... })
  * export default __WrappedComponent
  * ```
+ *
+ * TODO: Replace regex-based parsing with a proper AST parser (Babel or SWC) for
+ * more robust handling of edge cases like comments, string literals containing
+ * export patterns, and complex export syntax. Regex parsing is fragile and may
+ * fail on valid but unusual code patterns.
  */
 function transformClientComponent(
   code: string,
@@ -145,12 +151,12 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       throw new Error('Plugin state not initialized')
     }
 
-    // If routesDir from config includes a path separator or starts with appDir,
-    // use it directly; otherwise combine with appDir
-    const routesDir = state.options.routesDir
-    const routesPath = routesDir.includes('/') || routesDir.includes(path.sep)
-      ? path.resolve(root, routesDir)
-      : path.resolve(root, state.options.appDir, routesDir)
+    // Resolve routes path using shared utility
+    const routesPath = resolveRoutesPath(
+      state.options.routesDir,
+      state.options.appDir,
+      root
+    )
 
     // Scan routes
     state.scanResult = await scanRoutes(routesPath, {

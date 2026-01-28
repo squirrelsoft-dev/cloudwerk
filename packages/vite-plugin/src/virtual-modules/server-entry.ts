@@ -188,10 +188,11 @@ function renderWithHydration(element) {
   // Hono JSX elements have toString() for synchronous rendering
   const html = '<!DOCTYPE html>' + String(element)
 
-  // Inject hydration script before </body> if it exists
+  // Inject hydration script before </body> if it exists (case-insensitive for HTML compat)
   const hydrationScript = '<script type="module" src="/@id/__x00__virtual:cloudwerk/client-entry"></script>'
-  const injectedHtml = html.includes('</body>')
-    ? html.replace('</body>', hydrationScript + '</body>')
+  const bodyCloseRegex = /<\\/body>/i
+  const injectedHtml = bodyCloseRegex.test(html)
+    ? html.replace(bodyCloseRegex, hydrationScript + '</body>')
     : html + hydrationScript
 
   return new Response(injectedHtml, {

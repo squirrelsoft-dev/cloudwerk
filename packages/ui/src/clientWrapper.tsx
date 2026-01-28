@@ -24,6 +24,11 @@ function escapeHtmlAttribute(str: string): string {
 /**
  * Serialize props for hydration, filtering out non-serializable values.
  * Inlined here to avoid importing @cloudwerk/core which has Node.js dependencies.
+ *
+ * TODO: Consider creating a @cloudwerk/utils package for browser-safe utilities
+ * that can be shared between @cloudwerk/core and @cloudwerk/ui without pulling
+ * in Node.js dependencies. This would eliminate the duplication of serializeProps
+ * between this file and packages/core/src/client.ts.
  */
 function serializeProps(props: Record<string, unknown>): string {
   const serializable: Record<string, unknown> = {}

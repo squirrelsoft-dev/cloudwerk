@@ -14,6 +14,7 @@ import {
   resolveLayouts,
   resolveMiddleware,
   loadConfig,
+  resolveRoutesPath,
 } from '@cloudwerk/core'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
@@ -103,11 +104,9 @@ export async function build(
 
     // Load config and scan routes to generate server entry
     const cloudwerkConfig = await loadConfig(cwd)
-    const appDir = 'app'
+    const appDir = 'app' // TODO: Make configurable when appDir is added to CloudwerkConfig
     const routesDir = cloudwerkConfig.routesDir ?? 'routes'
-    const routesPath = routesDir.includes('/') || routesDir.includes(path.sep)
-      ? path.resolve(cwd, routesDir)
-      : path.resolve(cwd, appDir, routesDir)
+    const routesPath = resolveRoutesPath(routesDir, appDir, cwd)
 
     logger.debug(`Scanning routes from: ${routesPath}`)
 

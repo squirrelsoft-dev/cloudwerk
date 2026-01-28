@@ -259,12 +259,41 @@ export function validateConfig(config: CloudwerkConfig): string[] {
  * @param config - Configuration object
  * @param cwd - Current working directory
  * @returns Absolute path to routes directory
+ * @deprecated Use resolveRoutesPath instead for consistent behavior with appDir
  */
 export function resolveRoutesDir(config: CloudwerkConfig, cwd: string): string {
   if (path.isAbsolute(config.routesDir)) {
     return config.routesDir
   }
   return path.resolve(cwd, config.routesDir)
+}
+
+/**
+ * Resolve the full routes path, handling both absolute paths and paths relative to appDir.
+ *
+ * If routesDir contains a path separator or is absolute, it's resolved directly from cwd.
+ * Otherwise, it's resolved relative to appDir (e.g., 'app/routes').
+ *
+ * @param routesDir - Routes directory from config (e.g., 'routes' or 'app/routes')
+ * @param appDir - Application directory (e.g., 'app')
+ * @param cwd - Current working directory
+ * @returns Absolute path to routes directory
+ *
+ * @example
+ * // routesDir: 'routes', appDir: 'app' => '/cwd/app/routes'
+ * resolveRoutesPath('routes', 'app', '/cwd')
+ *
+ * @example
+ * // routesDir: 'app/routes', appDir: 'app' => '/cwd/app/routes'
+ * resolveRoutesPath('app/routes', 'app', '/cwd')
+ */
+export function resolveRoutesPath(routesDir: string, appDir: string, cwd: string): string {
+  // If routesDir contains a path separator or is absolute, resolve directly from cwd
+  if (routesDir.includes('/') || routesDir.includes(path.sep) || path.isAbsolute(routesDir)) {
+    return path.resolve(cwd, routesDir)
+  }
+  // Otherwise, resolve relative to appDir
+  return path.resolve(cwd, appDir, routesDir)
 }
 
 /**
