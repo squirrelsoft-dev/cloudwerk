@@ -451,7 +451,11 @@ describe('generatePreloadHints', () => {
 
     const hints = generatePreloadHints(manifest)
 
-    expect(hints).toBe('<link rel="modulepreload" href="/__cloudwerk/Counter.js">')
+    // Should include import map, runtime preload, and component preload
+    expect(hints).toContain('<script type="importmap">')
+    expect(hints).toContain('hono/jsx/dom')
+    expect(hints).toContain('<link rel="modulepreload" href="/__cloudwerk/runtime.js">')
+    expect(hints).toContain('<link rel="modulepreload" href="/__cloudwerk/Counter.js">')
   })
 
   it('should generate modulepreload links for multiple components', () => {
@@ -486,9 +490,11 @@ describe('generatePreloadHints', () => {
 
     const hints = generatePreloadHints(manifest)
 
-    // Should have 3 preload links separated by newlines
+    // Should have import map + runtime preload + 3 component preload links (5 total)
     const lines = hints.split('\n')
-    expect(lines).toHaveLength(3)
+    expect(lines).toHaveLength(5)
+    expect(hints).toContain('<script type="importmap">')
+    expect(hints).toContain('/__cloudwerk/runtime.js')
     expect(hints).toContain('/__cloudwerk/Counter.js')
     expect(hints).toContain('/__cloudwerk/Toggle.js')
     expect(hints).toContain('/__cloudwerk/Modal.js')

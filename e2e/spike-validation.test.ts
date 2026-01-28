@@ -140,6 +140,7 @@ interface Tarballs {
   core: string
   cli: string
   ui: string
+  vitePlugin: string
 }
 
 /**
@@ -162,6 +163,12 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
     cwd: join(MONOREPO_ROOT, 'packages/ui'),
   })
 
+  // Pack @cloudwerk/vite-plugin (cli depends on it)
+  console.log('[E2E] Packing @cloudwerk/vite-plugin...')
+  await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
+    cwd: join(MONOREPO_ROOT, 'packages/vite-plugin'),
+  })
+
   // Pack @cloudwerk/cli
   console.log('[E2E] Packing @cloudwerk/cli...')
   await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
@@ -175,6 +182,9 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   const uiPackageJson = JSON.parse(
     await readFile(join(MONOREPO_ROOT, 'packages/ui/package.json'), 'utf-8')
   )
+  const vitePluginPackageJson = JSON.parse(
+    await readFile(join(MONOREPO_ROOT, 'packages/vite-plugin/package.json'), 'utf-8')
+  )
   const cliPackageJson = JSON.parse(
     await readFile(join(MONOREPO_ROOT, 'packages/cli/package.json'), 'utf-8')
   )
@@ -182,6 +192,7 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   // Find the tarball paths using dynamic versions
   const coreTarball = join(packagesDir, `cloudwerk-core-${corePackageJson.version}.tgz`)
   const uiTarball = join(packagesDir, `cloudwerk-ui-${uiPackageJson.version}.tgz`)
+  const vitePluginTarball = join(packagesDir, `cloudwerk-vite-plugin-${vitePluginPackageJson.version}.tgz`)
   const cliTarball = join(packagesDir, `cloudwerk-cli-${cliPackageJson.version}.tgz`)
 
   if (!existsSync(coreTarball)) {
@@ -190,6 +201,9 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   if (!existsSync(uiTarball)) {
     throw new Error(`UI tarball not found at ${uiTarball}`)
   }
+  if (!existsSync(vitePluginTarball)) {
+    throw new Error(`Vite plugin tarball not found at ${vitePluginTarball}`)
+  }
   if (!existsSync(cliTarball)) {
     throw new Error(`CLI tarball not found at ${cliTarball}`)
   }
@@ -197,6 +211,7 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   return {
     core: coreTarball,
     ui: uiTarball,
+    vitePlugin: vitePluginTarball,
     cli: cliTarball,
   }
 }
@@ -217,6 +232,7 @@ async function patchPackageJson(projectDir: string, tarballs: Tarballs): Promise
   if (pkg.dependencies) {
     pkg.dependencies['@cloudwerk/core'] = `file:${tarballs.core}`
     pkg.dependencies['@cloudwerk/cli'] = `file:${tarballs.cli}`
+    pkg.dependencies['@cloudwerk/ui'] = `file:${tarballs.ui}`
   }
 
   // Add pnpm overrides to redirect transitive dependencies
@@ -225,6 +241,7 @@ async function patchPackageJson(projectDir: string, tarballs: Tarballs): Promise
   pkg.pnpm.overrides = pkg.pnpm.overrides || {}
   pkg.pnpm.overrides['@cloudwerk/core'] = `file:${tarballs.core}`
   pkg.pnpm.overrides['@cloudwerk/ui'] = `file:${tarballs.ui}`
+  pkg.pnpm.overrides['@cloudwerk/vite-plugin'] = `file:${tarballs.vitePlugin}`
 
   await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8')
 }

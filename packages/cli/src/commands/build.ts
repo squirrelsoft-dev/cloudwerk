@@ -1,38 +1,28 @@
 /**
  * @cloudwerk/cli - Build Command
  *
- * Builds the project for production, including static site generation.
+ * Builds the project for production deployment to Cloudflare Workers using Vite.
  */
 
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import {
-  loadConfig,
-  scanRoutes,
-  buildRouteManifest,
-  resolveLayouts,
-  resolveMiddleware,
-  resolveRoutesDir,
-  hasErrors,
-  formatErrors,
-  formatWarnings,
-} from '@cloudwerk/core'
+import { build as viteBuild, type InlineConfig } from 'vite'
+import cloudflareWorkersBuild from '@hono/vite-build/cloudflare-workers'
+import cloudwerk from '@cloudwerk/vite-plugin'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
 import { createLogger, printError } from '../utils/logger.js'
-import { createApp } from '../server/createApp.js'
-import { generateStaticSite, getStaticRoutesAsync } from '../server/ssg.js'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-/** Default output directory for static files */
+/** Default output directory for build output */
 const DEFAULT_OUTPUT_DIR = './dist'
 
-/** Subdirectory for static pages within the output directory */
-const STATIC_SUBDIR = 'static'
+/** Temporary build directory for generated files */
+const BUILD_TEMP_DIR = '.cloudwerk-build'
 
 // ============================================================================
 // Build Command
@@ -40,6 +30,12 @@ const STATIC_SUBDIR = 'static'
 
 /**
  * Build the project for production.
+ *
+ * Build pipeline:
+ * 1. Generate temporary entry file
+ * 2. Build client assets (if any client components)
+ * 3. Build server bundle for Cloudflare Workers
+ * 4. Clean up temporary files
  *
  * @param pathArg - Optional working directory path
  * @param options - Command options
@@ -50,7 +46,12 @@ export async function build(
 ): Promise<void> {
   const startTime = Date.now()
   const verbose = options.verbose ?? false
+  const minify = options.minify ?? true
+  const sourcemap = options.sourcemap ?? false
   const logger = createLogger(verbose)
+
+  // Track temp files for cleanup
+  let tempDir: string | null = null
 
   try {
     // Resolve working directory
@@ -69,115 +70,128 @@ export async function build(
 
     logger.debug(`Working directory: ${cwd}`)
 
-    // Load configuration
-    logger.debug(`Loading configuration...`)
-    const config = await loadConfig(cwd)
-    logger.debug(`Config loaded: routesDir=${config.routesDir}, extensions=${config.extensions.join(', ')}`)
-
-    // Resolve routes directory
-    const routesDir = resolveRoutesDir(config, cwd)
-    logger.debug(`Routes directory: ${routesDir}`)
-
-    // Check if routes directory exists
-    if (!fs.existsSync(routesDir)) {
-      throw new CliError(
-        `Routes directory does not exist: ${routesDir}`,
-        'ENOENT',
-        `Create the "${config.routesDir}" directory or update routesDir in cloudwerk.config.ts`
-      )
-    }
-
-    // Scan routes
-    logger.debug(`Scanning routes...`)
-    const scanResult = await scanRoutes(routesDir, config)
-    logger.debug(`Found ${scanResult.routes.length} route files`)
-
-    // Build manifest
-    logger.debug(`Building route manifest...`)
-    const manifest = buildRouteManifest(
-      scanResult,
-      routesDir,
-      resolveLayouts,
-      resolveMiddleware
-    )
-
-    // Report validation errors
-    if (hasErrors(manifest)) {
-      const errorMessages = formatErrors(manifest.errors)
-      logger.error(errorMessages)
-      throw new CliError(
-        'Route validation failed',
-        'VALIDATION_ERROR',
-        'Fix the errors above and try again.'
-      )
-    }
-
-    // Report warnings (only if there are actual warnings)
-    if (manifest.warnings.length > 0) {
-      const warningMessages = formatWarnings(manifest.warnings)
-      logger.warn(warningMessages)
-    }
-
-    // Check for no routes
-    if (manifest.routes.length === 0) {
-      logger.warn(`No routes found in ${config.routesDir}`)
-      logger.warn(`Create a route.ts file to get started.`)
-    }
-
     // Resolve output directory
     const outputBase = options.output ?? DEFAULT_OUTPUT_DIR
     const outputDir = path.isAbsolute(outputBase)
       ? outputBase
       : path.resolve(cwd, outputBase)
 
+    // Clean output directory
+    if (fs.existsSync(outputDir)) {
+      logger.debug(`Cleaning output directory: ${outputDir}`)
+      fs.rmSync(outputDir, { recursive: true, force: true })
+    }
+    fs.mkdirSync(outputDir, { recursive: true })
+
     logger.info(`Building to ${outputDir}...`)
 
-    // Handle SSG if enabled
-    if (options.ssg) {
-      // Load page modules to find static routes
-      logger.debug(`Scanning for static routes...`)
-      const staticRoutes = await getStaticRoutesAsync(manifest, verbose ? logger : undefined)
+    // ========================================================================
+    // Generate temporary entry file
+    // ========================================================================
+    // @hono/vite-build needs a real file path, not a virtual module ID
+    // So we create a temp file that re-exports from the virtual module
+    tempDir = path.join(cwd, BUILD_TEMP_DIR)
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true })
+    }
 
-      if (staticRoutes.length === 0) {
-        logger.warn(`No static routes found. Add rendering: 'static' to route configs to enable SSG.`)
-      } else {
-        logger.info(`Found ${staticRoutes.length} static route(s)`)
+    const tempEntryPath = path.join(tempDir, '_server-entry.ts')
+    fs.writeFileSync(tempEntryPath, `export { default } from 'virtual:cloudwerk/server-entry'\n`)
+    logger.debug(`Generated temp entry: ${tempEntryPath}`)
 
-        // Create Hono app for rendering
-        logger.debug(`Creating Hono app for SSG...`)
-        const { app } = await createApp(manifest, scanResult, config, logger, verbose)
+    // ========================================================================
+    // Phase 1: Build client assets (optional)
+    // ========================================================================
+    logger.debug(`Building client assets...`)
 
-        // Generate static pages
-        const staticOutputDir = path.join(outputDir, STATIC_SUBDIR)
-        logger.info(`Generating static pages to ${staticOutputDir}...`)
+    const clientConfig: InlineConfig = {
+      root: cwd,
+      mode: 'production',
+      logLevel: verbose ? 'info' : 'warn',
+      plugins: [
+        cloudwerk({ verbose }),
+      ],
+      build: {
+        outDir: path.join(outputDir, 'static'),
+        emptyOutDir: true,
+        minify: minify ? 'esbuild' : false,
+        sourcemap,
+        rollupOptions: {
+          input: 'virtual:cloudwerk/client-entry',
+          output: {
+            entryFileNames: '__cloudwerk/client.js',
+            chunkFileNames: '__cloudwerk/[name]-[hash].js',
+            assetFileNames: '__cloudwerk/[name]-[hash][extname]',
+          },
+        },
+      },
+    }
 
-        const ssgStartTime = Date.now()
-        const result = await generateStaticSite(app, manifest, staticOutputDir, logger, verbose)
-        const ssgDuration = Date.now() - ssgStartTime
-
-        // Report results
-        printSSGResults(result, logger, ssgDuration)
-
-        if (result.failureCount > 0) {
-          throw new CliError(
-            `Failed to generate ${result.failureCount} static page(s)`,
-            'SSG_ERROR',
-            'Check the errors above and fix any issues.'
-          )
-        }
-      }
-    } else {
-      // Without SSG flag, scan for static routes and report what would be generated
-      logger.debug(`Scanning for static routes...`)
-      const staticRoutes = await getStaticRoutesAsync(manifest, verbose ? logger : undefined)
-      if (staticRoutes.length > 0) {
-        logger.info(`Found ${staticRoutes.length} static route(s). Use --ssg to generate static pages.`)
+    try {
+      await viteBuild(clientConfig)
+      logger.debug(`Client assets built successfully`)
+    } catch (error) {
+      // Client build might fail if there are no client components
+      // That's ok - we'll continue with server build
+      if (verbose) {
+        logger.debug(`Client build skipped or failed: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
 
-    // Calculate build time
-    const buildTime = Date.now() - startTime
-    logger.success(`Build completed in ${buildTime}ms`)
+    // ========================================================================
+    // Phase 2: Build server for Cloudflare Workers
+    // ========================================================================
+    logger.debug(`Building server bundle...`)
+
+    const serverConfig: InlineConfig = {
+      root: cwd,
+      mode: 'production',
+      logLevel: verbose ? 'info' : 'warn',
+      plugins: [
+        cloudwerk({ verbose }),
+        cloudflareWorkersBuild({
+          entry: tempEntryPath,
+        }),
+      ],
+      build: {
+        outDir: outputDir,
+        emptyOutDir: false, // Don't clear - client assets are already there
+        minify: minify ? 'esbuild' : false,
+        sourcemap,
+      },
+    }
+
+    await viteBuild(serverConfig)
+    logger.debug(`Server bundle built successfully`)
+
+    // ========================================================================
+    // Final Report
+    // ========================================================================
+    const buildDuration = Date.now() - startTime
+
+    // Get bundle sizes
+    const serverBundlePath = path.join(outputDir, 'index.js')
+    const serverSize = fs.existsSync(serverBundlePath)
+      ? fs.statSync(serverBundlePath).size
+      : 0
+
+    const clientDir = path.join(outputDir, 'static', '__cloudwerk')
+    let clientSize = 0
+    if (fs.existsSync(clientDir)) {
+      const clientFiles = fs.readdirSync(clientDir)
+      for (const file of clientFiles) {
+        const filePath = path.join(clientDir, file)
+        const stat = fs.statSync(filePath)
+        if (stat.isFile()) {
+          clientSize += stat.size
+        }
+      }
+    }
+
+    console.log()
+    printBuildSummary(serverSize, clientSize, buildDuration, logger)
+    console.log()
+    logger.success(`Build completed in ${buildDuration}ms`)
   } catch (error) {
     if (error instanceof CliError) {
       printError(error.message, error.suggestion)
@@ -194,6 +208,18 @@ export async function build(
 
     printError(String(error))
     process.exit(1)
+  } finally {
+    // Clean up temp directory
+    if (tempDir && fs.existsSync(tempDir)) {
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true })
+        if (verbose) {
+          logger.debug(`Cleaned up temp directory: ${tempDir}`)
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 }
 
@@ -202,50 +228,44 @@ export async function build(
 // ============================================================================
 
 /**
- * Print SSG generation results.
- *
- * @param result - SSG result object
- * @param logger - Logger for output
- * @param duration - SSG duration in milliseconds
+ * Print build summary.
  */
-function printSSGResults(
-  result: Awaited<ReturnType<typeof generateStaticSite>>,
-  logger: Logger,
-  duration: number
+function printBuildSummary(
+  serverSize: number,
+  clientSize: number,
+  buildDuration: number,
+  logger: Logger
 ): void {
+  logger.log('Build Output:')
+  logger.log('')
 
-  console.log()
-  logger.log('Static Site Generation Results:')
-  logger.log(`  Total pages: ${result.totalPages}`)
-  logger.log(`  Generated: ${result.successCount}`)
+  // Server bundle
+  logger.log('  Server:')
+  logger.log(`    Bundle:     ${formatSize(serverSize)}`)
+  logger.log('')
 
-  if (result.failureCount > 0) {
-    logger.log(`  Failed: ${result.failureCount}`)
+  // Client bundles (if any)
+  if (clientSize > 0) {
+    logger.log('  Client:')
+    logger.log(`    Total:      ${formatSize(clientSize)}`)
+    logger.log('')
   }
 
-  logger.log(`  Output: ${result.outputDir}`)
-  logger.log(`  Duration: ${duration}ms`)
+  // Totals
+  const totalSize = serverSize + clientSize
+  logger.log(`  Total:        ${formatSize(totalSize)}`)
+  logger.log(`  Duration:     ${buildDuration}ms`)
+}
 
-  // List generated pages (up to 10)
-  const pagesToShow = result.routes.filter((r) => r.success).slice(0, 10)
-  if (pagesToShow.length > 0) {
-    console.log()
-    logger.log('Generated pages:')
-    for (const page of pagesToShow) {
-      logger.log(`  ${page.urlPath} -> ${page.outputFile}`)
-    }
-    if (result.successCount > 10) {
-      logger.log(`  ... and ${result.successCount - 10} more`)
-    }
+/**
+ * Format a byte size for human-readable display.
+ */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`
   }
-
-  // List failed pages
-  const failedPages = result.routes.filter((r) => !r.success)
-  if (failedPages.length > 0) {
-    console.log()
-    logger.error('Failed pages:')
-    for (const page of failedPages) {
-      logger.error(`  ${page.urlPath}: ${page.error}`)
-    }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
   }
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }

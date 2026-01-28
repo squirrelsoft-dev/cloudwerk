@@ -40,9 +40,12 @@ program
 
 program
   .command('build [path]')
-  .description('Build project for production')
+  .description('Build project for production deployment to Cloudflare Workers')
   .option('-o, --output <dir>', 'Output directory', './dist')
   .option('--ssg', 'Generate static pages for routes with rendering: static')
+  .option('--minify', 'Minify bundles (default: true)')
+  .option('--no-minify', 'Disable minification')
+  .option('--sourcemap', 'Generate source maps')
   .option('-c, --config <path>', 'Path to config file')
   .option('--verbose', 'Enable verbose logging')
   .action(build)

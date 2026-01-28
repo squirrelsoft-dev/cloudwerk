@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 import fs from 'fs-extra'
 import { validateProject } from './validate.js'
 import { logger, detectPackageManager, printSuccessBanner } from './utils.js'
-import { CORE_VERSION, CLI_VERSION } from './versions.js'
+import { CORE_VERSION, CLI_VERSION, UI_VERSION } from './versions.js'
 import type { RendererChoice } from './prompts.js'
 
 /**
@@ -36,6 +36,7 @@ interface TemplateValues {
   name: string
   coreVersion: string
   cliVersion: string
+  uiVersion: string
 }
 
 /**
@@ -50,6 +51,7 @@ function processTemplate(content: string, values: TemplateValues): string {
     .replace(/\{\{name\}\}/g, values.name)
     .replace(/\{\{coreVersion\}\}/g, values.coreVersion)
     .replace(/\{\{cliVersion\}\}/g, values.cliVersion)
+    .replace(/\{\{uiVersion\}\}/g, values.uiVersion)
 }
 
 /**
@@ -128,6 +130,7 @@ export async function scaffold(
     name: projectName,
     coreVersion: CORE_VERSION,
     cliVersion: CLI_VERSION,
+    uiVersion: UI_VERSION,
   }
 
   logger.info(`Creating ${projectName}...`)

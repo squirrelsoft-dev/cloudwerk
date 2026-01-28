@@ -72,6 +72,12 @@ export {
   generateReactHydrationScript,
 } from './hydration.js'
 
+export {
+  createClientComponentWrapper,
+  type ClientComponentMeta,
+  type ClientComponentWrapper,
+} from './clientWrapper.js'
+
 // ============================================================================
 // Facade Functions
 // ============================================================================

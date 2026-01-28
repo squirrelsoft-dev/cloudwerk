@@ -1,29 +1,19 @@
 /**
  * @cloudwerk/cli - Dev Command
  *
- * Starts the development server.
+ * Starts the development server using Vite.
  */
 
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
-import { serve } from '@hono/node-server'
-import {
-  loadConfig,
-  scanRoutes,
-  buildRouteManifest,
-  resolveLayouts,
-  resolveMiddleware,
-  resolveRoutesDir,
-  hasErrors,
-  formatErrors,
-  formatWarnings,
-} from '@cloudwerk/core'
+import { createServer, type InlineConfig } from 'vite'
+import devServer from '@hono/vite-dev-server'
+import cloudwerk from '@cloudwerk/vite-plugin'
 
 import type { DevCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
 import { createLogger, printStartupBanner, printError } from '../utils/logger.js'
-import { createApp } from '../server/createApp.js'
 import { VERSION } from '../version.js'
 import { SHUTDOWN_TIMEOUT_MS } from '../constants.js'
 
@@ -62,65 +52,6 @@ export async function dev(
 
     logger.debug(`Working directory: ${cwd}`)
 
-    // Load configuration
-    logger.debug(`Loading configuration...`)
-    const config = await loadConfig(cwd)
-    logger.debug(`Config loaded: routesDir=${config.routesDir}, extensions=${config.extensions.join(', ')}`)
-
-    // Resolve routes directory
-    const routesDir = resolveRoutesDir(config, cwd)
-    logger.debug(`Routes directory: ${routesDir}`)
-
-    // Check if routes directory exists
-    if (!fs.existsSync(routesDir)) {
-      throw new CliError(
-        `Routes directory does not exist: ${routesDir}`,
-        'ENOENT',
-        `Create the "${config.routesDir}" directory or update routesDir in cloudwerk.config.ts`
-      )
-    }
-
-    // Scan routes
-    logger.debug(`Scanning routes...`)
-    const scanResult = await scanRoutes(routesDir, config)
-    logger.debug(`Found ${scanResult.routes.length} route files`)
-
-    // Build manifest
-    logger.debug(`Building route manifest...`)
-    const manifest = buildRouteManifest(
-      scanResult,
-      routesDir,
-      resolveLayouts,
-      resolveMiddleware
-    )
-
-    // Report validation errors
-    if (hasErrors(manifest)) {
-      const errorMessages = formatErrors(manifest.errors)
-      logger.error(errorMessages)
-      throw new CliError(
-        'Route validation failed',
-        'VALIDATION_ERROR',
-        'Fix the errors above and try again.'
-      )
-    }
-
-    // Report warnings (only if there are actual warnings)
-    if (manifest.warnings.length > 0) {
-      const warningMessages = formatWarnings(manifest.warnings)
-      logger.warn(warningMessages)
-    }
-
-    // Check for no routes
-    if (manifest.routes.length === 0) {
-      logger.warn(`No routes found in ${config.routesDir}`)
-      logger.warn(`Create a route.ts file to get started.`)
-    }
-
-    // Create Hono app
-    logger.debug(`Creating Hono app...`)
-    const { app, routes } = await createApp(manifest, scanResult, config, logger, verbose)
-
     // Parse port
     const port = parseInt(options.port, 10)
     if (isNaN(port) || port < 1 || port > 65535) {
@@ -131,48 +62,77 @@ export async function dev(
       )
     }
 
-    // Start server
-    logger.debug(`Starting server on port ${port}...`)
-    const host = options.host
+    // Build Vite config
+    const viteConfig: InlineConfig = {
+      root: cwd,
+      mode: 'development',
+      server: {
+        port,
+        host: options.host,
+        strictPort: true,
+      },
+      plugins: [
+        cloudwerk({
+          verbose,
+        }),
+        devServer({
+          entry: 'virtual:cloudwerk/server-entry',
+        }),
+      ],
+      // Suppress Vite's default startup message - we'll print our own
+      logLevel: verbose ? 'info' : 'warn',
+      clearScreen: false,
+    }
 
-    const server = serve({
-      fetch: app.fetch,
-      port,
-      hostname: host,
-    })
+    logger.debug(`Starting Vite dev server...`)
 
-    // Handle server errors
-    server.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'EADDRINUSE') {
-        printError(
-          `Port ${port} is already in use`,
-          `Try using a different port:\n    cloudwerk dev --port ${port + 1}`
-        )
-        process.exit(1)
-      } else {
-        printError(err.message)
-        process.exit(1)
-      }
-    })
+    // Create and start Vite server
+    const server = await createServer(viteConfig)
+    await server.listen()
 
-    // Wait for server to start
-    await new Promise<void>((resolve) => {
-      server.on('listening', resolve)
-    })
+    // Get server info
+    const resolvedPort = server.config.server.port ?? port
+    const resolvedHost = server.config.server.host === true
+      ? '0.0.0.0'
+      : (server.config.server.host ?? 'localhost')
+
+    // Build URLs
+    const localHost = resolvedHost === '0.0.0.0' ? 'localhost' : resolvedHost
+    const localUrl = `http://${localHost}:${resolvedPort}/`
+    const networkUrl = resolvedHost === '0.0.0.0' ? getNetworkUrl(resolvedPort) : undefined
 
     // Calculate startup time
     const startupTime = Date.now() - startTime
 
-    // Build URLs
-    const localUrl = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/`
-    const networkUrl = host === '0.0.0.0' ? getNetworkUrl(port) : undefined
+    // Extract routes from the manifest (if available)
+    const routes: Array<{ method: string; pattern: string }> = []
+
+    // Import the manifest to get route info
+    try {
+      const manifestModule = await server.ssrLoadModule('virtual:cloudwerk/manifest')
+      const manifest = manifestModule.default
+      if (manifest?.routes) {
+        for (const route of manifest.routes) {
+          if (route.fileType === 'page') {
+            routes.push({ method: 'GET', pattern: route.urlPattern })
+          } else if (route.fileType === 'route') {
+            // For API routes, we don't know the methods without loading the module
+            // Just show GET for now - Vite will handle the actual methods
+            routes.push({ method: 'ALL', pattern: route.urlPattern })
+          }
+        }
+      }
+    } catch {
+      // Manifest not available yet, that's ok
+      logger.debug('Could not load route manifest for startup banner')
+    }
 
     // Print startup banner
     printStartupBanner(
       VERSION,
       localUrl,
       networkUrl,
-      routes.map((r) => ({ method: r.method, pattern: r.pattern })),
+      routes,
       startupTime
     )
 
@@ -185,6 +145,16 @@ export async function dev(
     }
 
     if (error instanceof Error) {
+      // Check for port in use error
+      if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+        const port = parseInt(options.port, 10)
+        printError(
+          `Port ${port} is already in use`,
+          `Try using a different port:\n    cloudwerk dev --port ${port + 1}`
+        )
+        process.exit(1)
+      }
+
       printError(error.message)
       if (verbose && error.stack) {
         console.log(error.stack)
@@ -231,28 +201,36 @@ function getNetworkUrl(port: number): string | undefined {
 /**
  * Set up graceful shutdown handlers.
  *
- * @param server - HTTP server instance
+ * @param server - Vite dev server instance
  * @param logger - Logger instance
  */
 function setupGracefulShutdown(
-  server: ReturnType<typeof serve>,
+  server: Awaited<ReturnType<typeof createServer>>,
   logger: Logger
 ): void {
-  const shutdown = () => {
+  const shutdown = async () => {
     console.log() // New line after ^C
     logger.info('Shutting down...')
-    server.close(() => {
-      logger.info('Server closed')
-      process.exit(0)
-    })
+    await server.close()
+    logger.info('Server closed')
+    process.exit(0)
+  }
 
-    // Force exit after timeout
+  // Force exit after timeout
+  const forceShutdown = () => {
     setTimeout(() => {
       logger.warn('Forcing shutdown...')
       process.exit(0)
     }, SHUTDOWN_TIMEOUT_MS)
   }
 
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
+  process.on('SIGINT', async () => {
+    forceShutdown()
+    await shutdown()
+  })
+
+  process.on('SIGTERM', async () => {
+    forceShutdown()
+    await shutdown()
+  })
 }
