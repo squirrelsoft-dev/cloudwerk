@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "cloudwerk dev --verbose",
-    "build": "cloudwerk build"
+    "test-build": "cloudwerk build"
   },
   "dependencies": {
     "@cloudwerk/core": "workspace:*",
