@@ -1,111 +1,32 @@
 /**
- * @cloudwerk/cli - Worker Entry Point Generator
+ * Server Entry Virtual Module Generator
  *
- * Generates a virtual entry point that:
- * 1. Imports the Hono app factory
- * 2. Registers all routes with pre-compiled handlers
- * 3. Exports the fetch handler for Cloudflare Workers
+ * Generates the virtual:cloudwerk/server-entry module that creates
+ * a Hono app with all routes registered from the file-based routing manifest.
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
-import type { RouteManifest, CloudwerkConfig } from '@cloudwerk/core'
-
-// ============================================================================
-// Types
-// ============================================================================
+import type { RouteManifest, ScanResult } from '@cloudwerk/core'
+import type { ResolvedCloudwerkOptions } from '../types.js'
 
 /**
- * Options for generating the worker entry point.
- */
-export interface GenerateWorkerEntryOptions {
-  /** Route manifest */
-  manifest: RouteManifest
-  /** Cloudwerk configuration */
-  config: CloudwerkConfig
-  /** Output directory for the entry file */
-  outputDir: string
-  /** Routes directory (absolute path) */
-  routesDir: string
-  /** Whether static assets are pre-bundled (production build) */
-  staticAssets?: boolean
-}
-
-/**
- * Result of entry point generation.
- */
-export interface GenerateWorkerEntryResult {
-  /** Path to the generated entry file */
-  entryPath: string
-  /** The generated code */
-  code: string
-}
-
-// ============================================================================
-// Entry Point Generation
-// ============================================================================
-
-/**
- * Generate a virtual entry point for the Cloudflare Worker.
+ * Generate the server entry module code.
  *
- * The generated entry point:
- * - Creates a Hono app with all routes pre-registered
- * - Imports all page components, layouts, and handlers
- * - Exports the fetch handler for Workers
+ * This creates a complete Hono application with:
+ * - All page and API routes registered
+ * - Layouts applied to pages in correct order
+ * - Middleware chains applied
+ * - Route config support
+ * - Error and 404 handling
  *
- * @param options - Generation options
- * @returns Generated entry point path and code
- *
- * @example
- * ```typescript
- * const { entryPath, code } = await generateWorkerEntry({
- *   manifest,
- *   config,
- *   outputDir: './dist/.build',
- *   routesDir: './app/routes',
- * })
- * ```
+ * @param manifest - Route manifest from @cloudwerk/core
+ * @param scanResult - Scan result with file information
+ * @param options - Resolved plugin options
+ * @returns Generated TypeScript/JavaScript code
  */
-export async function generateWorkerEntry(
-  options: GenerateWorkerEntryOptions
-): Promise<GenerateWorkerEntryResult> {
-  const {
-    manifest,
-    config,
-    outputDir,
-    routesDir,
-    staticAssets = true,
-  } = options
-
-  // Ensure output directory exists
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true })
-  }
-
-  const entryPath = path.join(outputDir, '_worker-entry.ts')
-  const code = generateEntryCode(manifest, config, routesDir, outputDir, staticAssets)
-
-  fs.writeFileSync(entryPath, code)
-
-  return { entryPath, code }
-}
-
-/**
- * Generate the TypeScript code for the worker entry point.
- *
- * @param manifest - Route manifest
- * @param config - Cloudwerk configuration
- * @param routesDir - Routes directory path
- * @param entryDir - Directory where the entry file will be written
- * @param staticAssets - Whether static assets are pre-bundled
- * @returns Generated TypeScript code
- */
-function generateEntryCode(
+export function generateServerEntry(
   manifest: RouteManifest,
-  config: CloudwerkConfig,
-  routesDir: string,
-  entryDir: string,
-  staticAssets: boolean
+  scanResult: ScanResult,
+  options: ResolvedCloudwerkOptions
 ): string {
   const imports: string[] = []
   const pageRegistrations: string[] = []
@@ -129,8 +50,7 @@ function generateEntryCode(
     for (const middlewarePath of route.middleware) {
       if (!importedModules.has(middlewarePath)) {
         const varName = `middleware_${middlewareIndex++}`
-        const relativePath = getRelativePathFromEntry(entryDir, middlewarePath)
-        middlewareImports.push(`import ${varName} from '${relativePath}'`)
+        middlewareImports.push(`import ${varName} from '${middlewarePath}'`)
         middlewareModules.set(middlewarePath, varName)
         importedModules.add(middlewarePath)
       }
@@ -141,8 +61,7 @@ function generateEntryCode(
       for (const layoutPath of route.layouts) {
         if (!importedModules.has(layoutPath)) {
           const varName = `layout_${layoutIndex++}`
-          const relativePath = getRelativePathFromEntry(entryDir, layoutPath)
-          layoutImports.push(`import * as ${varName} from '${relativePath}'`)
+          layoutImports.push(`import * as ${varName} from '${layoutPath}'`)
           layoutModules.set(layoutPath, varName)
           importedModules.add(layoutPath)
         }
@@ -152,12 +71,11 @@ function generateEntryCode(
     if (route.fileType === 'page') {
       // Page route - import page module and register GET handler
       const varName = `page_${pageIndex++}`
-      const relativePath = getRelativePathFromEntry(entryDir, route.absolutePath)
-      imports.push(`import * as ${varName} from '${relativePath}'`)
+      imports.push(`import * as ${varName} from '${route.absolutePath}'`)
 
       // Generate layout chain for this route
-      const layoutChain = route.layouts.map(p => layoutModules.get(p)!).join(', ')
-      const middlewareChain = route.middleware.map(p => middlewareModules.get(p)!).join(', ')
+      const layoutChain = route.layouts.map((p) => layoutModules.get(p)!).join(', ')
+      const middlewareChain = route.middleware.map((p) => middlewareModules.get(p)!).join(', ')
 
       pageRegistrations.push(
         `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}])`
@@ -165,10 +83,9 @@ function generateEntryCode(
     } else if (route.fileType === 'route') {
       // API route - import route module and register HTTP handlers
       const varName = `route_${routeIndex++}`
-      const relativePath = getRelativePathFromEntry(entryDir, route.absolutePath)
-      imports.push(`import * as ${varName} from '${relativePath}'`)
+      imports.push(`import * as ${varName} from '${route.absolutePath}'`)
 
-      const middlewareChain = route.middleware.map(p => middlewareModules.get(p)!).join(', ')
+      const middlewareChain = route.middleware.map((p) => middlewareModules.get(p)!).join(', ')
 
       routeRegistrations.push(
         `  registerRoute(app, '${route.urlPattern}', ${varName}, [${middlewareChain}])`
@@ -176,18 +93,17 @@ function generateEntryCode(
     }
   }
 
-  // Generate the entry file code
-  const rendererName = config.ui?.renderer ?? 'hono-jsx'
+  const rendererName = options.renderer
 
   return `/**
- * Generated Cloudflare Worker Entry Point
- * This file is auto-generated by cloudwerk build - do not edit
+ * Generated Cloudwerk Server Entry
+ * This file is auto-generated by @cloudwerk/vite-plugin - do not edit
  */
 
 import { Hono } from 'hono'
 import type { Context, MiddlewareHandler } from 'hono'
 import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
-import { render, renderToStream, setActiveRenderer } from '@cloudwerk/ui'
+import { renderToStream, setActiveRenderer } from '@cloudwerk/ui'
 import type { PageProps, LayoutProps, RouteConfig, LoaderArgs, HttpMethod } from '@cloudwerk/core'
 
 // Page and Route Imports
@@ -198,12 +114,6 @@ ${layoutImports.join('\n')}
 
 // Middleware Imports
 ${middlewareImports.join('\n')}
-
-// ============================================================================
-// Static Asset Configuration
-// ============================================================================
-
-const STATIC_ASSETS_ENABLED = ${staticAssets}
 
 // ============================================================================
 // Route Registration Helpers
@@ -366,28 +276,9 @@ app.onError((err, c) => {
 })
 
 // ============================================================================
-// Worker Export
+// Export
 // ============================================================================
 
-export default {
-  fetch: app.fetch,
-}
+export default app
 `
-}
-
-/**
- * Get relative path from the generated entry file to target file.
- * Ensures the path starts with ./ for ESM compatibility.
- *
- * @param entryDir - Directory containing the generated entry file
- * @param targetPath - Target file path
- * @returns Relative path with ./ prefix
- */
-function getRelativePathFromEntry(entryDir: string, targetPath: string): string {
-  const relative = path.relative(entryDir, targetPath)
-  // Ensure it starts with ./
-  if (!relative.startsWith('.')) {
-    return `./${relative}`
-  }
-  return relative
 }

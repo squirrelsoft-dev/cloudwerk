@@ -98,6 +98,25 @@ importers:
         specifier: ^6.1.2
         version: 6.3.0
 
+  apps/test-hydration:
+    dependencies:
+      '@cloudwerk/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cloudwerk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+    devDependencies:
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   examples/hello-world: {}
 
   examples/saas-starter: {}
@@ -112,9 +131,18 @@ importers:
       '@cloudwerk/ui':
         specifier: workspace:^
         version: link:../ui
+      '@cloudwerk/vite-plugin':
+        specifier: workspace:^
+        version: link:../vite-plugin
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.11.5)
+      '@hono/vite-build':
+        specifier: ^1.3.0
+        version: 1.9.2(hono@4.11.5)
+      '@hono/vite-dev-server':
+        specifier: ^0.18.0
+        version: 0.18.3(hono@4.11.5)
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -124,6 +152,9 @@ importers:
       picocolors:
         specifier: ^1.1.0
         version: 1.1.1
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -207,6 +238,37 @@ importers:
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.30)
+
+  packages/vite-plugin:
+    dependencies:
+      '@cloudwerk/core':
+        specifier: workspace:^
+        version: link:../core
+      '@cloudwerk/ui':
+        specifier: workspace:^
+        version: link:../ui
+      '@hono/vite-dev-server':
+        specifier: '>=0.18.0'
+        version: 0.18.3(hono@4.11.5)
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.30
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.30)
@@ -550,6 +612,25 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
+
+  '@hono/vite-build@1.9.2':
+    resolution: {integrity: sha512-7/qan3lgeA8mMv7jtx5KX0wrAdMteNqI87JcZjS1CUN9hhIsaqOvySXcT3lZLyhYidywl+s88ZX84I0knefItA==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: '*'
+
+  '@hono/vite-dev-server@0.18.3':
+    resolution: {integrity: sha512-JztypLmq6qtQ3OAcz5vDzwXYBBymLztSbfDuNf4XTWkfppLjf6DHvYHtQZ5idOfNhUzdnbYY7/6QAKlVk6G3QQ==}
+    engines: {node: '>=18.14.1'}
+    peerDependencies:
+      hono: '*'
+      miniflare: '*'
+      wrangler: '*'
+    peerDependenciesMeta:
+      miniflare:
+        optional: true
+      wrangler:
+        optional: true
 
   '@humanwhocodes/config-array@0.13.0':
     resolution: {integrity: sha512-DZLEEqFWQFiyK6h5YIeynKx7JlvCYWL0cImfSRXZ9l4Sg2efkFGTuFf6vzXjK1cq6IYkU+Eg/JizXw+TD2vRNw==}
@@ -3924,6 +4005,16 @@ snapshots:
     dependencies:
       hono: 4.11.5
 
+  '@hono/vite-build@1.9.2(hono@4.11.5)':
+    dependencies:
+      hono: 4.11.5
+
+  '@hono/vite-dev-server@0.18.3(hono@4.11.5)':
+    dependencies:
+      '@hono/node-server': 1.19.9(hono@4.11.5)
+      hono: 4.11.5
+      minimatch: 9.0.5
+
   '@humanwhocodes/config-array@0.13.0':
     dependencies:
       '@humanwhocodes/object-schema': 2.0.3
@@ -7239,6 +7330,18 @@ snapshots:
       esbuild: 0.25.12
       postcss: 8.5.6
       rollup: 4.56.0
+    optionalDependencies:
+      '@types/node': 20.19.30
+      fsevents: 2.3.3
+
+  vite@6.4.1(@types/node@20.19.30):
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.56.0
+      tinyglobby: 0.2.15
     optionalDependencies:
       '@types/node': 20.19.30
       fsevents: 2.3.3
