@@ -20,6 +20,9 @@ const corePackage = JSON.parse(
 const cliPackage = JSON.parse(
   readFileSync(join(rootDir, 'packages/cli/package.json'), 'utf-8')
 )
+const uiPackage = JSON.parse(
+  readFileSync(join(rootDir, 'packages/ui/package.json'), 'utf-8')
+)
 
 const versionsContent = `/**
  * Auto-generated file - DO NOT EDIT
@@ -28,9 +31,10 @@ const versionsContent = `/**
 
 export const CORE_VERSION = '${corePackage.version}'
 export const CLI_VERSION = '${cliPackage.version}'
+export const UI_VERSION = '${uiPackage.version}'
 `
 
 const outputPath = join(__dirname, '..', 'src', 'versions.ts')
 writeFileSync(outputPath, versionsContent)
 
-console.log(`Generated versions.ts: core=${corePackage.version}, cli=${cliPackage.version}`)
+console.log(`Generated versions.ts: core=${corePackage.version}, cli=${cliPackage.version}, ui=${uiPackage.version}`)

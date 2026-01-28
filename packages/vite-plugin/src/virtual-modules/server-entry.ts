@@ -101,10 +101,8 @@ export function generateServerEntry(
  */
 
 import { Hono } from 'hono'
-import type { Context, MiddlewareHandler } from 'hono'
 import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
 import { renderToStream, setActiveRenderer } from '@cloudwerk/ui'
-import type { PageProps, LayoutProps, RouteConfig, LoaderArgs, HttpMethod } from '@cloudwerk/core'
 
 // Page and Route Imports
 ${imports.join('\n')}
@@ -119,37 +117,9 @@ ${middlewareImports.join('\n')}
 // Route Registration Helpers
 // ============================================================================
 
-interface PageModule {
-  default: (props: PageProps) => unknown
-  loader?: (args: LoaderArgs) => unknown
-  config?: RouteConfig
-}
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
 
-interface LayoutModule {
-  default: (props: LayoutProps) => unknown
-  loader?: (args: LoaderArgs) => unknown
-}
-
-interface RouteModule {
-  GET?: unknown
-  POST?: unknown
-  PUT?: unknown
-  PATCH?: unknown
-  DELETE?: unknown
-  OPTIONS?: unknown
-  HEAD?: unknown
-  config?: RouteConfig
-}
-
-const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
-
-function registerPage(
-  app: Hono,
-  pattern: string,
-  pageModule: PageModule,
-  layoutModules: LayoutModule[],
-  middlewareModules: MiddlewareHandler[]
-) {
+function registerPage(app, pattern, pageModule, layoutModules, middlewareModules) {
   // Apply middleware
   for (const mw of middlewareModules) {
     app.use(pattern, mw)
@@ -158,39 +128,39 @@ function registerPage(
   // Apply config middleware if present
   if (pageModule.config) {
     app.use(pattern, async (_c, next) => {
-      setRouteConfig(pageModule.config!)
+      setRouteConfig(pageModule.config)
       await next()
     })
   }
 
   // Register GET handler for page
-  app.get(pattern, async (c: Context) => {
+  app.get(pattern, async (c) => {
     const params = c.req.param()
     const request = c.req.raw
     const url = new URL(request.url)
     const searchParams = Object.fromEntries(url.searchParams.entries())
 
     // Execute layout loaders
-    const layoutLoaderData: Record<string, unknown>[] = []
-    const loaderArgs: LoaderArgs = { params, request, context: c }
+    const layoutLoaderData = []
+    const loaderArgs = { params, request, context: c }
 
     for (const layoutModule of layoutModules) {
       if (layoutModule.loader) {
         const data = await Promise.resolve(layoutModule.loader(loaderArgs))
-        layoutLoaderData.push((data ?? {}) as Record<string, unknown>)
+        layoutLoaderData.push(data ?? {})
       } else {
         layoutLoaderData.push({})
       }
     }
 
     // Execute page loader
-    let pageLoaderData: Record<string, unknown> = {}
+    let pageLoaderData = {}
     if (pageModule.loader) {
-      pageLoaderData = (await Promise.resolve(pageModule.loader(loaderArgs))) as Record<string, unknown> ?? {}
+      pageLoaderData = (await Promise.resolve(pageModule.loader(loaderArgs))) ?? {}
     }
 
     // Build page props
-    const pageProps: PageProps = { params, searchParams, ...pageLoaderData }
+    const pageProps = { params, searchParams, ...pageLoaderData }
 
     // Render page
     let element = await Promise.resolve(pageModule.default(pageProps))
@@ -198,7 +168,7 @@ function registerPage(
     // Wrap with layouts (inside-out)
     for (let i = layoutModules.length - 1; i >= 0; i--) {
       const Layout = layoutModules[i].default
-      const layoutProps: LayoutProps = {
+      const layoutProps = {
         children: element,
         params,
         ...layoutLoaderData[i],
@@ -210,12 +180,7 @@ function registerPage(
   })
 }
 
-function registerRoute(
-  app: Hono,
-  pattern: string,
-  routeModule: RouteModule,
-  middlewareModules: MiddlewareHandler[]
-) {
+function registerRoute(app, pattern, routeModule, middlewareModules) {
   // Apply middleware
   for (const mw of middlewareModules) {
     app.use(pattern, mw)
@@ -224,7 +189,7 @@ function registerRoute(
   // Apply config middleware if present
   if (routeModule.config) {
     app.use(pattern, async (_c, next) => {
-      setRouteConfig(routeModule.config!)
+      setRouteConfig(routeModule.config)
       await next()
     })
   }
@@ -233,7 +198,7 @@ function registerRoute(
   for (const method of HTTP_METHODS) {
     const handler = routeModule[method]
     if (handler && typeof handler === 'function') {
-      const h = handler.length === 2 ? createHandlerAdapter(handler as any) : handler as any
+      const h = handler.length === 2 ? createHandlerAdapter(handler) : handler
       switch (method) {
         case 'GET': app.get(pattern, h); break
         case 'POST': app.post(pattern, h); break
