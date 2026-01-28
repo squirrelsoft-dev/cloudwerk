@@ -66,7 +66,12 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       throw new Error('Plugin state not initialized')
     }
 
-    const routesPath = path.resolve(root, state.options.appDir, state.options.routesDir)
+    // If routesDir from config includes a path separator or starts with appDir,
+    // use it directly; otherwise combine with appDir
+    const routesDir = state.options.routesDir
+    const routesPath = routesDir.includes('/') || routesDir.includes(path.sep)
+      ? path.resolve(root, routesDir)
+      : path.resolve(root, state.options.appDir, routesDir)
 
     // Scan routes
     state.scanResult = await scanRoutes(routesPath, {
