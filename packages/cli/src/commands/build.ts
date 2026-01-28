@@ -104,7 +104,7 @@ export async function build(
 
     // Load config and scan routes to generate server entry
     const cloudwerkConfig = await loadConfig(cwd)
-    const appDir = 'app' // TODO: Make configurable when appDir is added to CloudwerkConfig
+    const appDir = cloudwerkConfig.appDir
     const routesDir = cloudwerkConfig.routesDir ?? 'routes'
     const routesPath = resolveRoutesPath(routesDir, appDir, cwd)
 

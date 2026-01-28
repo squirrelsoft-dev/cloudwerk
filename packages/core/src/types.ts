@@ -268,6 +268,9 @@ export interface UIConfig {
  * Configuration options for the route compiler
  */
 export interface CloudwerkConfig {
+  /** Directory containing application files (default: "app") */
+  appDir: string
+
   /** Directory containing route files (default: "app") */
   routesDir: string
 

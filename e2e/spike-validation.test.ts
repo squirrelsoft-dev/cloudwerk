@@ -137,6 +137,7 @@ describe('End-to-End Spike Validation', () => {
 // ============================================================================
 
 interface Tarballs {
+  utils: string
   core: string
   cli: string
   ui: string
@@ -151,7 +152,13 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   const packagesDir = join(targetDir, 'packages')
   await mkdir(packagesDir, { recursive: true })
 
-  // Pack @cloudwerk/core first (cli and ui depend on it)
+  // Pack @cloudwerk/utils first (core and ui depend on it)
+  console.log('[E2E] Packing @cloudwerk/utils...')
+  await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
+    cwd: join(MONOREPO_ROOT, 'packages/utils'),
+  })
+
+  // Pack @cloudwerk/core (cli and ui depend on it)
   console.log('[E2E] Packing @cloudwerk/core...')
   await runCommand('pnpm', ['pack', '--pack-destination', packagesDir], {
     cwd: join(MONOREPO_ROOT, 'packages/core'),
@@ -176,6 +183,9 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   })
 
   // Read package versions dynamically
+  const utilsPackageJson = JSON.parse(
+    await readFile(join(MONOREPO_ROOT, 'packages/utils/package.json'), 'utf-8')
+  )
   const corePackageJson = JSON.parse(
     await readFile(join(MONOREPO_ROOT, 'packages/core/package.json'), 'utf-8')
   )
@@ -190,11 +200,15 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   )
 
   // Find the tarball paths using dynamic versions
+  const utilsTarball = join(packagesDir, `cloudwerk-utils-${utilsPackageJson.version}.tgz`)
   const coreTarball = join(packagesDir, `cloudwerk-core-${corePackageJson.version}.tgz`)
   const uiTarball = join(packagesDir, `cloudwerk-ui-${uiPackageJson.version}.tgz`)
   const vitePluginTarball = join(packagesDir, `cloudwerk-vite-plugin-${vitePluginPackageJson.version}.tgz`)
   const cliTarball = join(packagesDir, `cloudwerk-cli-${cliPackageJson.version}.tgz`)
 
+  if (!existsSync(utilsTarball)) {
+    throw new Error(`Utils tarball not found at ${utilsTarball}`)
+  }
   if (!existsSync(coreTarball)) {
     throw new Error(`Core tarball not found at ${coreTarball}`)
   }
@@ -209,6 +223,7 @@ async function packLocalPackages(targetDir: string): Promise<Tarballs> {
   }
 
   return {
+    utils: utilsTarball,
     core: coreTarball,
     ui: uiTarball,
     vitePlugin: vitePluginTarball,
@@ -239,6 +254,7 @@ async function patchPackageJson(projectDir: string, tarballs: Tarballs): Promise
   // This ensures @cloudwerk/cli's dependencies also resolve to local tarballs
   pkg.pnpm = pkg.pnpm || {}
   pkg.pnpm.overrides = pkg.pnpm.overrides || {}
+  pkg.pnpm.overrides['@cloudwerk/utils'] = `file:${tarballs.utils}`
   pkg.pnpm.overrides['@cloudwerk/core'] = `file:${tarballs.core}`
   pkg.pnpm.overrides['@cloudwerk/ui'] = `file:${tarballs.ui}`
   pkg.pnpm.overrides['@cloudwerk/vite-plugin'] = `file:${tarballs.vitePlugin}`

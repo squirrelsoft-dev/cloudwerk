@@ -3,51 +3,9 @@
  *
  * Wraps client components with hydration metadata for server-side rendering.
  * This wrapper is used by the esbuild plugin to transform imports of client components.
- *
- * NOTE: This module is imported on both server and client. To avoid pulling in
- * Node.js-only dependencies from @cloudwerk/core, we inline the serializeProps
- * function here instead of importing it.
  */
 
-/**
- * Escape a string for safe use in an HTML attribute.
- */
-function escapeHtmlAttribute(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-/**
- * Serialize props for hydration, filtering out non-serializable values.
- * Inlined here to avoid importing @cloudwerk/core which has Node.js dependencies.
- *
- * TODO: Consider creating a @cloudwerk/utils package for browser-safe utilities
- * that can be shared between @cloudwerk/core and @cloudwerk/ui without pulling
- * in Node.js dependencies. This would eliminate the duplication of serializeProps
- * between this file and packages/core/src/client.ts.
- */
-function serializeProps(props: Record<string, unknown>): string {
-  const serializable: Record<string, unknown> = {}
-
-  for (const [key, value] of Object.entries(props)) {
-    // Skip children - these are rendered server-side
-    if (key === 'children') continue
-    // Skip functions
-    if (typeof value === 'function') continue
-    // Skip symbols
-    if (typeof value === 'symbol') continue
-    // Skip undefined
-    if (value === undefined) continue
-
-    serializable[key] = value
-  }
-
-  return JSON.stringify(serializable)
-}
+import { serializeProps, escapeHtmlAttribute } from '@cloudwerk/utils'
 
 /**
  * Metadata for a wrapped client component.

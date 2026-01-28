@@ -18,6 +18,7 @@ import type { CloudwerkConfig, CloudwerkUserConfig, SupportedExtension } from '.
  * Default configuration values.
  */
 export const DEFAULT_CONFIG: CloudwerkConfig = {
+  appDir: 'app',
   routesDir: 'app',
   extensions: ['.ts', '.tsx'] as SupportedExtension[],
   strict: true,
@@ -66,6 +67,7 @@ export function mergeConfig(
   user: CloudwerkUserConfig
 ): CloudwerkConfig {
   return {
+    appDir: user.appDir ?? defaults.appDir,
     routesDir: user.routesDir ?? defaults.routesDir,
     extensions: user.extensions ?? defaults.extensions,
     strict: user.strict ?? defaults.strict,
