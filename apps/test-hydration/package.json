@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "cloudwerk dev --verbose",
-    "build": "cloudwerk build"
+    "dev": "cloudwerk dev --verbose"
   },
   "dependencies": {
     "@cloudwerk/core": "workspace:*",
