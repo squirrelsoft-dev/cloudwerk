@@ -3,9 +3,11 @@
  *
  * Wraps client components with hydration metadata for server-side rendering.
  * This wrapper is used by the esbuild plugin to transform imports of client components.
+ *
+ * NOTE: This module is imported on both server and client. To avoid pulling in
+ * Node.js-only dependencies from @cloudwerk/core, we inline the serializeProps
+ * function here instead of importing it.
  */
-
-import { serializeProps } from '@cloudwerk/core'
 
 /**
  * Escape a string for safe use in an HTML attribute.
@@ -17,6 +19,29 @@ function escapeHtmlAttribute(str: string): string {
     .replace(/'/g, '&#39;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+}
+
+/**
+ * Serialize props for hydration, filtering out non-serializable values.
+ * Inlined here to avoid importing @cloudwerk/core which has Node.js dependencies.
+ */
+function serializeProps(props: Record<string, unknown>): string {
+  const serializable: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(props)) {
+    // Skip children - these are rendered server-side
+    if (key === 'children') continue
+    // Skip functions
+    if (typeof value === 'function') continue
+    // Skip symbols
+    if (typeof value === 'symbol') continue
+    // Skip undefined
+    if (value === undefined) continue
+
+    serializable[key] = value
+  }
+
+  return JSON.stringify(serializable)
 }
 
 /**
@@ -58,6 +83,12 @@ export function createClientComponentWrapper<P extends Record<string, unknown>>(
   Component: (props: P) => unknown,
   meta: ClientComponentMeta
 ): (props: P) => unknown {
+  // On the client, return the original component for hydration
+  // The wrapper is only needed on the server to add hydration attributes
+  if (typeof window !== 'undefined') {
+    return Component
+  }
+
   const { componentId, bundlePath } = meta
 
   return function WrappedClientComponent(props: P): unknown {

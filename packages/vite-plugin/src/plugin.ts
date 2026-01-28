@@ -33,6 +33,85 @@ import { generateServerEntry } from './virtual-modules/server-entry.js'
 import { generateClientEntry } from './virtual-modules/client-entry.js'
 
 /**
+ * Transform a client component to wrap its default export with hydration wrapper.
+ *
+ * This transforms:
+ * ```ts
+ * 'use client'
+ * export default function Counter() { ... }
+ * ```
+ *
+ * To:
+ * ```ts
+ * import { createClientComponentWrapper } from '@cloudwerk/ui'
+ * function Counter() { ... }
+ * const __WrappedComponent = createClientComponentWrapper(Counter, { ... })
+ * export default __WrappedComponent
+ * ```
+ */
+function transformClientComponent(
+  code: string,
+  componentId: string,
+  bundlePath: string
+): string {
+  // Remove the 'use client' directive
+  let transformed = code.replace(/['"]use client['"]\s*;?\s*\n?/g, '')
+
+  // Check for different export patterns
+  const defaultExportFunctionMatch = transformed.match(
+    /export\s+default\s+function\s+(\w+)/
+  )
+  const defaultExportConstMatch = transformed.match(
+    /export\s+default\s+(\w+)\s*;?\s*$/m
+  )
+  const defaultExportArrowMatch = transformed.match(
+    /export\s+default\s+(\([^)]*\)|[a-zA-Z_]\w*)\s*=>/
+  )
+
+  // Add the wrapper import at the top
+  // Use @cloudwerk/ui/client which has no Node.js dependencies and is browser-safe
+  const wrapperImport = `import { createClientComponentWrapper as __createWrapper } from '@cloudwerk/ui/client'\n`
+
+  // Meta object for the wrapper
+  const metaObj = JSON.stringify({ componentId, bundlePath })
+
+  if (defaultExportFunctionMatch) {
+    // export default function Counter() { ... }
+    const funcName = defaultExportFunctionMatch[1]
+    transformed = transformed.replace(
+      /export\s+default\s+function/,
+      'function'
+    )
+    transformed = wrapperImport + transformed
+    transformed += `\nconst __WrappedComponent = __createWrapper(${funcName}, ${metaObj})\nexport default __WrappedComponent\n`
+  } else if (defaultExportConstMatch && !defaultExportArrowMatch) {
+    // export default Counter (where Counter is defined elsewhere)
+    const varName = defaultExportConstMatch[1]
+    transformed = transformed.replace(
+      /export\s+default\s+\w+\s*;?\s*$/m,
+      ''
+    )
+    transformed = wrapperImport + transformed
+    transformed += `\nconst __WrappedComponent = __createWrapper(${varName}, ${metaObj})\nexport default __WrappedComponent\n`
+  } else if (defaultExportArrowMatch) {
+    // export default () => { ... } or export default (props) => { ... }
+    // Extract the arrow function and assign to a variable
+    transformed = transformed.replace(
+      /export\s+default\s+((?:\([^)]*\)|[a-zA-Z_]\w*)\s*=>)/,
+      'const __OriginalComponent = $1'
+    )
+    transformed = wrapperImport + transformed
+    transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
+  } else {
+    // Fallback: just add a comment that we couldn't transform
+    console.warn(`[cloudwerk] Could not transform client component: ${componentId}`)
+    transformed = wrapperImport + code
+  }
+
+  return transformed
+}
+
+/**
  * Create the Cloudwerk Vite plugin.
  *
  * @param options - Plugin configuration options
@@ -331,12 +410,12 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
     },
 
     /**
-     * Transform hook to detect client components.
+     * Transform hook to detect and wrap client components.
      */
     transform(code: string, id: string) {
       if (!state) return null
 
-      // Skip non-route files and node_modules
+      // Skip node_modules
       if (id.includes('node_modules')) return null
       if (!id.endsWith('.tsx') && !id.endsWith('.ts')) return null
 
@@ -358,6 +437,15 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
         if (state.options.verbose) {
           console.log(`[cloudwerk] Detected client component: ${componentId}`)
+        }
+
+        // Transform the client component to wrap its default export
+        // This adds the hydration wrapper for server-side rendering
+        // Use the actual file path for Vite to resolve in dev mode
+        const transformedCode = transformClientComponent(code, componentId, id)
+        return {
+          code: transformedCode,
+          map: null,
         }
       }
 

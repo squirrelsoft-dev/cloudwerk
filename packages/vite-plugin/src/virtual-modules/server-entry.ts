@@ -102,7 +102,7 @@ export function generateServerEntry(
 
 import { Hono } from 'hono'
 import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
-import { renderToStream, setActiveRenderer } from '@cloudwerk/ui'
+import { setActiveRenderer } from '@cloudwerk/ui'
 
 // Page and Route Imports
 ${imports.join('\n')}
@@ -176,7 +176,28 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
       element = await Promise.resolve(Layout(layoutProps))
     }
 
-    return renderToStream(element)
+    // Render the page with hydration script injection
+    return renderWithHydration(element)
+  })
+}
+
+/**
+ * Render element to a Response, injecting hydration script before </body>.
+ */
+function renderWithHydration(element) {
+  // Hono JSX elements have toString() for synchronous rendering
+  const html = '<!DOCTYPE html>' + String(element)
+
+  // Inject hydration script before </body> if it exists
+  const hydrationScript = '<script type="module" src="/@id/__x00__virtual:cloudwerk/client-entry"></script>'
+  const injectedHtml = html.includes('</body>')
+    ? html.replace('</body>', hydrationScript + '</body>')
+    : html + hydrationScript
+
+  return new Response(injectedHtml, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+    },
   })
 }
 
