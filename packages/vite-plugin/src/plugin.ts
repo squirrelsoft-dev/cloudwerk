@@ -17,8 +17,6 @@ import {
   hasUseClientDirective,
   generateComponentId,
   ROUTE_FILE_NAMES,
-  type RouteManifest,
-  type ScanResult,
   type CloudwerkConfig,
 } from '@cloudwerk/core'
 import type {

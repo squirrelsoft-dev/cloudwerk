@@ -37,7 +37,7 @@ export function generateClientEntry(
  */
 function generateHonoClientEntry(
   clientComponents: Map<string, ClientComponentInfo>,
-  hydrationEndpoint: string
+  _hydrationEndpoint: string
 ): string {
   const bundleMap = Object.fromEntries(
     Array.from(clientComponents.values()).map((info) => [info.componentId, info.bundlePath])
@@ -136,7 +136,7 @@ export { hydrate }
  */
 function generateReactClientEntry(
   clientComponents: Map<string, ClientComponentInfo>,
-  hydrationEndpoint: string
+  _hydrationEndpoint: string
 ): string {
   const bundleMap = Object.fromEntries(
     Array.from(clientComponents.values()).map((info) => [info.componentId, info.bundlePath])
