@@ -1,7 +1,8 @@
 /**
  * @cloudwerk/cli - Build Command
  *
- * Builds the project for production, including static site generation.
+ * Builds the project for production deployment to Cloudflare Workers.
+ * Includes client asset bundling, server bundling, and optional SSG.
  */
 
 import * as path from 'node:path'
@@ -23,6 +24,9 @@ import { CliError } from '../types.js'
 import { createLogger, printError } from '../utils/logger.js'
 import { createApp } from '../server/createApp.js'
 import { generateStaticSite, getStaticRoutesAsync } from '../server/ssg.js'
+import { bundleClientAssets } from '../build/bundleClientAssets.js'
+import { bundleServer } from '../build/bundleServer.js'
+import { writeManifest } from '../build/writeManifest.js'
 
 // ============================================================================
 // Constants
@@ -41,6 +45,16 @@ const STATIC_SUBDIR = 'static'
 /**
  * Build the project for production.
  *
+ * Build pipeline:
+ * 1. Load config and scan routes
+ * 2. Validate manifest
+ * 3. Discover all client components
+ * 4. Bundle client assets -> dist/__cloudwerk/
+ * 5. Bundle server -> dist/index.js
+ * 6. Generate static pages (if --ssg) -> dist/static/
+ * 7. Write build manifest
+ * 8. Report bundle sizes and warnings
+ *
  * @param pathArg - Optional working directory path
  * @param options - Command options
  */
@@ -50,6 +64,8 @@ export async function build(
 ): Promise<void> {
   const startTime = Date.now()
   const verbose = options.verbose ?? false
+  const minify = options.minify ?? true
+  const sourcemap = options.sourcemap ?? false
   const logger = createLogger(verbose)
 
   try {
@@ -130,9 +146,51 @@ export async function build(
       ? outputBase
       : path.resolve(cwd, outputBase)
 
+    // Clean output directory
+    if (fs.existsSync(outputDir)) {
+      logger.debug(`Cleaning output directory: ${outputDir}`)
+      fs.rmSync(outputDir, { recursive: true, force: true })
+    }
+    fs.mkdirSync(outputDir, { recursive: true })
+
     logger.info(`Building to ${outputDir}...`)
 
-    // Handle SSG if enabled
+    // ========================================================================
+    // Phase 1: Bundle client assets
+    // ========================================================================
+    const appDir = path.dirname(routesDir)
+    const rendererName = config.ui?.renderer ?? 'hono-jsx'
+
+    const clientResult = await bundleClientAssets({
+      manifest,
+      outputDir,
+      appDir,
+      minify,
+      sourcemap,
+      renderer: rendererName === 'react' ? 'react' : 'hono-jsx',
+      logger,
+      verbose,
+    })
+
+    // ========================================================================
+    // Phase 2: Bundle server
+    // ========================================================================
+    const serverResult = await bundleServer({
+      manifest,
+      config,
+      outputDir,
+      routesDir,
+      minify,
+      sourcemap,
+      logger,
+      verbose,
+    })
+
+    // ========================================================================
+    // Phase 3: Static Site Generation (optional)
+    // ========================================================================
+    let staticPages: string[] = []
+
     if (options.ssg) {
       // Load page modules to find static routes
       logger.debug(`Scanning for static routes...`)
@@ -165,6 +223,11 @@ export async function build(
             'Check the errors above and fix any issues.'
           )
         }
+
+        // Collect static page paths
+        staticPages = result.routes
+          .filter(r => r.success)
+          .map(r => r.outputFile)
       }
     } else {
       // Without SSG flag, scan for static routes and report what would be generated
@@ -175,9 +238,30 @@ export async function build(
       }
     }
 
-    // Calculate build time
-    const buildTime = Date.now() - startTime
-    logger.success(`Build completed in ${buildTime}ms`)
+    // ========================================================================
+    // Phase 4: Write build manifest
+    // ========================================================================
+    const buildDuration = Date.now() - startTime
+
+    const manifestPath = await writeManifest({
+      outputDir,
+      clientResult,
+      serverResult,
+      staticPages: staticPages.length > 0 ? staticPages : undefined,
+      buildDuration,
+    })
+
+    if (verbose) {
+      logger.debug(`Build manifest written to: ${manifestPath}`)
+    }
+
+    // ========================================================================
+    // Final Report
+    // ========================================================================
+    console.log()
+    printBuildSummary(clientResult, serverResult, staticPages, buildDuration, logger)
+    console.log()
+    logger.success(`Build completed in ${buildDuration}ms`)
   } catch (error) {
     if (error instanceof CliError) {
       printError(error.message, error.suggestion)
@@ -200,6 +284,71 @@ export async function build(
 // ============================================================================
 // Output Helpers
 // ============================================================================
+
+/**
+ * Print build summary.
+ *
+ * @param clientResult - Client bundle result
+ * @param serverResult - Server bundle result
+ * @param staticPages - List of static pages
+ * @param buildDuration - Build duration in milliseconds
+ * @param logger - Logger for output
+ */
+function printBuildSummary(
+  clientResult: Awaited<ReturnType<typeof bundleClientAssets>>,
+  serverResult: Awaited<ReturnType<typeof bundleServer>>,
+  staticPages: string[],
+  _buildDuration: number,
+  logger: Logger
+): void {
+  logger.log('Build Output:')
+  logger.log('')
+
+  // Client bundles
+  logger.log('  Client:')
+  logger.log(`    Runtime:    ${formatSize(clientResult.runtimeSize)}`)
+  if (clientResult.componentBundles.size > 0) {
+    logger.log(`    Components: ${clientResult.componentBundles.size} bundles (${formatSize(clientResult.totalSize - clientResult.runtimeSize)})`)
+  }
+  logger.log(`    Total:      ${formatSize(clientResult.totalSize)}`)
+  logger.log('')
+
+  // Server bundle
+  logger.log('  Server:')
+  logger.log(`    Bundle:     ${formatSize(serverResult.size)}`)
+  if (serverResult.compressedSize) {
+    logger.log(`    Gzipped:    ${formatSize(serverResult.compressedSize)}`)
+  }
+  logger.log('')
+
+  // SSG (if applicable)
+  if (staticPages.length > 0) {
+    logger.log('  Static:')
+    logger.log(`    Pages:      ${staticPages.length}`)
+    logger.log('')
+  }
+
+  // Totals
+  const totalUncompressed = clientResult.totalSize + serverResult.size
+  const totalCompressed = clientResult.totalSize + (serverResult.compressedSize ?? serverResult.size)
+  logger.log(`  Total:        ${formatSize(totalUncompressed)} (${formatSize(totalCompressed)} gzipped)`)
+}
+
+/**
+ * Format a byte size for human-readable display.
+ *
+ * @param bytes - Size in bytes
+ * @returns Formatted size string (e.g., "14.2 KB")
+ */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
 
 /**
  * Print SSG generation results.

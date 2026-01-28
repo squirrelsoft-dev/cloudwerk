@@ -39,10 +39,60 @@ export interface BuildCommandOptions {
   output?: string
   /** Enable static site generation for routes with rendering: 'static' */
   ssg?: boolean
+  /** Enable minification (default: true) */
+  minify?: boolean
+  /** Generate source maps (default: false) */
+  sourcemap?: boolean
   /** Path to config file */
   config?: string
   /** Enable verbose logging */
   verbose?: boolean
+}
+
+/**
+ * Result of client asset bundling.
+ */
+export interface ClientBundleResult {
+  /** Path to the runtime bundle */
+  runtimePath: string
+  /** Size of the runtime bundle in bytes */
+  runtimeSize: number
+  /** Map of component ID to bundle path */
+  componentBundles: Map<string, string>
+  /** Map of component ID to bundle size in bytes */
+  componentSizes: Map<string, number>
+  /** Path to the manifest file */
+  manifestPath: string
+  /** Total size of all client bundles in bytes */
+  totalSize: number
+}
+
+/**
+ * Result of server bundling.
+ */
+export interface ServerBundleResult {
+  /** Path to the server bundle */
+  outputPath: string
+  /** Size of the server bundle in bytes */
+  size: number
+  /** Size of the compressed bundle in bytes (if available) */
+  compressedSize?: number
+}
+
+/**
+ * Complete build result with all output information.
+ */
+export interface BuildResult {
+  /** Client bundle result */
+  client: ClientBundleResult
+  /** Server bundle result */
+  server: ServerBundleResult
+  /** SSG output paths (if --ssg was used) */
+  staticPages?: string[]
+  /** Total build time in milliseconds */
+  buildTime: number
+  /** Output directory */
+  outputDir: string
 }
 
 /**
