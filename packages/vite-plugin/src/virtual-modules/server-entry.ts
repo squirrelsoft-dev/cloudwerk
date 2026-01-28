@@ -5,7 +5,7 @@
  * a Hono app with all routes registered from the file-based routing manifest.
  */
 
-import type { RouteManifest, ScanResult } from '@cloudwerk/core'
+import type { RouteManifest, ScanResult } from '@cloudwerk/core/build'
 import type { ResolvedCloudwerkOptions } from '../types.js'
 
 /**
@@ -101,7 +101,7 @@ export function generateServerEntry(
  */
 
 import { Hono } from 'hono'
-import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core'
+import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core/runtime'
 import { setActiveRenderer } from '@cloudwerk/ui'
 
 // Page and Route Imports

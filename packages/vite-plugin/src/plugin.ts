@@ -19,7 +19,7 @@ import {
   generateComponentId,
   ROUTE_FILE_NAMES,
   type CloudwerkConfig,
-} from '@cloudwerk/core'
+} from '@cloudwerk/core/build'
 import type {
   CloudwerkVitePluginOptions,
   ResolvedCloudwerkOptions,

@@ -26,6 +26,14 @@ const PACKAGES: Record<string, { path: string; entryPoint: string }> = {
     path: 'packages/core',
     entryPoint: 'packages/core/src/index.ts',
   },
+  '@cloudwerk/core/runtime': {
+    path: 'packages/core',
+    entryPoint: 'packages/core/src/runtime.ts',
+  },
+  '@cloudwerk/core/build': {
+    path: 'packages/core',
+    entryPoint: 'packages/core/src/build.ts',
+  },
   '@cloudwerk/ui': {
     path: 'packages/ui',
     entryPoint: 'packages/ui/src/index.ts',
@@ -40,25 +48,20 @@ const PACKAGES: Record<string, { path: string; entryPoint: string }> = {
 const exportCache = new Map<string, Set<string>>()
 
 /**
- * Get all exports from a package's entry point.
+ * Get all exports from a file, recursively following re-exports.
  */
-function getPackageExports(packageName: string): Set<string> {
-  if (exportCache.has(packageName)) {
-    return exportCache.get(packageName)!
+function getExportsFromFile(filePath: string, visited: Set<string> = new Set()): Set<string> {
+  // Prevent infinite recursion
+  if (visited.has(filePath)) {
+    return new Set()
   }
+  visited.add(filePath)
 
-  const config = PACKAGES[packageName]
-  if (!config) {
+  if (!fs.existsSync(filePath)) {
     return new Set()
   }
 
-  const entryPath = path.join(process.cwd(), config.entryPoint)
-  if (!fs.existsSync(entryPath)) {
-    console.warn(`${YELLOW}Warning: Entry point not found: ${entryPath}${RESET}`)
-    return new Set()
-  }
-
-  let content = fs.readFileSync(entryPath, 'utf-8')
+  let content = fs.readFileSync(filePath, 'utf-8')
 
   // Remove single-line comments to avoid parsing issues
   content = content.replace(/\/\/[^\n]*/g, '')
@@ -66,6 +69,31 @@ function getPackageExports(packageName: string): Set<string> {
   content = content.replace(/\/\*[\s\S]*?\*\//g, '')
 
   const exports = new Set<string>()
+  const baseDir = path.dirname(filePath)
+
+  // Match "export * from './module'" - recursively get exports from that module
+  const reExportAllMatches = content.matchAll(/export\s*\*\s*from\s*['"]([^'"]+)['"]/g)
+  for (const match of reExportAllMatches) {
+    const modulePath = match[1]
+    // Resolve the module path (handle .js extension in imports)
+    let resolvedPath = path.resolve(baseDir, modulePath)
+    // Try with .ts extension if the import uses .js
+    if (resolvedPath.endsWith('.js')) {
+      resolvedPath = resolvedPath.replace(/\.js$/, '.ts')
+    }
+    // Add .ts if no extension
+    if (!resolvedPath.endsWith('.ts') && !resolvedPath.endsWith('.tsx')) {
+      if (fs.existsSync(resolvedPath + '.ts')) {
+        resolvedPath = resolvedPath + '.ts'
+      } else if (fs.existsSync(resolvedPath + '.tsx')) {
+        resolvedPath = resolvedPath + '.tsx'
+      }
+    }
+    const reExports = getExportsFromFile(resolvedPath, visited)
+    for (const exp of reExports) {
+      exports.add(exp)
+    }
+  }
 
   // Match named exports: export { foo, bar } from '...'
   const namedExportMatches = content.matchAll(
@@ -117,6 +145,29 @@ function getPackageExports(packageName: string): Set<string> {
     exports.add('default')
   }
 
+  return exports
+}
+
+/**
+ * Get all exports from a package's entry point.
+ */
+function getPackageExports(packageName: string): Set<string> {
+  if (exportCache.has(packageName)) {
+    return exportCache.get(packageName)!
+  }
+
+  const config = PACKAGES[packageName]
+  if (!config) {
+    return new Set()
+  }
+
+  const entryPath = path.join(process.cwd(), config.entryPoint)
+  if (!fs.existsSync(entryPath)) {
+    console.warn(`${YELLOW}Warning: Entry point not found: ${entryPath}${RESET}`)
+    return new Set()
+  }
+
+  const exports = getExportsFromFile(entryPath)
   exportCache.set(packageName, exports)
   return exports
 }

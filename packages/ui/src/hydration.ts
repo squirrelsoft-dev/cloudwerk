@@ -5,8 +5,8 @@
  * and generating the client-side hydration bootstrap script.
  */
 
-import type { HydrationManifest } from '@cloudwerk/core'
-import { serializeProps } from '@cloudwerk/core'
+import type { HydrationManifest } from '@cloudwerk/core/build'
+import { serializeProps } from '@cloudwerk/core/build'
 
 // ============================================================================
 // Types

@@ -4,6 +4,7 @@
  * Builds the project for production deployment to Cloudflare Workers using Vite.
  */
 
+import { builtinModules } from 'node:module'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { build as viteBuild, type InlineConfig } from 'vite'
@@ -15,7 +16,7 @@ import {
   resolveMiddleware,
   loadConfig,
   resolveRoutesPath,
-} from '@cloudwerk/core'
+} from '@cloudwerk/core/build'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
@@ -185,6 +186,8 @@ export async function build(
     // ========================================================================
     logger.debug(`Building server bundle...`)
 
+    // Build configuration optimized for Cloudflare Workers
+    // Based on @hono/vite-build settings for minimal bundle size
     const serverConfig: InlineConfig = {
       root: cwd,
       mode: 'production',
@@ -197,21 +200,16 @@ export async function build(
         emptyOutDir: false, // Don't clear - client assets are already there
         minify: minify ? 'esbuild' : false,
         sourcemap,
-        ssr: true, // Enable SSR mode for proper externalization
+        ssr: true,
         rollupOptions: {
           input: tempEntryPath,
+          // Externalize Node.js builtins (polyfilled by nodejs_compat in Workers)
+          external: [...builtinModules, /^node:/],
           output: {
-            format: 'esm',
             entryFileNames: 'index.js',
-            inlineDynamicImports: true, // Important: inline all imports for Workers
           },
-          // Don't externalize anything - bundle everything for Workers
-          external: [],
         },
-        // Target Cloudflare Workers runtime
-        target: 'esnext',
       },
-      // Cloudflare Workers compatibility
       ssr: {
         target: 'webworker',
         noExternal: true, // Bundle all dependencies
