@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 .cloudwerk/
+.wrangler/
 
 # Generated files
 apps/create-cloudwerk-app/src/versions.ts

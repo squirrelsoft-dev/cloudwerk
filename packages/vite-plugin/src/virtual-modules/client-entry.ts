@@ -39,8 +39,9 @@ function generateHonoClientEntry(
   clientComponents: Map<string, ClientComponentInfo>,
   _hydrationEndpoint: string
 ): string {
+  // Use /@fs/ prefix for Vite to serve absolute file paths in dev mode
   const bundleMap = Object.fromEntries(
-    Array.from(clientComponents.values()).map((info) => [info.componentId, info.bundlePath])
+    Array.from(clientComponents.values()).map((info) => [info.componentId, `/@fs${info.absolutePath}`])
   )
 
   return `/**
@@ -49,6 +50,7 @@ function generateHonoClientEntry(
  */
 
 import { render } from 'hono/jsx/dom'
+import { jsx } from 'hono/jsx/jsx-runtime'
 
 // Bundle map for component lookups
 const bundles = ${JSON.stringify(bundleMap, null, 2)}
@@ -105,8 +107,9 @@ async function hydrate() {
         continue
       }
 
-      // Hydrate the component
-      render(Component(props), el)
+      // Hydrate the component using jsx() to create a proper element
+      // This allows Hono's reactive system to manage re-renders
+      render(jsx(Component, props), el)
 
       // Clean up hydration attributes
       el.removeAttribute('data-hydrate-id')
@@ -138,8 +141,9 @@ function generateReactClientEntry(
   clientComponents: Map<string, ClientComponentInfo>,
   _hydrationEndpoint: string
 ): string {
+  // Use /@fs/ prefix for Vite to serve absolute file paths in dev mode
   const bundleMap = Object.fromEntries(
-    Array.from(clientComponents.values()).map((info) => [info.componentId, info.bundlePath])
+    Array.from(clientComponents.values()).map((info) => [info.componentId, `/@fs${info.absolutePath}`])
   )
 
   return `/**

@@ -243,6 +243,7 @@ export {
 
   // Configuration Utilities
   resolveRoutesDir,
+  resolveRoutesPath,
   isSupportedExtension,
 } from './config.js'
 
