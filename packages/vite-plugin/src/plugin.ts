@@ -146,14 +146,19 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
      * Pass publicDir configuration to Vite.
      * This enables Vite's built-in static file serving for the public directory.
      */
-    config(userConfig) {
+    async config(userConfig) {
       // Don't override if user explicitly set publicDir in vite.config.ts
       if (userConfig.publicDir !== undefined) {
         return {}
       }
-      // Use plugin option or Cloudwerk default
+
+      // Load config to respect cloudwerk.config.ts
+      const root = userConfig.root ?? process.cwd()
+      const cloudwerkConfig = await loadConfig(root)
+
+      // Use plugin option, Cloudwerk config, or default
       return {
-        publicDir: options.publicDir ?? 'public',
+        publicDir: options.publicDir ?? cloudwerkConfig.publicDir ?? 'public',
       }
     },
 
