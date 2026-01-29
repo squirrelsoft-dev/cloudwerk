@@ -10,6 +10,13 @@ import { dev } from './commands/dev.js'
 import { build } from './commands/build.js'
 import { deploy } from './commands/deploy.js'
 import { configGet, configSet } from './commands/config.js'
+import { bindings } from './commands/bindings.js'
+import {
+  bindingsAdd,
+  bindingsRemove,
+  bindingsUpdate,
+  bindingsGenerateTypes,
+} from './commands/bindings/index.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -82,6 +89,48 @@ configCmd
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action(configSet)
+
+// ============================================================================
+// Bindings Command
+// ============================================================================
+
+const bindingsCmd = program
+  .command('bindings')
+  .description('Manage Cloudflare bindings (D1, KV, R2, Queues, etc.)')
+  .option('-e, --env <environment>', 'Environment to operate on')
+  .option('--verbose', 'Enable verbose logging')
+  .action(bindings)
+
+bindingsCmd
+  .command('add [type]')
+  .description('Add a new binding (d1, kv, r2, queue, do, secret)')
+  .option('-e, --env <environment>', 'Environment to add binding to')
+  .option('--skip-types', 'Skip TypeScript type generation')
+  .option('--verbose', 'Enable verbose logging')
+  .action(bindingsAdd)
+
+bindingsCmd
+  .command('remove [name]')
+  .description('Remove a binding')
+  .option('-e, --env <environment>', 'Environment to remove binding from')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .option('--skip-types', 'Skip TypeScript type generation')
+  .option('--verbose', 'Enable verbose logging')
+  .action(bindingsRemove)
+
+bindingsCmd
+  .command('update [name]')
+  .description('Update an existing binding')
+  .option('-e, --env <environment>', 'Environment to update binding in')
+  .option('--skip-types', 'Skip TypeScript type generation')
+  .option('--verbose', 'Enable verbose logging')
+  .action(bindingsUpdate)
+
+bindingsCmd
+  .command('generate-types')
+  .description('Regenerate TypeScript type definitions')
+  .option('--verbose', 'Enable verbose logging')
+  .action(bindingsGenerateTypes)
 
 // ============================================================================
 // Parse Arguments
