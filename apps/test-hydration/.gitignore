@@ -1,0 +1,5 @@
+# Local wrangler config with account-specific IDs
+wrangler.toml
+
+# Generated type definitions
+env.d.ts

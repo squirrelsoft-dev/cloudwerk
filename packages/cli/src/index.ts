@@ -28,6 +28,7 @@ program
   .name('cloudwerk')
   .description('Cloudwerk CLI - Build and deploy full-stack apps to Cloudflare')
   .version(VERSION)
+  .enablePositionalOptions()
 
 // ============================================================================
 // Dev Command
@@ -97,7 +98,8 @@ configCmd
 const bindingsCmd = program
   .command('bindings')
   .description('Manage Cloudflare bindings (D1, KV, R2, Queues, etc.)')
-  .option('-e, --env <environment>', 'Environment to operate on')
+  .enablePositionalOptions()
+  .passThroughOptions()
   .option('--verbose', 'Enable verbose logging')
   .action(bindings)
 

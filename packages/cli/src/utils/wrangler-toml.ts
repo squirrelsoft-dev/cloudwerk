@@ -43,6 +43,7 @@ export interface Binding {
  */
 export interface WranglerConfig {
   name?: string
+  account_id?: string
   d1_databases?: D1DatabaseBinding[]
   kv_namespaces?: KVNamespaceBinding[]
   r2_buckets?: R2BucketBinding[]
@@ -219,122 +220,7 @@ export function extractBindings(
   env?: string
 ): Binding[] {
   const envConfig = getEnvConfig(config, env)
-  const bindings: Binding[] = []
-
-  // D1 Databases
-  if (envConfig.d1_databases) {
-    for (const db of envConfig.d1_databases) {
-      bindings.push({
-        type: 'd1',
-        name: db.binding,
-        resourceId: db.database_id,
-        resourceName: db.database_name,
-      })
-    }
-  }
-
-  // KV Namespaces
-  if (envConfig.kv_namespaces) {
-    for (const kv of envConfig.kv_namespaces) {
-      bindings.push({
-        type: 'kv',
-        name: kv.binding,
-        resourceId: kv.id,
-      })
-    }
-  }
-
-  // R2 Buckets
-  if (envConfig.r2_buckets) {
-    for (const r2 of envConfig.r2_buckets) {
-      bindings.push({
-        type: 'r2',
-        name: r2.binding,
-        resourceName: r2.bucket_name,
-      })
-    }
-  }
-
-  // Queue Producers
-  if (envConfig.queues?.producers) {
-    for (const queue of envConfig.queues.producers) {
-      bindings.push({
-        type: 'queue',
-        name: queue.binding,
-        resourceName: queue.queue,
-      })
-    }
-  }
-
-  // Durable Objects
-  if (envConfig.durable_objects?.bindings) {
-    for (const doBinding of envConfig.durable_objects.bindings) {
-      bindings.push({
-        type: 'do',
-        name: doBinding.name,
-        resourceName: doBinding.class_name,
-        extra: doBinding.script_name
-          ? { script_name: doBinding.script_name }
-          : undefined,
-      })
-    }
-  }
-
-  // Services
-  if (envConfig.services) {
-    for (const service of envConfig.services) {
-      bindings.push({
-        type: 'service',
-        name: service.binding,
-        resourceName: service.service,
-        extra: service.environment
-          ? { environment: service.environment }
-          : undefined,
-      })
-    }
-  }
-
-  // Secrets/Vars
-  if (envConfig.vars) {
-    for (const [name] of Object.entries(envConfig.vars)) {
-      bindings.push({
-        type: 'secret',
-        name,
-      })
-    }
-  }
-
-  // AI
-  if (envConfig.ai) {
-    bindings.push({
-      type: 'ai',
-      name: envConfig.ai.binding,
-    })
-  }
-
-  // Vectorize
-  if (envConfig.vectorize) {
-    for (const vec of envConfig.vectorize) {
-      bindings.push({
-        type: 'vectorize',
-        name: vec.binding,
-        resourceName: vec.index_name,
-      })
-    }
-  }
-
-  // Hyperdrive
-  if (envConfig.hyperdrive) {
-    for (const hd of envConfig.hyperdrive) {
-      bindings.push({
-        type: 'hyperdrive',
-        name: hd.binding,
-        resourceId: hd.id,
-      })
-    }
-  }
-
-  return bindings
+  return extractBindingsFromConfig(envConfig)
 }
 
 /**
@@ -665,15 +551,160 @@ export function removeBinding(
 }
 
 /**
- * Check if a binding name already exists.
+ * Set the account_id in wrangler.toml.
+ */
+export function setAccountId(cwd: string, accountId: string): void {
+  const config = readWranglerToml(cwd)
+  config.account_id = accountId
+  writeWranglerToml(cwd, config)
+}
+
+/**
+ * Get the account_id from wrangler.toml.
+ */
+export function getAccountId(cwd: string): string | undefined {
+  const config = readWranglerToml(cwd)
+  return config.account_id
+}
+
+/**
+ * Check if a binding name already exists in the specified scope.
+ *
+ * When env is specified, only checks that environment's bindings (not merged with base).
+ * When env is not specified, checks the base config bindings.
  */
 export function bindingExists(
   config: WranglerConfig,
   bindingName: string,
   env?: string
 ): boolean {
-  const bindings = extractBindings(config, env)
+  // When targeting a specific environment, only check that env's bindings
+  // This allows the same binding name in base and env configs (pointing to different resources)
+  const targetConfig = env && config.env?.[env] ? config.env[env] : config
+  const bindings = extractBindingsFromConfig(targetConfig)
   return bindings.some((b) => b.name === bindingName)
+}
+
+/**
+ * Extract bindings from a single config object (no merging).
+ */
+function extractBindingsFromConfig(config: WranglerConfig): Binding[] {
+  const bindings: Binding[] = []
+
+  // D1 Databases
+  if (config.d1_databases) {
+    for (const db of config.d1_databases) {
+      bindings.push({
+        type: 'd1',
+        name: db.binding,
+        resourceId: db.database_id,
+        resourceName: db.database_name,
+      })
+    }
+  }
+
+  // KV Namespaces
+  if (config.kv_namespaces) {
+    for (const kv of config.kv_namespaces) {
+      bindings.push({
+        type: 'kv',
+        name: kv.binding,
+        resourceId: kv.id,
+      })
+    }
+  }
+
+  // R2 Buckets
+  if (config.r2_buckets) {
+    for (const r2 of config.r2_buckets) {
+      bindings.push({
+        type: 'r2',
+        name: r2.binding,
+        resourceName: r2.bucket_name,
+      })
+    }
+  }
+
+  // Queue Producers
+  if (config.queues?.producers) {
+    for (const queue of config.queues.producers) {
+      bindings.push({
+        type: 'queue',
+        name: queue.binding,
+        resourceName: queue.queue,
+      })
+    }
+  }
+
+  // Durable Objects
+  if (config.durable_objects?.bindings) {
+    for (const doBinding of config.durable_objects.bindings) {
+      bindings.push({
+        type: 'do',
+        name: doBinding.name,
+        resourceName: doBinding.class_name,
+        extra: doBinding.script_name
+          ? { script_name: doBinding.script_name }
+          : undefined,
+      })
+    }
+  }
+
+  // Services
+  if (config.services) {
+    for (const service of config.services) {
+      bindings.push({
+        type: 'service',
+        name: service.binding,
+        resourceName: service.service,
+        extra: service.environment
+          ? { environment: service.environment }
+          : undefined,
+      })
+    }
+  }
+
+  // Secrets/Vars
+  if (config.vars) {
+    for (const [name] of Object.entries(config.vars)) {
+      bindings.push({
+        type: 'secret',
+        name,
+      })
+    }
+  }
+
+  // AI
+  if (config.ai) {
+    bindings.push({
+      type: 'ai',
+      name: config.ai.binding,
+    })
+  }
+
+  // Vectorize
+  if (config.vectorize) {
+    for (const vec of config.vectorize) {
+      bindings.push({
+        type: 'vectorize',
+        name: vec.binding,
+        resourceName: vec.index_name,
+      })
+    }
+  }
+
+  // Hyperdrive
+  if (config.hyperdrive) {
+    for (const hd of config.hyperdrive) {
+      bindings.push({
+        type: 'hyperdrive',
+        name: hd.binding,
+        resourceId: hd.id,
+      })
+    }
+  }
+
+  return bindings
 }
 
 // ============================================================================

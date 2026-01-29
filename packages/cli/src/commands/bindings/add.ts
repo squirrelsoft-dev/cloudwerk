@@ -23,6 +23,7 @@ import {
   addDurableObjectBinding,
   addSecretBinding,
   extractBindings,
+  setAccountId,
   type BindingType,
 } from '../../utils/wrangler-toml.js'
 import { generateEnvTypes, getTypeForBinding } from '../../utils/env-types.js'
@@ -51,6 +52,11 @@ interface WranglerQueue {
   queue_id: string
   queue_name: string
   created_on: string
+}
+
+interface CloudflareAccount {
+  name: string
+  id: string
 }
 
 // ============================================================================
@@ -179,7 +185,7 @@ async function addD1(
   // Prompt for database name
   const databaseName = await input({
     message: 'Database name:',
-    default: `${config.name || 'my-app'}-db${env ? `-${env}` : ''}`,
+    default: `${config.name || 'my-app'}${env ? `-${env}` : ''}-db`,
     validate: (value) => {
       if (!value.trim()) return 'Database name is required'
       return true
@@ -376,7 +382,7 @@ async function addR2(
     // Prompt for bucket name
     bucketName = await input({
       message: 'Bucket name:',
-      default: `${config.name || 'my-app'}-bucket${env ? `-${env}` : ''}`,
+      default: `${config.name || 'my-app'}${env ? `-${env}` : ''}-bucket`,
       validate: (value) => {
         if (!value.trim()) return 'Bucket name is required'
         return true
@@ -460,7 +466,7 @@ async function addQueue(
     // Prompt for queue name
     queueName = await input({
       message: 'Queue name:',
-      default: `${config.name || 'my-app'}-queue${env ? `-${env}` : ''}`,
+      default: `${config.name || 'my-app'}${env ? `-${env}` : ''}-queue`,
       validate: (value) => {
         if (!value.trim()) return 'Queue name is required'
         return true
@@ -671,10 +677,110 @@ function showTypeHint(bindingName: string, type: BindingType): void {
 // ============================================================================
 
 /**
- * Run a wrangler command and return stdout.
+ * Parse available Cloudflare accounts from a wrangler error message.
  */
-function runWranglerCommand(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
+function parseAccountsFromError(errorMessage: string): CloudflareAccount[] {
+  const accounts: CloudflareAccount[] = []
+
+  // Match lines like: `Chris@ctrlabs.io's Account`: `21340ce16c468f10952f6f9946eaf2d1`
+  const accountRegex = /`([^`]+)`:\s*`([a-f0-9]+)`/g
+  let match
+
+  while ((match = accountRegex.exec(errorMessage)) !== null) {
+    accounts.push({
+      name: match[1],
+      id: match[2],
+    })
+  }
+
+  return accounts
+}
+
+/**
+ * Check if an error is a multi-account error.
+ */
+function isMultiAccountError(errorMessage: string): boolean {
+  return errorMessage.includes('More than one account available')
+}
+
+/**
+ * Prompt user to select a Cloudflare account.
+ */
+async function promptForAccount(accounts: CloudflareAccount[]): Promise<string> {
+  console.log()
+  const selected = await select({
+    message: 'Multiple Cloudflare accounts available. Which account do you want to use?',
+    choices: accounts.map((account) => ({
+      name: `${account.name} (${account.id.slice(0, 8)}...)`,
+      value: account.id,
+    })),
+  })
+
+  return selected
+}
+
+/**
+ * Raw result from a wrangler command.
+ */
+interface WranglerCommandResult {
+  stdout: string
+  stderr: string
+  code: number | null
+  error: boolean
+}
+
+/**
+ * Handle wrangler command result with multi-account error recovery.
+ * If a multi-account error is detected, prompts user to select an account,
+ * saves it to wrangler.toml, and retries the command.
+ */
+async function handleWranglerResult(
+  result: WranglerCommandResult,
+  retryFn: () => Promise<WranglerCommandResult>,
+  cwd?: string
+): Promise<string> {
+  if (result.error && isMultiAccountError(result.stderr)) {
+    const accounts = parseAccountsFromError(result.stderr)
+
+    if (accounts.length > 0) {
+      const selectedAccountId = await promptForAccount(accounts)
+
+      // Set account_id in wrangler.toml
+      const projectCwd = cwd || process.cwd()
+      setAccountId(projectCwd, selectedAccountId)
+      console.log(pc.green('\u2713') + ' Set account_id in wrangler.toml')
+      console.log()
+
+      // Retry the command
+      const retryResult = await retryFn()
+      if (retryResult.error) {
+        throw new Error(retryResult.stderr || `wrangler exited with code ${retryResult.code}`)
+      }
+      return retryResult.stdout
+    }
+  }
+
+  if (result.error) {
+    throw new Error(result.stderr || `wrangler exited with code ${result.code}`)
+  }
+
+  return result.stdout
+}
+
+/**
+ * Run a wrangler command and return stdout.
+ * Handles multi-account errors by prompting user to select an account.
+ */
+async function runWranglerCommand(args: string[], cwd?: string): Promise<string> {
+  const result = await runWranglerCommandRaw(args)
+  return handleWranglerResult(result, () => runWranglerCommandRaw(args), cwd)
+}
+
+/**
+ * Run a wrangler command and return raw result (uses spawn with separate args for security).
+ */
+function runWranglerCommandRaw(args: string[]): Promise<WranglerCommandResult> {
+  return new Promise((resolve) => {
     let stdout = ''
     let stderr = ''
 
@@ -691,27 +797,40 @@ function runWranglerCommand(args: string[]): Promise<string> {
     })
 
     child.on('error', (error) => {
-      reject(error)
+      resolve({ stdout, stderr: error.message, code: null, error: true })
     })
 
     child.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr || `wrangler exited with code ${code}`))
-      } else {
-        resolve(stdout)
-      }
+      resolve({ stdout, stderr, code, error: code !== 0 })
     })
   })
 }
 
 /**
  * Run a wrangler command with stdin input.
+ * Handles multi-account errors by prompting user to select an account.
  */
-function runWranglerCommandWithInput(
+async function runWranglerCommandWithInput(
+  args: string[],
+  inputData: string,
+  cwd?: string
+): Promise<string> {
+  const result = await runWranglerCommandWithInputRaw(args, inputData)
+  return handleWranglerResult(
+    result,
+    () => runWranglerCommandWithInputRaw(args, inputData),
+    cwd
+  )
+}
+
+/**
+ * Run a wrangler command with stdin input and return raw result.
+ */
+function runWranglerCommandWithInputRaw(
   args: string[],
   inputData: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
+): Promise<WranglerCommandResult> {
+  return new Promise((resolve) => {
     let stdout = ''
     let stderr = ''
 
@@ -728,15 +847,11 @@ function runWranglerCommandWithInput(
     })
 
     child.on('error', (error) => {
-      reject(error)
+      resolve({ stdout, stderr: error.message, code: null, error: true })
     })
 
     child.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr || `wrangler exited with code ${code}`))
-      } else {
-        resolve(stdout)
-      }
+      resolve({ stdout, stderr, code, error: code !== 0 })
     })
 
     // Write input and close stdin
