@@ -1,5 +1,3 @@
 import { defineConfig } from '@cloudwerk/core'
 
-export default defineConfig({
-  routesDir: 'app/routes',
-})
+export default defineConfig({})
