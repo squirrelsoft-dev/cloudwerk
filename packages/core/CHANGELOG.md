@@ -1,5 +1,15 @@
 # @cloudwerk/core
 
+## 0.8.0
+
+### Minor Changes
+
+- [#149](https://github.com/squirrelsoft-dev/cloudwerk/pull/149) [`4958ac2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/4958ac226bb6350e8f0cf8be32d1938d275df631) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add support for error.tsx and not-found.tsx boundary pages
+  - Error boundaries catch errors in loaders and render custom error UI
+  - Not-found boundaries render when NotFoundError is thrown or for 404s
+  - Nested boundaries override parent boundaries (closest wins)
+  - API routes return JSON errors, page routes render HTML boundaries
+
 ## 0.7.2
 
 ### Patch Changes
