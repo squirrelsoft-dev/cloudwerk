@@ -1,5 +1,20 @@
 # @cloudwerk/cli
 
+## 0.9.0
+
+### Patch Changes
+
+- [#152](https://github.com/squirrelsoft-dev/cloudwerk/pull/152) [`3245bb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/3245bb2d915e39f8fcab04dffb8901f610597c70) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add publicDir configuration for serving static assets from public/ folder
+  - Added `publicDir` option to `CloudwerkConfig` (default: "public")
+  - Vite plugin now passes `publicDir` to Vite's built-in static file serving
+  - Fixed CLI build command to avoid duplicating static assets in dist/ output
+  - Added integration tests for static asset serving
+
+- Updated dependencies [[`3245bb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/3245bb2d915e39f8fcab04dffb8901f610597c70)]:
+  - @cloudwerk/core@0.9.0
+  - @cloudwerk/vite-plugin@0.3.0
+  - @cloudwerk/ui@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes
