@@ -128,7 +128,35 @@ function findNotFoundPage(path: string): NotFoundModule | null {
 }
 ```
 
-### Step 7: Implement Page Renderers
+### Step 7: Update renderWithHydration to Accept Status Code
+
+The current `renderWithHydration` function only returns a 200 status. Update it to accept an optional status code:
+
+```typescript
+/**
+ * Render element to a Response, injecting hydration script before </body>.
+ * @param element - The JSX element to render
+ * @param status - HTTP status code (default: 200)
+ */
+function renderWithHydration(element: unknown, status: number = 200): Response {
+  const html = '<!DOCTYPE html>' + String(element)
+
+  const hydrationScript = '<script type="module" src="/@id/__x00__virtual:cloudwerk/client-entry"></script>'
+  const bodyCloseRegex = /<\/body>/i
+  const injectedHtml = bodyCloseRegex.test(html)
+    ? html.replace(bodyCloseRegex, hydrationScript + '</body>')
+    : html + hydrationScript
+
+  return new Response(injectedHtml, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+    },
+  })
+}
+```
+
+### Step 8: Implement Page Renderers
 
 ```typescript
 function renderErrorPage(error: Error, errorModule: ErrorModule): Response {

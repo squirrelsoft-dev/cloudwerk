@@ -49,7 +49,8 @@ export async function createTestServer(fixtureDir: string): Promise<TestServer> 
 
   return {
     server,
-    fetch: (path, init) => fetch(`http://localhost:${port}${path}`, init),
+    // Ensure path has leading slash to avoid malformed URLs
+    fetch: (path, init) => fetch(`http://localhost:${port}${path.startsWith('/') ? path : '/' + path}`, init),
     close: () => server.close(),
   }
 }
