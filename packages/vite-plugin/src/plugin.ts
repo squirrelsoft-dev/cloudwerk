@@ -143,6 +143,21 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
     name: 'cloudwerk',
 
     /**
+     * Pass publicDir configuration to Vite.
+     * This enables Vite's built-in static file serving for the public directory.
+     */
+    config(userConfig) {
+      // Don't override if user explicitly set publicDir in vite.config.ts
+      if (userConfig.publicDir !== undefined) {
+        return {}
+      }
+      // Use plugin option or Cloudwerk default
+      return {
+        publicDir: options.publicDir ?? 'public',
+      }
+    },
+
+    /**
      * Resolve configuration and build initial manifest.
      */
     async configResolved(config: ResolvedConfig) {
@@ -186,6 +201,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         verbose: options.verbose ?? false,
         hydrationEndpoint: options.hydrationEndpoint ?? '/__cloudwerk',
         renderer: options.renderer ?? (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx',
+        publicDir: options.publicDir ?? cloudwerkConfig.publicDir ?? 'public',
         root,
       }
 

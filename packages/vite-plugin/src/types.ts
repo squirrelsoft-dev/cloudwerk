@@ -58,6 +58,12 @@ export interface CloudwerkVitePluginOptions {
    * @default 'hono-jsx'
    */
   renderer?: 'hono-jsx' | 'react'
+
+  /**
+   * Directory for static assets served at root.
+   * @default 'public'
+   */
+  publicDir?: string
 }
 
 /**
@@ -80,6 +86,8 @@ export interface ResolvedCloudwerkOptions {
   hydrationEndpoint: string
   /** UI renderer name */
   renderer: 'hono-jsx' | 'react'
+  /** Directory for static assets (relative to root) */
+  publicDir: string
   /** Vite root directory (absolute path) */
   root: string
 }

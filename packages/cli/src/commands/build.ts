@@ -135,6 +135,7 @@ export async function build(
       verbose,
       hydrationEndpoint: '/__cloudwerk',
       renderer,
+      publicDir: cloudwerkConfig.publicDir ?? 'public',
       root: cwd,
     })
 
@@ -192,6 +193,8 @@ export async function build(
       root: cwd,
       mode: 'production',
       logLevel: verbose ? 'info' : 'warn',
+      // Disable publicDir for server build - static assets are already in dist/static/ from client build
+      publicDir: false,
       plugins: [
         cloudwerk({ verbose }),
       ],
