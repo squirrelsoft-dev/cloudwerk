@@ -1,6 +1,6 @@
 import type { PageProps } from '@cloudwerk/core'
 
-export default function HomePage({ params }: PageProps) {
+export default function HomePage({ params: _params }: PageProps) {
   return (
     <div>
       <h1>Home Page</h1>

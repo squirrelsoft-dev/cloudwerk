@@ -1,6 +1,6 @@
 import type { PageProps } from '@cloudwerk/core'
 
-export default function DashboardPage({ params }: PageProps) {
+export default function DashboardPage({ params: _params }: PageProps) {
   return (
     <div>
       <h1>Dashboard</h1>

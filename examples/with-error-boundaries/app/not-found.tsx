@@ -1,6 +1,6 @@
 import type { NotFoundProps } from '@cloudwerk/core'
 
-export default function RootNotFound({ params, searchParams }: NotFoundProps) {
+export default function RootNotFound({ params: _params, searchParams: _searchParams }: NotFoundProps) {
   return (
     <div class="not-found">
       <h1>404 - Page Not Found</h1>

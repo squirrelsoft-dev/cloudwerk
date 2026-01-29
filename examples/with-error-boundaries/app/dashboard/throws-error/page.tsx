@@ -1,11 +1,11 @@
 import type { PageProps, LoaderArgs } from '@cloudwerk/core'
 
-export async function loader({ params }: LoaderArgs) {
+export async function loader({ params: _params }: LoaderArgs) {
   // Simulate an error in the dashboard
   throw new Error('Dashboard-specific error!')
 }
 
-export default function DashboardThrowsErrorPage({ params }: PageProps) {
+export default function DashboardThrowsErrorPage({ params: _params }: PageProps) {
   return (
     <div>
       <h1>This page should not be visible</h1>
