@@ -13,6 +13,8 @@ import {
   buildRouteManifest,
   resolveLayouts,
   resolveMiddleware,
+  resolveErrorBoundary,
+  resolveNotFoundBoundary,
   loadConfig,
   resolveRoutesPath,
   hasUseClientDirective,
@@ -85,7 +87,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       state.scanResult,
       routesPath,
       resolveLayouts,
-      resolveMiddleware
+      resolveMiddleware,
+      resolveErrorBoundary,
+      resolveNotFoundBoundary
     )
 
     // Invalidate caches
@@ -192,6 +196,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           routes: [],
           layouts: new Map(),
           middleware: new Map(),
+          errorBoundaries: new Map(),
+          notFoundBoundaries: new Map(),
           errors: [],
           warnings: [],
           generatedAt: new Date(),

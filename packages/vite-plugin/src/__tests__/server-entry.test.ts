@@ -14,6 +14,7 @@ function createScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
     routes: [],
     layouts: [],
     middleware: [],
+    loading: [],
     errors: [],
     notFound: [],
     ...overrides,
@@ -32,37 +33,37 @@ function createOptions() {
   }
 }
 
+// Helper to create a minimal manifest
+function createManifest(overrides: Partial<RouteManifest> = {}): RouteManifest {
+  return {
+    routes: [],
+    layouts: new Map(),
+    middleware: new Map(),
+    errorBoundaries: new Map(),
+    notFoundBoundaries: new Map(),
+    errors: [],
+    warnings: [],
+    generatedAt: new Date(),
+    rootDir: '/project/app',
+    ...overrides,
+  }
+}
+
 describe('generateServerEntry', () => {
   describe('basic structure', () => {
     it('should generate valid module with imports', () => {
-      const manifest: RouteManifest = {
-        routes: [],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      const manifest = createManifest()
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       expect(code).toContain("import { Hono } from 'hono'")
-      expect(code).toContain("import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig } from '@cloudwerk/core/runtime'")
+      expect(code).toContain("import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'")
       expect(code).toContain("import { setActiveRenderer } from '@cloudwerk/ui'")
       expect(code).toContain('export default app')
     })
 
     it('should set the renderer from options', () => {
-      const manifest: RouteManifest = {
-        routes: [],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      const manifest = createManifest()
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
@@ -72,7 +73,7 @@ describe('generateServerEntry', () => {
 
   describe('middleware imports', () => {
     it('should import middleware using named export syntax', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/dashboard',
@@ -85,13 +86,8 @@ describe('generateServerEntry', () => {
             priority: 1,
           },
         ],
-        layouts: new Map(),
         middleware: new Map([['.', '/project/app/middleware.ts']]),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
@@ -101,7 +97,7 @@ describe('generateServerEntry', () => {
     })
 
     it('should wrap middleware with createMiddlewareAdapter', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/dashboard',
@@ -114,13 +110,8 @@ describe('generateServerEntry', () => {
             priority: 1,
           },
         ],
-        layouts: new Map(),
         middleware: new Map([['.', '/project/app/middleware.ts']]),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
@@ -131,7 +122,7 @@ describe('generateServerEntry', () => {
 
   describe('page route registration', () => {
     it('should register page routes with layouts and middleware', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/users',
@@ -145,22 +136,17 @@ describe('generateServerEntry', () => {
           },
         ],
         layouts: new Map([['.', '/project/app/layout.tsx']]),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       expect(code).toContain("import * as page_0 from '/project/app/users/page.tsx'")
       expect(code).toContain("import * as layout_0 from '/project/app/layout.tsx'")
-      expect(code).toContain("registerPage(app, '/users', page_0, [layout_0], [])")
+      expect(code).toContain("registerPage(app, '/users', page_0, [layout_0], [], null, null)")
     })
 
     it('should handle dynamic routes with :param syntax', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/users/:id',
@@ -176,23 +162,17 @@ describe('generateServerEntry', () => {
             priority: 11,
           },
         ],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/users/:id', page_0, [], [])")
+      expect(code).toContain("registerPage(app, '/users/:id', page_0, [], [], null, null)")
     })
   })
 
   describe('catch-all routes', () => {
     it('should handle catch-all routes with :param{.+} syntax', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/docs/:slug{.+}',
@@ -208,23 +188,17 @@ describe('generateServerEntry', () => {
             priority: 101,
           },
         ],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/docs/:slug{.+}', page_0, [], [])")
+      expect(code).toContain("registerPage(app, '/docs/:slug{.+}', page_0, [], [], null, null)")
     })
   })
 
   describe('optional catch-all routes', () => {
     it('should register both base path and wildcard for optional catch-all', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/shop/:cat{.*}',
@@ -240,24 +214,18 @@ describe('generateServerEntry', () => {
             priority: 1001,
           },
         ],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       // Should register base path (without catch-all) first
-      expect(code).toContain("registerPage(app, '/shop', page_0, [], [])")
+      expect(code).toContain("registerPage(app, '/shop', page_0, [], [], null, null)")
       // Then register the full pattern
-      expect(code).toContain("registerPage(app, '/shop/:cat{.*}', page_0, [], [])")
+      expect(code).toContain("registerPage(app, '/shop/:cat{.*}', page_0, [], [], null, null)")
     })
 
     it('should handle optional catch-all at root level', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/:slug{.*}',
@@ -270,25 +238,19 @@ describe('generateServerEntry', () => {
             priority: 1000,
           },
         ],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       // Base path should be '/'
-      expect(code).toContain("registerPage(app, '/', page_0, [], [])")
-      expect(code).toContain("registerPage(app, '/:slug{.*}', page_0, [], [])")
+      expect(code).toContain("registerPage(app, '/', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/:slug{.*}', page_0, [], [], null, null)")
     })
   })
 
   describe('API route registration', () => {
     it('should register API routes with registerRoute helper', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/api/users',
@@ -304,13 +266,7 @@ describe('generateServerEntry', () => {
             priority: 2,
           },
         ],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
@@ -321,43 +277,27 @@ describe('generateServerEntry', () => {
 
   describe('error and 404 handlers', () => {
     it('should include default notFound handler', () => {
-      const manifest: RouteManifest = {
-        routes: [],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      const manifest = createManifest()
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain('app.notFound((c) => {')
-      expect(code).toContain("return c.json({ error: 'Not Found', path: c.req.path }, 404)")
+      expect(code).toContain('app.notFound(async (c) => {')
+      expect(code).toContain("return c.json({ error: 'Not Found', path }, 404)")
     })
 
     it('should include default onError handler', () => {
-      const manifest: RouteManifest = {
-        routes: [],
-        layouts: new Map(),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      const manifest = createManifest()
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain('app.onError((err, c) => {')
+      expect(code).toContain('app.onError(async (err, c) => {')
       expect(code).toContain("return c.json({ error: 'Internal Server Error', message: err.message }, 500)")
     })
   })
 
   describe('layout chain', () => {
     it('should pass multiple layouts in correct order', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/admin/users',
@@ -377,22 +317,17 @@ describe('generateServerEntry', () => {
           ['.', '/project/app/layout.tsx'],
           ['admin', '/project/app/admin/layout.tsx'],
         ]),
-        middleware: new Map(),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/admin/users', page_0, [layout_0, layout_1], [])")
+      expect(code).toContain("registerPage(app, '/admin/users', page_0, [layout_0, layout_1], [], null, null)")
     })
   })
 
   describe('middleware chain', () => {
     it('should pass multiple middleware in correct order', () => {
-      const manifest: RouteManifest = {
+      const manifest = createManifest({
         routes: [
           {
             urlPattern: '/admin/settings',
@@ -408,22 +343,17 @@ describe('generateServerEntry', () => {
             priority: 2,
           },
         ],
-        layouts: new Map(),
         middleware: new Map([
           ['.', '/project/app/middleware.ts'],
           ['admin', '/project/app/admin/middleware.ts'],
         ]),
-        errors: [],
-        warnings: [],
-        generatedAt: new Date(),
-        rootDir: '/project/app',
-      }
+      })
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       expect(code).toContain("import { middleware as middleware_0 } from '/project/app/middleware.ts'")
       expect(code).toContain("import { middleware as middleware_1 } from '/project/app/admin/middleware.ts'")
-      expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1])")
+      expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1], null, null)")
     })
   })
 })
