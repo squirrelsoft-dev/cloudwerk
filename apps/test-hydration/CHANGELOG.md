@@ -1,5 +1,14 @@
 # test-hydration
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [[`7e4ff97`](https://github.com/squirrelsoft-dev/cloudwerk/commit/7e4ff9729563861839178475208a42ae7d94e137)]:
+  - @cloudwerk/cli@0.11.0
+  - @cloudwerk/core@0.11.0
+  - @cloudwerk/ui@0.11.0
+
 ## 0.0.7
 
 ### Patch Changes

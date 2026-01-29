@@ -1,5 +1,18 @@
 # @cloudwerk/core
 
+## 0.11.0
+
+### Minor Changes
+
+- [#156](https://github.com/squirrelsoft-dev/cloudwerk/pull/156) [`7e4ff97`](https://github.com/squirrelsoft-dev/cloudwerk/commit/7e4ff9729563861839178475208a42ae7d94e137) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add `cloudwerk bindings` command for managing Cloudflare bindings
+  - `cloudwerk bindings` - View all configured bindings (production or specific environment)
+  - `cloudwerk bindings add [type]` - Add a new binding (d1, kv, r2, queue, do, secret)
+  - `cloudwerk bindings remove [name]` - Remove a binding
+  - `cloudwerk bindings update [name]` - Update an existing binding
+  - `cloudwerk bindings generate-types` - Regenerate TypeScript env.d.ts
+
+  Supports environment-specific bindings with `--env` flag. Automatically generates TypeScript type definitions in env.d.ts after modifications.
+
 ## 0.9.0
 
 ### Minor Changes
