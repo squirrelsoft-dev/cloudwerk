@@ -294,6 +294,10 @@ export function resolveRoutesPath(routesDir: string, appDir: string, cwd: string
   if (routesDir.includes('/') || routesDir.includes(path.sep) || path.isAbsolute(routesDir)) {
     return path.resolve(cwd, routesDir)
   }
+  // If routesDir equals appDir, just use appDir (routes are at root of app directory)
+  if (routesDir === appDir) {
+    return path.resolve(cwd, appDir)
+  }
   // Otherwise, resolve relative to appDir
   return path.resolve(cwd, appDir, routesDir)
 }

@@ -37,14 +37,19 @@ Before you begin, ensure you have:
   </TabItem>
 </Tabs>
 
-The CLI will prompt you with a few questions:
+The CLI will prompt you to select a UI renderer:
 
 ```
-? Project name: my-app
-? Include example pages? Yes
-? Include authentication? Yes
-? Include database (D1)? Yes
-? TypeScript or JavaScript? TypeScript
+? Select UI renderer:
+  ○ Hono JSX (recommended) - Lightweight (~3kb), Workers-optimized
+  ○ React - Full ecosystem, larger bundle (~45kb)
+  ○ None (API only) - No UI rendering, pure API routes
+```
+
+You can also skip the prompt by specifying the renderer directly:
+
+```bash
+npx @cloudwerk/create-app@latest my-app --renderer hono-jsx
 ```
 
 ## Manual Installation
