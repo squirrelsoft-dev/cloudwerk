@@ -9,7 +9,8 @@ import pc from 'picocolors'
 
 import type { BindingsCommandOptions } from '../types.js'
 import { CliError } from '../types.js'
-import { createLogger, printError } from '../utils/logger.js'
+import { createLogger } from '../utils/logger.js'
+import { handleCommandError } from '../utils/command-error-handler.js'
 import {
   findWranglerToml,
   readWranglerToml,
@@ -121,20 +122,6 @@ export async function bindings(options: BindingsCommandOptions): Promise<void> {
     }
     console.log()
   } catch (error) {
-    if (error instanceof CliError) {
-      printError(error.message, error.suggestion)
-      process.exit(1)
-    }
-
-    if (error instanceof Error) {
-      printError(error.message)
-      if (verbose && error.stack) {
-        console.log(error.stack)
-      }
-      process.exit(1)
-    }
-
-    printError(String(error))
-    process.exit(1)
+    handleCommandError(error, verbose)
   }
 }

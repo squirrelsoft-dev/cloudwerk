@@ -10,7 +10,8 @@ import { select, input, confirm } from '@inquirer/prompts'
 
 import type { BindingsAddCommandOptions } from '../../types.js'
 import { CliError } from '../../types.js'
-import { createLogger, printError } from '../../utils/logger.js'
+import { createLogger } from '../../utils/logger.js'
+import { handleCommandError } from '../../utils/command-error-handler.js'
 import {
   findWranglerToml,
   readWranglerToml,
@@ -129,29 +130,7 @@ export async function bindingsAdd(
     logger.success('Binding added successfully!')
     console.log()
   } catch (error) {
-    if (error instanceof CliError) {
-      printError(error.message, error.suggestion)
-      process.exit(1)
-    }
-
-    // User cancelled prompt
-    if (
-      error instanceof Error &&
-      (error.message.includes('User force closed') ||
-        error.name === 'ExitPromptError')
-    ) {
-      console.log()
-      console.log(pc.dim('Cancelled.'))
-      process.exit(0)
-    }
-
-    if (error instanceof Error) {
-      printError(error.message)
-      process.exit(1)
-    }
-
-    printError(String(error))
-    process.exit(1)
+    handleCommandError(error, verbose)
   }
 }
 
@@ -266,12 +245,8 @@ async function addD1(
 }
 
 async function listD1Databases(): Promise<WranglerD1Database[]> {
-  try {
-    const output = await runWranglerCommand(['d1', 'list', '--json'])
-    return JSON.parse(output) as WranglerD1Database[]
-  } catch {
-    return []
-  }
+  const output = await runWranglerCommand(['d1', 'list', '--json'])
+  return JSON.parse(output) as WranglerD1Database[]
 }
 
 // ============================================================================
@@ -361,12 +336,8 @@ async function addKV(
 }
 
 async function listKVNamespaces(): Promise<WranglerKVNamespace[]> {
-  try {
-    const output = await runWranglerCommand(['kv', 'namespace', 'list', '--json'])
-    return JSON.parse(output) as WranglerKVNamespace[]
-  } catch {
-    return []
-  }
+  const output = await runWranglerCommand(['kv', 'namespace', 'list', '--json'])
+  return JSON.parse(output) as WranglerKVNamespace[]
 }
 
 // ============================================================================
@@ -449,12 +420,8 @@ async function addR2(
 }
 
 async function listR2Buckets(): Promise<WranglerR2Bucket[]> {
-  try {
-    const output = await runWranglerCommand(['r2', 'bucket', 'list', '--json'])
-    return JSON.parse(output) as WranglerR2Bucket[]
-  } catch {
-    return []
-  }
+  const output = await runWranglerCommand(['r2', 'bucket', 'list', '--json'])
+  return JSON.parse(output) as WranglerR2Bucket[]
 }
 
 // ============================================================================
@@ -537,12 +504,8 @@ async function addQueue(
 }
 
 async function listQueues(): Promise<WranglerQueue[]> {
-  try {
-    const output = await runWranglerCommand(['queues', 'list', '--json'])
-    return JSON.parse(output) as WranglerQueue[]
-  } catch {
-    return []
-  }
+  const output = await runWranglerCommand(['queues', 'list', '--json'])
+  return JSON.parse(output) as WranglerQueue[]
 }
 
 // ============================================================================

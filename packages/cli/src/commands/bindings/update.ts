@@ -4,12 +4,14 @@
  * Update existing Cloudflare bindings in wrangler.toml.
  */
 
+import { spawn } from 'node:child_process'
 import pc from 'picocolors'
 import { input, select } from '@inquirer/prompts'
 
 import type { BindingsUpdateCommandOptions } from '../../types.js'
 import { CliError } from '../../types.js'
-import { createLogger, printError } from '../../utils/logger.js'
+import { createLogger } from '../../utils/logger.js'
+import { handleCommandError } from '../../utils/command-error-handler.js'
 import {
   findWranglerToml,
   readWranglerToml,
@@ -122,29 +124,7 @@ export async function bindingsUpdate(
     logger.success('Binding updated successfully!')
     console.log()
   } catch (error) {
-    if (error instanceof CliError) {
-      printError(error.message, error.suggestion)
-      process.exit(1)
-    }
-
-    // User cancelled prompt
-    if (
-      error instanceof Error &&
-      (error.message.includes('User force closed') ||
-        error.name === 'ExitPromptError')
-    ) {
-      console.log()
-      console.log(pc.dim('Cancelled.'))
-      process.exit(0)
-    }
-
-    if (error instanceof Error) {
-      printError(error.message)
-      process.exit(1)
-    }
-
-    printError(String(error))
-    process.exit(1)
+    handleCommandError(error, verbose)
   }
 }
 
@@ -179,15 +159,15 @@ async function updateBinding(
 
   switch (binding.type) {
     case 'd1':
-      return updateD1(cwd, config, targetConfig, binding.name, field, env)
+      return updateD1(cwd, config, targetConfig, binding.name, field)
     case 'kv':
-      return updateKV(cwd, config, targetConfig, binding.name, field, env)
+      return updateKV(cwd, config, targetConfig, binding.name, field)
     case 'r2':
-      return updateR2(cwd, config, targetConfig, binding.name, field, env)
+      return updateR2(cwd, config, targetConfig, binding.name, field)
     case 'queue':
-      return updateQueue(cwd, config, targetConfig, binding.name, field, env)
+      return updateQueue(cwd, config, targetConfig, binding.name, field)
     case 'do':
-      return updateDurableObject(cwd, config, targetConfig, binding.name, field, env)
+      return updateDurableObject(cwd, config, targetConfig, binding.name, field)
     case 'secret':
       return updateSecret(cwd, config, targetConfig, binding.name, field, env)
     default:
@@ -250,8 +230,7 @@ async function updateD1(
   config: WranglerConfig,
   targetConfig: WranglerConfig,
   bindingName: string,
-  field: string,
-  _env?: string
+  field: string
 ): Promise<boolean> {
   const bindings = targetConfig.d1_databases
   if (!bindings) return false
@@ -299,8 +278,7 @@ async function updateKV(
   config: WranglerConfig,
   targetConfig: WranglerConfig,
   bindingName: string,
-  field: string,
-  _env?: string
+  field: string
 ): Promise<boolean> {
   const bindings = targetConfig.kv_namespaces
   if (!bindings) return false
@@ -352,8 +330,7 @@ async function updateR2(
   config: WranglerConfig,
   targetConfig: WranglerConfig,
   bindingName: string,
-  field: string,
-  _env?: string
+  field: string
 ): Promise<boolean> {
   const bindings = targetConfig.r2_buckets
   if (!bindings) return false
@@ -392,8 +369,7 @@ async function updateQueue(
   config: WranglerConfig,
   targetConfig: WranglerConfig,
   bindingName: string,
-  field: string,
-  _env?: string
+  field: string
 ): Promise<boolean> {
   const bindings = targetConfig.queues?.producers
   if (!bindings) return false
@@ -432,8 +408,7 @@ async function updateDurableObject(
   config: WranglerConfig,
   targetConfig: WranglerConfig,
   bindingName: string,
-  field: string,
-  _env?: string
+  field: string
 ): Promise<boolean> {
   const bindings = targetConfig.durable_objects?.bindings
   if (!bindings) return false
@@ -486,11 +461,56 @@ async function updateSecret(
   targetConfig: WranglerConfig,
   varName: string,
   field: string,
-  _env?: string
+  env?: string
 ): Promise<boolean> {
   const vars = targetConfig.vars
-  if (!vars || !(varName in vars)) return false
+  const isInToml = vars && varName in vars
 
+  // If variable is not in wrangler.toml, it's a secret managed by wrangler
+  if (!isInToml) {
+    if (field === 'name') {
+      console.log()
+      console.log(
+        pc.yellow('\u26A0') +
+          ' Secrets managed by wrangler cannot be renamed directly.'
+      )
+      console.log(
+        pc.dim(
+          '  To rename, delete the old secret and create a new one with:'
+        )
+      )
+      console.log(pc.dim(`    wrangler secret delete ${varName}`))
+      console.log(pc.dim(`    wrangler secret put <new-name>`))
+      return false
+    }
+
+    // Update secret value via wrangler
+    console.log()
+    console.log(
+      pc.dim('This is a secret managed by wrangler. Enter the new value:')
+    )
+
+    const newValue = await input({
+      message: 'New secret value:',
+    })
+
+    if (!newValue.trim()) {
+      console.log(pc.dim('No value provided.'))
+      return false
+    }
+
+    const args = ['secret', 'put', varName]
+    if (env) args.push('--env', env)
+
+    console.log()
+    console.log(pc.dim(`Updating secret "${varName}"...`))
+
+    await runWranglerCommandWithInput(args, newValue)
+    console.log(pc.green('\u2713') + ` Secret "${varName}" updated`)
+    return true
+  }
+
+  // Variable is in wrangler.toml - update directly
   switch (field) {
     case 'name': {
       const newName = await input({
@@ -519,4 +539,49 @@ async function updateSecret(
   writeWranglerToml(cwd, config)
   console.log(pc.green('\u2713') + ' Updated wrangler.toml')
   return true
+}
+
+// ============================================================================
+// Wrangler Command Helpers
+// ============================================================================
+
+/**
+ * Run a wrangler command with stdin input.
+ */
+function runWranglerCommandWithInput(
+  args: string[],
+  inputData: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
+
+    const child = spawn('npx', ['wrangler', ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    child.stdout?.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    child.stderr?.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    child.on('error', (error) => {
+      reject(error)
+    })
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || `wrangler exited with code ${code}`))
+      } else {
+        resolve(stdout)
+      }
+    })
+
+    // Write input and close stdin
+    child.stdin?.write(inputData)
+    child.stdin?.end()
+  })
 }
