@@ -215,10 +215,10 @@ describe('filePathToRoutePath', () => {
   })
 
   describe('catch-all routes', () => {
-    it('should convert [...path] to *path', () => {
+    it('should convert [...path] to :path{.+}', () => {
       const result = filePathToRoutePath('docs/[...path]/page.tsx')
       expect(result).toEqual({
-        urlPattern: '/docs/*path',
+        urlPattern: '/docs/:path{.+}',
         segments: [
           { type: 'static', value: 'docs' },
           { type: 'catchAll', name: 'path' },
@@ -228,10 +228,10 @@ describe('filePathToRoutePath', () => {
   })
 
   describe('optional catch-all routes', () => {
-    it('should convert [[...cat]] to :cat*', () => {
+    it('should convert [[...cat]] to :cat{.*}', () => {
       const result = filePathToRoutePath('shop/[[...cat]]/page.tsx')
       expect(result).toEqual({
-        urlPattern: '/shop/:cat*',
+        urlPattern: '/shop/:cat{.*}',
         segments: [
           { type: 'static', value: 'shop' },
           { type: 'optionalCatchAll', name: 'cat' },
