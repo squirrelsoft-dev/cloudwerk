@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/utils",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Shared browser-safe utilities for Cloudwerk",
   "repository": {
     "type": "git",
