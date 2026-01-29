@@ -1,5 +1,21 @@
 # @cloudwerk/core
 
+## 0.7.1
+
+### Patch Changes
+
+- [#143](https://github.com/squirrelsoft-dev/cloudwerk/pull/143) [`403005f`](https://github.com/squirrelsoft-dev/cloudwerk/commit/403005f8a15c838bb37f5c619e77510b09a71d63) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix middleware and catch-all route handling
+  - Fix middleware import to use named export `{ middleware }`
+  - Wrap middleware with `createMiddlewareAdapter` for Hono compatibility
+  - Fix catch-all route patterns to use Hono-compatible `:slug{.+}` syntax
+  - Fix optional catch-all patterns to use `:slug{.*}` with base path registration
+
+- [#143](https://github.com/squirrelsoft-dev/cloudwerk/pull/143) [`9b9d131`](https://github.com/squirrelsoft-dev/cloudwerk/commit/9b9d131c7b4f6acbfef1b462a5e2b5c689f626a4) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix routes directory structure to use `app/` instead of `app/routes/`
+  - Fixed `resolveRoutesPath()` in core to handle when `routesDir === appDir`, preventing incorrect resolution to `app/app/`
+  - Updated all create-app templates to place routes directly in `app/` directory (matching Next.js convention)
+  - Removed `routesDir: 'app/routes'` override from template configs
+  - Updated installation docs to reflect actual CLI prompts
+
 ## 0.7.0
 
 ### Minor Changes

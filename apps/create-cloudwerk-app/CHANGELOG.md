@@ -1,5 +1,15 @@
 # @cloudwerk/create-app
 
+## 0.1.1
+
+### Patch Changes
+
+- [#143](https://github.com/squirrelsoft-dev/cloudwerk/pull/143) [`9b9d131`](https://github.com/squirrelsoft-dev/cloudwerk/commit/9b9d131c7b4f6acbfef1b462a5e2b5c689f626a4) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix routes directory structure to use `app/` instead of `app/routes/`
+  - Fixed `resolveRoutesPath()` in core to handle when `routesDir === appDir`, preventing incorrect resolution to `app/app/`
+  - Updated all create-app templates to place routes directly in `app/` directory (matching Next.js convention)
+  - Removed `routesDir: 'app/routes'` override from template configs
+  - Updated installation docs to reflect actual CLI prompts
+
 ## 0.1.0
 
 ### Minor Changes
