@@ -286,6 +286,9 @@ export interface CloudwerkConfig {
   /** Directory containing route files (default: "app") */
   routesDir: string
 
+  /** Directory for static assets served at root (default: "public") */
+  publicDir: string
+
   /** File extensions to scan (default: ['.ts', '.tsx']) */
   extensions: SupportedExtension[]
 
