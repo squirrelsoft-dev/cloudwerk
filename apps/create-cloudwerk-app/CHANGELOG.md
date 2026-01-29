@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.1.2
+
+### Patch Changes
+
+- [#147](https://github.com/squirrelsoft-dev/cloudwerk/pull/147) [`257662b`](https://github.com/squirrelsoft-dev/cloudwerk/commit/257662b07d2c1f58acef9376d8dd17a58788be0d) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add README file for npm display
+
 ## 0.1.1
 
 ### Patch Changes
