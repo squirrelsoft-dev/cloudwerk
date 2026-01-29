@@ -352,7 +352,7 @@ describe('scaffold integration', () => {
     expect(fs.existsSync(path.join(targetDir, 'cloudwerk.config.ts'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'tsconfig.json'))).toBe(true)
     expect(fs.existsSync(path.join(targetDir, 'wrangler.toml'))).toBe(true)
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'route.ts'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'route.ts'))).toBe(true)
 
     // Verify package.json has correct name
     const pkgJson = await fs.readJson(path.join(targetDir, 'package.json'))
@@ -474,7 +474,7 @@ describe('scaffold with renderer selection', () => {
     expect(tsconfig.compilerOptions.jsxImportSource).toBe('hono/jsx')
 
     // Verify page.tsx exists
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'page.tsx'))).toBe(true)
 
     // Verify counter component exists with hono/jsx import
     const counter = await fs.readFile(
@@ -508,7 +508,7 @@ describe('scaffold with renderer selection', () => {
     expect(tsconfig.compilerOptions.jsxImportSource).toBe('hono/jsx')
 
     // Verify page.tsx exists
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'page.tsx'))).toBe(true)
 
     // Verify counter component exists with hono/jsx import
     const counter = await fs.readFile(
@@ -549,7 +549,7 @@ describe('scaffold with renderer selection', () => {
     expect(pkgJson.devDependencies['@types/react-dom']).toBeDefined()
 
     // Verify page.tsx exists
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'page.tsx'))).toBe(true)
 
     // Verify counter component exists with react import
     const counter = await fs.readFile(
@@ -584,10 +584,10 @@ describe('scaffold with renderer selection', () => {
     expect(tsconfig.compilerOptions.jsxImportSource).toBeUndefined()
 
     // Verify route.ts exists (API route)
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'route.ts'))).toBe(true)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'route.ts'))).toBe(true)
 
     // Verify page.tsx does NOT exist
-    expect(fs.existsSync(path.join(targetDir, 'app', 'routes', 'page.tsx'))).toBe(false)
+    expect(fs.existsSync(path.join(targetDir, 'app', 'page.tsx'))).toBe(false)
 
     // Verify components directory does NOT exist
     expect(fs.existsSync(path.join(targetDir, 'app', 'components'))).toBe(false)

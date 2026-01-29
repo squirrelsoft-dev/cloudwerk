@@ -178,10 +178,13 @@ export function filePathToRoutePath(filePath: string): {
           urlParts.push(`:${parsed.name}`)
           break
         case 'catchAll':
-          urlParts.push(`*${parsed.name}`)
+          // Use Hono's regex pattern for catch-all (one or more path segments)
+          urlParts.push(`:${parsed.name}{.+}`)
           break
         case 'optionalCatchAll':
-          urlParts.push(`:${parsed.name}*`)
+          // Use Hono's regex pattern for optional catch-all (zero or more path segments)
+          // Note: This requires the base path to also be registered separately
+          urlParts.push(`:${parsed.name}{.*}`)
           break
       }
     }

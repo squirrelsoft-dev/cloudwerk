@@ -50,7 +50,7 @@ export function generateServerEntry(
     for (const middlewarePath of route.middleware) {
       if (!importedModules.has(middlewarePath)) {
         const varName = `middleware_${middlewareIndex++}`
-        middlewareImports.push(`import ${varName} from '${middlewarePath}'`)
+        middlewareImports.push(`import { middleware as ${varName} } from '${middlewarePath}'`)
         middlewareModules.set(middlewarePath, varName)
         importedModules.add(middlewarePath)
       }
@@ -77,6 +77,18 @@ export function generateServerEntry(
       const layoutChain = route.layouts.map((p) => layoutModules.get(p)!).join(', ')
       const middlewareChain = route.middleware.map((p) => middlewareModules.get(p)!).join(', ')
 
+      // Check if this is an optional catch-all route
+      const hasOptionalCatchAll = route.segments.some(s => s.type === 'optionalCatchAll')
+
+      if (hasOptionalCatchAll) {
+        // For optional catch-all, register both the base path and the wildcard pattern
+        // Base path (without the catch-all segment)
+        const basePath = route.urlPattern.replace(/\/:[^/]+\{\.\*\}$/, '') || '/'
+        pageRegistrations.push(
+          `  registerPage(app, '${basePath}', ${varName}, [${layoutChain}], [${middlewareChain}])`
+        )
+      }
+
       pageRegistrations.push(
         `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}])`
       )
@@ -101,7 +113,7 @@ export function generateServerEntry(
  */
 
 import { Hono } from 'hono'
-import { contextMiddleware, createHandlerAdapter, setRouteConfig } from '@cloudwerk/core/runtime'
+import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig } from '@cloudwerk/core/runtime'
 import { setActiveRenderer } from '@cloudwerk/ui'
 
 // Page and Route Imports
@@ -120,9 +132,9 @@ ${middlewareImports.join('\n')}
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
 
 function registerPage(app, pattern, pageModule, layoutModules, middlewareModules) {
-  // Apply middleware
+  // Apply middleware (wrap with adapter to convert Cloudwerk middleware to Hono middleware)
   for (const mw of middlewareModules) {
-    app.use(pattern, mw)
+    app.use(pattern, createMiddlewareAdapter(mw))
   }
 
   // Apply config middleware if present
@@ -203,9 +215,9 @@ function renderWithHydration(element) {
 }
 
 function registerRoute(app, pattern, routeModule, middlewareModules) {
-  // Apply middleware
+  // Apply middleware (wrap with adapter to convert Cloudwerk middleware to Hono middleware)
   for (const mw of middlewareModules) {
-    app.use(pattern, mw)
+    app.use(pattern, createMiddlewareAdapter(mw))
   }
 
   // Apply config middleware if present

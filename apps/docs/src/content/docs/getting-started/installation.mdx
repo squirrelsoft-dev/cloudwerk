@@ -37,14 +37,19 @@ Before you begin, ensure you have:
   </TabItem>
 </Tabs>
 
-The CLI will prompt you with a few questions:
+The CLI will prompt you to select a UI renderer:
 
 ```
-? Project name: my-app
-? Include example pages? Yes
-? Include authentication? Yes
-? Include database (D1)? Yes
-? TypeScript or JavaScript? TypeScript
+? Select UI renderer:
+  ○ Hono JSX (recommended) - Lightweight (~3kb), Workers-optimized
+  ○ React - Full ecosystem, larger bundle (~45kb)
+  ○ None (API only) - No UI rendering, pure API routes
+```
+
+You can also skip the prompt by specifying the renderer directly:
+
+```bash
+npx @cloudwerk/create-app@latest my-app --renderer hono-jsx
 ```
 
 ## Manual Installation
@@ -59,10 +64,10 @@ If you prefer to set up Cloudwerk manually or add it to an existing project:
    pnpm init
    ```
 
-2. Install Cloudwerk packages:
+2. Install Cloudwerk packages and Hono:
 
    ```bash
-   pnpm add @cloudwerk/core @cloudwerk/cli @cloudwerk/ui
+   pnpm add @cloudwerk/core @cloudwerk/cli @cloudwerk/ui hono
    ```
 
 3. Install development dependencies:
@@ -82,13 +87,45 @@ If you prefer to set up Cloudwerk manually or add it to an existing project:
    });
    ```
 
-5. Create your app directory structure:
+5. Create a `tsconfig.json` file:
+
+   ```json
+   {
+     "compilerOptions": {
+       "target": "ES2022",
+       "module": "ESNext",
+       "moduleResolution": "bundler",
+       "strict": true,
+       "esModuleInterop": true,
+       "skipLibCheck": true,
+       "jsx": "react-jsx",
+       "jsxImportSource": "hono/jsx",
+       "types": ["@cloudflare/workers-types"]
+     },
+     "include": ["app/**/*", "cloudwerk.config.ts"],
+     "exclude": ["node_modules"]
+   }
+   ```
+
+6. Create your app directory with a home page:
 
    ```bash
    mkdir -p app
    ```
 
-6. Add scripts to `package.json`:
+   ```tsx
+   // app/page.tsx
+   export default function HomePage() {
+     return (
+       <div>
+         <h1>Welcome to Cloudwerk</h1>
+         <p>Your full-stack framework for Cloudflare Workers.</p>
+       </div>
+     );
+   }
+   ```
+
+7. Add scripts to `package.json`:
 
    ```json
    {
@@ -129,7 +166,7 @@ Start the development server:
 pnpm dev
 ```
 
-Open [http://localhost:8787](http://localhost:8787) in your browser. You should see the Cloudwerk welcome page.
+Open [http://localhost:3000](http://localhost:3000) in your browser. You should see your home page.
 
 ## Next Steps
 
