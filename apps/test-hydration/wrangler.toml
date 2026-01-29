@@ -3,5 +3,10 @@ main = "dist/index.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-[site]
-bucket = "./dist/static"
+[assets]
+directory = "./dist/static"
+binding = "ASSETS"
+
+# Preview environment for testing
+[env.preview]
+name = "test-hydration-preview"
