@@ -1,5 +1,24 @@
 # @cloudwerk/cli
 
+## 0.10.0
+
+### Minor Changes
+
+- [#154](https://github.com/squirrelsoft-dev/cloudwerk/pull/154) [`876b834`](https://github.com/squirrelsoft-dev/cloudwerk/commit/876b834c541d9bb097e099917b73766493280e48) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add preview deployment support with `cloudwerk deploy` command
+  - Add `cloudwerk deploy` CLI command that wraps `wrangler deploy` with environment support
+  - Add `--env` flag to deploy to specific Cloudflare Workers environments (e.g., preview)
+  - Add `--dry-run` flag to preview deployment without executing
+  - Add `--skip-build` flag to skip the build step
+  - Update wrangler.toml templates with Workers Static Assets configuration and preview environment
+  - Add `preview` and `deploy` npm scripts to all templates
+  - Fix production hydration by pre-scanning client components and using static imports
+  - Add static asset serving via Workers Static Assets binding in production builds
+
+### Patch Changes
+
+- Updated dependencies [[`876b834`](https://github.com/squirrelsoft-dev/cloudwerk/commit/876b834c541d9bb097e099917b73766493280e48)]:
+  - @cloudwerk/vite-plugin@0.4.0
+
 ## 0.9.0
 
 ### Patch Changes
