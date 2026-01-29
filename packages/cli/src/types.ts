@@ -66,6 +66,42 @@ export interface DeployCommandOptions {
 }
 
 /**
+ * Options for the `cloudwerk bindings` command.
+ */
+export interface BindingsCommandOptions {
+  /** Environment to operate on (default: production) */
+  env?: string
+  /** Enable verbose logging */
+  verbose?: boolean
+}
+
+/**
+ * Options for the `cloudwerk bindings add` command.
+ */
+export interface BindingsAddCommandOptions extends BindingsCommandOptions {
+  /** Skip TypeScript type generation */
+  skipTypes?: boolean
+}
+
+/**
+ * Options for the `cloudwerk bindings remove` command.
+ */
+export interface BindingsRemoveCommandOptions extends BindingsCommandOptions {
+  /** Skip confirmation prompt */
+  force?: boolean
+  /** Skip TypeScript type generation */
+  skipTypes?: boolean
+}
+
+/**
+ * Options for the `cloudwerk bindings update` command.
+ */
+export interface BindingsUpdateCommandOptions extends BindingsCommandOptions {
+  /** Skip TypeScript type generation */
+  skipTypes?: boolean
+}
+
+/**
  * Result of client asset bundling.
  */
 export interface ClientBundleResult {
