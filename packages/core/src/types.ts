@@ -131,6 +131,12 @@ export interface RouteEntry {
 
   /** Route configuration (auth, rate limiting, caching, custom metadata) */
   config?: RouteConfig
+
+  /** Closest error boundary for this route (absolute path) */
+  errorBoundary?: string
+
+  /** Closest not-found boundary for this route (absolute path) */
+  notFoundBoundary?: string
 }
 
 // ============================================================================
@@ -235,6 +241,12 @@ export interface RouteManifest {
 
   /** All middleware files discovered */
   middleware: Map<string, string>
+
+  /** All error boundary files discovered (directory path -> absolute path) */
+  errorBoundaries: Map<string, string>
+
+  /** All not-found boundary files discovered (directory path -> absolute path) */
+  notFoundBoundaries: Map<string, string>
 
   /** Validation errors that prevent building */
   errors: RouteValidationError[]

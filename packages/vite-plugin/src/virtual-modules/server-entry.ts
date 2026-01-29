@@ -7,6 +7,7 @@
 
 import type { RouteManifest, ScanResult } from '@cloudwerk/core/build'
 import type { ResolvedCloudwerkOptions } from '../types.js'
+import * as path from 'node:path'
 
 /**
  * Generate the server entry module code.
@@ -16,7 +17,7 @@ import type { ResolvedCloudwerkOptions } from '../types.js'
  * - Layouts applied to pages in correct order
  * - Middleware chains applied
  * - Route config support
- * - Error and 404 handling
+ * - Error and 404 handling with error.tsx and not-found.tsx support
  *
  * @param manifest - Route manifest from @cloudwerk/core
  * @param scanResult - Scan result with file information
@@ -33,16 +34,60 @@ export function generateServerEntry(
   const routeRegistrations: string[] = []
   const layoutImports: string[] = []
   const middlewareImports: string[] = []
+  const errorImports: string[] = []
+  const notFoundImports: string[] = []
 
   // Track imported modules to avoid duplicates
   const importedModules = new Set<string>()
   const layoutModules = new Map<string, string>() // path -> varName
   const middlewareModules = new Map<string, string>() // path -> varName
+  const errorModules = new Map<string, string>() // path -> varName
+  const notFoundModules = new Map<string, string>() // path -> varName
 
   let pageIndex = 0
   let routeIndex = 0
   let layoutIndex = 0
   let middlewareIndex = 0
+  let errorIndex = 0
+  let notFoundIndex = 0
+
+  // Import all error boundary modules for global handler lookup
+  for (const err of scanResult.errors) {
+    if (!importedModules.has(err.absolutePath)) {
+      const varName = `error_${errorIndex++}`
+      errorImports.push(`import * as ${varName} from '${err.absolutePath}'`)
+      errorModules.set(err.absolutePath, varName)
+      importedModules.add(err.absolutePath)
+    }
+  }
+
+  // Import all not-found boundary modules for global handler lookup
+  for (const nf of scanResult.notFound) {
+    if (!importedModules.has(nf.absolutePath)) {
+      const varName = `notFound_${notFoundIndex++}`
+      notFoundImports.push(`import * as ${varName} from '${nf.absolutePath}'`)
+      notFoundModules.set(nf.absolutePath, varName)
+      importedModules.add(nf.absolutePath)
+    }
+  }
+
+  // Build error boundary map entries for runtime lookup (directory path -> module)
+  const errorBoundaryMapEntries: string[] = []
+  for (const err of scanResult.errors) {
+    const dir = path.posix.dirname(err.relativePath)
+    const normalizedDir = dir === '.' ? '' : dir
+    const varName = errorModules.get(err.absolutePath)
+    errorBoundaryMapEntries.push(`  ['${normalizedDir}', ${varName}]`)
+  }
+
+  // Build not-found boundary map entries for runtime lookup (directory path -> module)
+  const notFoundBoundaryMapEntries: string[] = []
+  for (const nf of scanResult.notFound) {
+    const dir = path.posix.dirname(nf.relativePath)
+    const normalizedDir = dir === '.' ? '' : dir
+    const varName = notFoundModules.get(nf.absolutePath)
+    notFoundBoundaryMapEntries.push(`  ['${normalizedDir}', ${varName}]`)
+  }
 
   // Process each route
   for (const route of manifest.routes) {
@@ -77,6 +122,10 @@ export function generateServerEntry(
       const layoutChain = route.layouts.map((p) => layoutModules.get(p)!).join(', ')
       const middlewareChain = route.middleware.map((p) => middlewareModules.get(p)!).join(', ')
 
+      // Get error and not-found modules if available
+      const errorModule = route.errorBoundary ? errorModules.get(route.errorBoundary) : null
+      const notFoundModule = route.notFoundBoundary ? notFoundModules.get(route.notFoundBoundary) : null
+
       // Check if this is an optional catch-all route
       const hasOptionalCatchAll = route.segments.some(s => s.type === 'optionalCatchAll')
 
@@ -85,12 +134,12 @@ export function generateServerEntry(
         // Base path (without the catch-all segment)
         const basePath = route.urlPattern.replace(/\/:[^/]+\{\.\*\}$/, '') || '/'
         pageRegistrations.push(
-          `  registerPage(app, '${basePath}', ${varName}, [${layoutChain}], [${middlewareChain}])`
+          `  registerPage(app, '${basePath}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'})`
         )
       }
 
       pageRegistrations.push(
-        `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}])`
+        `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'})`
       )
     } else if (route.fileType === 'route') {
       // API route - import route module and register HTTP handlers
@@ -113,7 +162,7 @@ export function generateServerEntry(
  */
 
 import { Hono } from 'hono'
-import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig } from '@cloudwerk/core/runtime'
+import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'
 import { setActiveRenderer } from '@cloudwerk/ui'
 
 // Page and Route Imports
@@ -125,13 +174,151 @@ ${layoutImports.join('\n')}
 // Middleware Imports
 ${middlewareImports.join('\n')}
 
+// Error Boundary Imports
+${errorImports.join('\n')}
+
+// Not-Found Boundary Imports
+${notFoundImports.join('\n')}
+
+// ============================================================================
+// Boundary Maps for Runtime Lookup
+// ============================================================================
+
+const errorBoundaryMap = new Map([
+${errorBoundaryMapEntries.join(',\n')}
+])
+
+const notFoundBoundaryMap = new Map([
+${notFoundBoundaryMapEntries.join(',\n')}
+])
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Generate a unique error digest for matching server logs.
+ */
+function generateErrorDigest() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 8)
+}
+
+/**
+ * Find the closest error boundary for a given URL path.
+ * Walks from closest directory to root, returning first match.
+ */
+function findClosestErrorBoundary(urlPath) {
+  // Convert URL path to directory segments
+  const segments = urlPath.split('/').filter(Boolean)
+
+  // Walk from closest to root
+  while (segments.length >= 0) {
+    const dir = segments.join('/')
+    const boundary = errorBoundaryMap.get(dir)
+    if (boundary) {
+      return boundary
+    }
+    if (segments.length === 0) break
+    segments.pop()
+  }
+
+  return null
+}
+
+/**
+ * Find the closest not-found boundary for a given URL path.
+ * Walks from closest directory to root, returning first match.
+ */
+function findClosestNotFoundBoundary(urlPath) {
+  // Convert URL path to directory segments
+  const segments = urlPath.split('/').filter(Boolean)
+
+  // Walk from closest to root
+  while (segments.length >= 0) {
+    const dir = segments.join('/')
+    const boundary = notFoundBoundaryMap.get(dir)
+    if (boundary) {
+      return boundary
+    }
+    if (segments.length === 0) break
+    segments.pop()
+  }
+
+  return null
+}
+
+/**
+ * Render an error page with the given error boundary module.
+ */
+async function renderErrorPage(error, errorModule, layoutModules, layoutLoaderData, params, searchParams, errorType) {
+  // Add digest to error for log matching
+  const digest = generateErrorDigest()
+  error.digest = digest
+
+  // Build error boundary props
+  const errorProps = {
+    error: {
+      message: error.message,
+      digest,
+      stack: error.stack,
+    },
+    errorType,
+    reset: () => {}, // No-op on server
+    params,
+    searchParams,
+  }
+
+  // Render error boundary
+  let element = await Promise.resolve(errorModule.default(errorProps))
+
+  // Wrap with layouts if available
+  for (let i = layoutModules.length - 1; i >= 0; i--) {
+    const Layout = layoutModules[i].default
+    const layoutProps = {
+      children: element,
+      params,
+      ...layoutLoaderData[i],
+    }
+    element = await Promise.resolve(Layout(layoutProps))
+  }
+
+  return renderWithHydration(element, 500)
+}
+
+/**
+ * Render a not-found page with the given not-found boundary module.
+ */
+async function renderNotFoundPage(notFoundModule, layoutModules, layoutLoaderData, params, searchParams) {
+  // Build not-found props
+  const notFoundProps = {
+    params,
+    searchParams,
+  }
+
+  // Render not-found boundary
+  let element = await Promise.resolve(notFoundModule.default(notFoundProps))
+
+  // Wrap with layouts if available
+  for (let i = layoutModules.length - 1; i >= 0; i--) {
+    const Layout = layoutModules[i].default
+    const layoutProps = {
+      children: element,
+      params,
+      ...layoutLoaderData[i],
+    }
+    element = await Promise.resolve(Layout(layoutProps))
+  }
+
+  return renderWithHydration(element, 404)
+}
+
 // ============================================================================
 // Route Registration Helpers
 // ============================================================================
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
 
-function registerPage(app, pattern, pageModule, layoutModules, middlewareModules) {
+function registerPage(app, pattern, pageModule, layoutModules, middlewareModules, errorModule, notFoundModule) {
   // Apply middleware (wrap with adapter to convert Cloudwerk middleware to Hono middleware)
   for (const mw of middlewareModules) {
     app.use(pattern, createMiddlewareAdapter(mw))
@@ -152,51 +339,76 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
     const url = new URL(request.url)
     const searchParams = Object.fromEntries(url.searchParams.entries())
 
-    // Execute layout loaders
+    // Track layout loader data for use in error boundaries
     const layoutLoaderData = []
     const loaderArgs = { params, request, context: c }
 
-    for (const layoutModule of layoutModules) {
-      if (layoutModule.loader) {
-        const data = await Promise.resolve(layoutModule.loader(loaderArgs))
-        layoutLoaderData.push(data ?? {})
-      } else {
-        layoutLoaderData.push({})
+    try {
+      // Execute layout loaders
+      for (const layoutModule of layoutModules) {
+        if (layoutModule.loader) {
+          const data = await Promise.resolve(layoutModule.loader(loaderArgs))
+          layoutLoaderData.push(data ?? {})
+        } else {
+          layoutLoaderData.push({})
+        }
       }
-    }
 
-    // Execute page loader
-    let pageLoaderData = {}
-    if (pageModule.loader) {
-      pageLoaderData = (await Promise.resolve(pageModule.loader(loaderArgs))) ?? {}
-    }
-
-    // Build page props
-    const pageProps = { params, searchParams, ...pageLoaderData }
-
-    // Render page
-    let element = await Promise.resolve(pageModule.default(pageProps))
-
-    // Wrap with layouts (inside-out)
-    for (let i = layoutModules.length - 1; i >= 0; i--) {
-      const Layout = layoutModules[i].default
-      const layoutProps = {
-        children: element,
-        params,
-        ...layoutLoaderData[i],
+      // Execute page loader
+      let pageLoaderData = {}
+      if (pageModule.loader) {
+        pageLoaderData = (await Promise.resolve(pageModule.loader(loaderArgs))) ?? {}
       }
-      element = await Promise.resolve(Layout(layoutProps))
-    }
 
-    // Render the page with hydration script injection
-    return renderWithHydration(element)
+      // Build page props
+      const pageProps = { params, searchParams, ...pageLoaderData }
+
+      // Render page
+      let element = await Promise.resolve(pageModule.default(pageProps))
+
+      // Wrap with layouts (inside-out)
+      for (let i = layoutModules.length - 1; i >= 0; i--) {
+        const Layout = layoutModules[i].default
+        const layoutProps = {
+          children: element,
+          params,
+          ...layoutLoaderData[i],
+        }
+        element = await Promise.resolve(Layout(layoutProps))
+      }
+
+      // Render the page with hydration script injection
+      return renderWithHydration(element)
+    } catch (error) {
+      // Handle NotFoundError (check both instanceof and name for module duplication)
+      if (error instanceof NotFoundError || error?.name === 'NotFoundError') {
+        if (notFoundModule) {
+          return renderNotFoundPage(notFoundModule, layoutModules, layoutLoaderData, params, searchParams)
+        }
+        // Re-throw to trigger global not-found handler
+        throw error
+      }
+
+      // Handle RedirectError (check both instanceof and name for module duplication)
+      if (error instanceof RedirectError || error?.name === 'RedirectError') {
+        return c.redirect(error.url, error.status)
+      }
+
+      // Handle other errors
+      console.error('Page render error:', error.message)
+      if (errorModule) {
+        return renderErrorPage(error, errorModule, layoutModules, layoutLoaderData, params, searchParams, 'loader')
+      }
+      // Re-throw to trigger global error handler
+      throw error
+    }
   })
 }
 
 /**
  * Render element to a Response, injecting hydration script before </body>.
  */
-function renderWithHydration(element) {
+function renderWithHydration(element, status = 200) {
   // Hono JSX elements have toString() for synchronous rendering
   const html = '<!DOCTYPE html>' + String(element)
 
@@ -208,6 +420,7 @@ function renderWithHydration(element) {
     : html + hydrationScript
 
   return new Response(injectedHtml, {
+    status,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
     },
@@ -264,13 +477,64 @@ ${pageRegistrations.join('\n')}
 ${routeRegistrations.join('\n')}
 
 // 404 handler
-app.notFound((c) => {
-  return c.json({ error: 'Not Found', path: c.req.path }, 404)
+app.notFound(async (c) => {
+  const path = c.req.path
+
+  // API routes return JSON 404
+  if (path.startsWith('/api')) {
+    return c.json({ error: 'Not Found', path }, 404)
+  }
+
+  // Try to find a not-found boundary for this path
+  const notFoundModule = findClosestNotFoundBoundary(path)
+  if (notFoundModule) {
+    return renderNotFoundPage(notFoundModule, [], [], {}, {})
+  }
+
+  // Fallback to JSON 404
+  return c.json({ error: 'Not Found', path }, 404)
 })
 
 // Error handler
-app.onError((err, c) => {
+app.onError(async (err, c) => {
+  const path = c.req.path
+
+  // Handle NotFoundError (check both instanceof and name for module duplication)
+  if (err instanceof NotFoundError || err?.name === 'NotFoundError') {
+    // API routes return JSON 404
+    if (path.startsWith('/api')) {
+      return c.json({ error: 'Not Found', path }, 404)
+    }
+
+    // Try to find a not-found boundary
+    const notFoundModule = findClosestNotFoundBoundary(path)
+    if (notFoundModule) {
+      return renderNotFoundPage(notFoundModule, [], [], {}, {})
+    }
+
+    return c.json({ error: 'Not Found', path }, 404)
+  }
+
+  // Handle RedirectError (check both instanceof and name for module duplication)
+  if (err instanceof RedirectError || err?.name === 'RedirectError') {
+    return c.redirect(err.url, err.status)
+  }
+
+  // Log the error
   console.error('Request error:', err.message)
+
+  // API routes return JSON 500
+  if (path.startsWith('/api')) {
+    return c.json({ error: 'Internal Server Error', message: err.message }, 500)
+  }
+
+  // Try to find an error boundary for this path
+  const errorModule = findClosestErrorBoundary(path)
+  if (errorModule) {
+    return renderErrorPage(err, errorModule, [], [], {}, {}, 'unknown')
+  }
+
+  // Fallback to JSON 500
   return c.json({ error: 'Internal Server Error', message: err.message }, 500)
 })
 

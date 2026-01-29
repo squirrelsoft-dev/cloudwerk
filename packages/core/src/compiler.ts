@@ -277,12 +277,16 @@ export function sortRoutes(routes: RouteEntry[]): RouteEntry[] {
  * @param file - Scanned file information
  * @param layouts - Resolved layout files for this route
  * @param middleware - Resolved middleware files for this route
+ * @param errorBoundary - Resolved error boundary for this route
+ * @param notFoundBoundary - Resolved not-found boundary for this route
  * @returns Compiled RouteEntry or null if invalid
  */
 export function compileRoute(
   file: ScannedFile,
   layouts: string[],
-  middleware: string[]
+  middleware: string[],
+  errorBoundary?: string | null,
+  notFoundBoundary?: string | null
 ): RouteEntry | null {
   const result = filePathToRoutePath(file.relativePath)
 
@@ -292,7 +296,7 @@ export function compileRoute(
 
   const { urlPattern, segments } = result
 
-  return {
+  const entry: RouteEntry = {
     urlPattern,
     filePath: file.relativePath,
     absolutePath: file.absolutePath,
@@ -302,6 +306,16 @@ export function compileRoute(
     middleware,
     priority: calculateRoutePriority(segments),
   }
+
+  if (errorBoundary) {
+    entry.errorBoundary = errorBoundary
+  }
+
+  if (notFoundBoundary) {
+    entry.notFoundBoundary = notFoundBoundary
+  }
+
+  return entry
 }
 
 // ============================================================================
@@ -315,13 +329,17 @@ export function compileRoute(
  * @param rootDir - Root directory that was scanned
  * @param resolveLayouts - Function to resolve layouts for a path
  * @param resolveMiddleware - Function to resolve middleware for a path
+ * @param resolveErrorBoundary - Optional function to resolve error boundary for a path
+ * @param resolveNotFoundBoundary - Optional function to resolve not-found boundary for a path
  * @returns Complete RouteManifest
  */
 export function buildRouteManifest(
   scanResult: ScanResult,
   rootDir: string,
   resolveLayouts: (relativePath: string, allLayouts: ScannedFile[]) => string[],
-  resolveMiddleware: (relativePath: string, allMiddleware: ScannedFile[]) => string[]
+  resolveMiddleware: (relativePath: string, allMiddleware: ScannedFile[]) => string[],
+  resolveErrorBoundary?: (relativePath: string, allErrors: ScannedFile[]) => string | null,
+  resolveNotFoundBoundary?: (relativePath: string, allNotFound: ScannedFile[]) => string | null
 ): RouteManifest {
   const routes: RouteEntry[] = []
   const errors: RouteValidationError[] = []
@@ -340,12 +358,33 @@ export function buildRouteManifest(
     middlewareMap.set(dir, mw.absolutePath)
   }
 
+  // Build error and not-found boundary maps
+  const errorBoundaryMap = new Map<string, string>()
+  for (const err of scanResult.errors) {
+    const dir = path.posix.dirname(err.relativePath)
+    errorBoundaryMap.set(dir, err.absolutePath)
+  }
+
+  const notFoundBoundaryMap = new Map<string, string>()
+  for (const nf of scanResult.notFound) {
+    const dir = path.posix.dirname(nf.relativePath)
+    notFoundBoundaryMap.set(dir, nf.absolutePath)
+  }
+
   // Compile each route file
   for (const file of scanResult.routes) {
     const layouts = resolveLayouts(file.relativePath, scanResult.layouts)
     const middleware = resolveMiddleware(file.relativePath, scanResult.middleware)
 
-    const route = compileRoute(file, layouts, middleware)
+    // Resolve boundaries if resolvers are provided
+    const errorBoundary = resolveErrorBoundary
+      ? resolveErrorBoundary(file.relativePath, scanResult.errors)
+      : null
+    const notFoundBoundary = resolveNotFoundBoundary
+      ? resolveNotFoundBoundary(file.relativePath, scanResult.notFound)
+      : null
+
+    const route = compileRoute(file, layouts, middleware, errorBoundary, notFoundBoundary)
 
     if (route) {
       routes.push(route)
@@ -376,6 +415,8 @@ export function buildRouteManifest(
     routes,
     layouts: layoutMap,
     middleware: middlewareMap,
+    errorBoundaries: errorBoundaryMap,
+    notFoundBoundaries: notFoundBoundaryMap,
     errors,
     warnings,
     generatedAt: new Date(),
