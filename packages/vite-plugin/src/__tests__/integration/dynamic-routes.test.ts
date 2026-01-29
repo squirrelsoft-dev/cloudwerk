@@ -15,7 +15,7 @@ describe('Dynamic Routes', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('[id] - single dynamic segment', () => {

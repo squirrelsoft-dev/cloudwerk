@@ -15,7 +15,7 @@ describe('Route Groups', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('URL path exclusion', () => {

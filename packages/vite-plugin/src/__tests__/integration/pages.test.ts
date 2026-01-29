@@ -15,7 +15,7 @@ describe('Page Routes', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('basic rendering', () => {
@@ -90,13 +90,9 @@ describe('Page Routes', () => {
   })
 
   describe('404 handling', () => {
-    it('should return 404 for non-existent pages', async () => {
+    it('should return JSON 404 for non-existent pages', async () => {
       const response = await server.fetch('/non-existent')
       expect(response.status).toBe(404)
-    })
-
-    it('should return JSON 404 for non-existent pages without custom not-found', async () => {
-      const response = await server.fetch('/non-existent')
       const data = await response.json()
       expect(data.error).toBe('Not Found')
     })

@@ -15,7 +15,7 @@ describe('Layouts', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('root layout', () => {

@@ -15,11 +15,11 @@ describe('Error Handling', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('error.tsx rendering', () => {
-    it('should render error boundary when loader throws', async () => {
+    it('should render error boundary with digest when loader throws', async () => {
       const response = await server.fetch('/throws-error')
       expect(response.status).toBe(500)
 
@@ -27,12 +27,6 @@ describe('Error Handling', () => {
       expect(html).toContain('data-testid="root-error-boundary"')
       expect(html).toContain('Something went wrong')
       expect(html).toContain('Intentional error from loader')
-    })
-
-    it('should include error digest in error boundary', async () => {
-      const response = await server.fetch('/throws-error')
-      const html = await response.text()
-
       expect(html).toContain('data-testid="error-digest"')
       expect(html).toContain('Digest:')
     })
@@ -58,13 +52,6 @@ describe('Error Handling', () => {
   })
 
   describe('boundary hierarchy', () => {
-    it('should use root error boundary for routes without local boundary', async () => {
-      const response = await server.fetch('/throws-error')
-      const html = await response.text()
-
-      expect(html).toContain('data-testid="root-error-boundary"')
-    })
-
     it('should render normal page when no error occurs', async () => {
       const response = await server.fetch('/')
       expect(response.status).toBe(200)

@@ -15,7 +15,7 @@ describe('API Routes', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('GET handlers', () => {

@@ -15,7 +15,7 @@ describe('Middleware', () => {
   })
 
   afterAll(async () => {
-    await server.close()
+    await server?.close()
   })
 
   describe('root middleware', () => {
