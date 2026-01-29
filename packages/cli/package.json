@@ -28,6 +28,7 @@
     "test:coverage": "vitest --run --coverage"
   },
   "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.4.0",
     "@cloudwerk/core": "workspace:^",
     "@cloudwerk/ui": "workspace:^",
     "@cloudwerk/vite-plugin": "workspace:^",

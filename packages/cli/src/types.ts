@@ -50,6 +50,22 @@ export interface BuildCommandOptions {
 }
 
 /**
+ * Options for the `cloudwerk deploy` command.
+ */
+export interface DeployCommandOptions {
+  /** Environment to deploy to (default: production) */
+  env?: string
+  /** Preview deployment without executing */
+  dryRun?: boolean
+  /** Skip the build step */
+  skipBuild?: boolean
+  /** Path to config file */
+  config?: string
+  /** Enable verbose logging */
+  verbose?: boolean
+}
+
+/**
  * Result of client asset bundling.
  */
 export interface ClientBundleResult {

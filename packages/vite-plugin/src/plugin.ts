@@ -37,6 +37,54 @@ import { generateClientEntry } from './virtual-modules/client-entry.js'
 import { transformClientComponent } from './transform-client-component.js'
 
 /**
+ * Recursively scan a directory for .tsx files with 'use client' directive.
+ */
+async function scanClientComponents(root: string, state: PluginState): Promise<void> {
+  const appDir = path.resolve(root, state.options.appDir)
+
+  if (!fs.existsSync(appDir)) {
+    return
+  }
+
+  async function scanDir(dir: string): Promise<void> {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+
+      if (entry.isDirectory()) {
+        // Skip node_modules and hidden directories
+        if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
+          await scanDir(fullPath)
+        }
+      } else if (entry.isFile() && (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts'))) {
+        // Read file and check for 'use client' directive
+        const content = fs.readFileSync(fullPath, 'utf-8')
+
+        if (hasUseClientDirective(content)) {
+          const componentId = generateComponentId(fullPath, root)
+          const bundlePath = `${state.options.hydrationEndpoint}/${componentId}.js`
+
+          const info: ClientComponentInfo = {
+            componentId,
+            bundlePath,
+            absolutePath: fullPath,
+          }
+
+          state.clientComponents.set(fullPath, info)
+
+          if (state.options.verbose) {
+            console.log(`[cloudwerk] Pre-scanned client component: ${componentId}`)
+          }
+        }
+      }
+    }
+  }
+
+  await scanDir(appDir)
+}
+
+/**
  * Create the Cloudwerk Vite plugin.
  *
  * @param options - Plugin configuration options
@@ -196,6 +244,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       // Load Cloudwerk config
       const cloudwerkConfig = await loadConfig(root)
 
+      // Detect production mode from Vite's config
+      const isProduction = config.command === 'build' || config.mode === 'production'
+
       // Resolve options
       const resolvedOptions: ResolvedCloudwerkOptions = {
         appDir: options.appDir ?? cloudwerkConfig.appDir,
@@ -208,6 +259,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         renderer: options.renderer ?? (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx',
         publicDir: options.publicDir ?? cloudwerkConfig.publicDir ?? 'public',
         root,
+        isProduction,
       }
 
       // Initialize state with placeholder values
@@ -239,6 +291,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Build initial manifest
       await buildManifest(root)
+
+      // Pre-scan for client components (needed for production builds)
+      await scanClientComponents(root, state)
     },
 
     /**

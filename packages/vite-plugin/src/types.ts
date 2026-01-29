@@ -90,6 +90,8 @@ export interface ResolvedCloudwerkOptions {
   publicDir: string
   /** Vite root directory (absolute path) */
   root: string
+  /** Whether building for production (affects asset paths) */
+  isProduction?: boolean
 }
 
 /**

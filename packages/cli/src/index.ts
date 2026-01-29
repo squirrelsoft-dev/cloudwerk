@@ -8,6 +8,7 @@
 import { program } from 'commander'
 import { dev } from './commands/dev.js'
 import { build } from './commands/build.js'
+import { deploy } from './commands/deploy.js'
 import { configGet, configSet } from './commands/config.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
@@ -49,6 +50,20 @@ program
   .option('-c, --config <path>', 'Path to config file')
   .option('--verbose', 'Enable verbose logging')
   .action(build)
+
+// ============================================================================
+// Deploy Command
+// ============================================================================
+
+program
+  .command('deploy [path]')
+  .description('Deploy to Cloudflare Workers')
+  .option('-e, --env <environment>', 'Environment to deploy to')
+  .option('--dry-run', 'Preview deployment without executing')
+  .option('--skip-build', 'Skip the build step')
+  .option('-c, --config <path>', 'Path to config file')
+  .option('--verbose', 'Enable verbose logging')
+  .action(deploy)
 
 // ============================================================================
 // Config Command

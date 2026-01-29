@@ -137,6 +137,7 @@ export async function build(
       renderer,
       publicDir: cloudwerkConfig.publicDir ?? 'public',
       root: cwd,
+      isProduction: true,
     })
 
     const tempEntryPath = path.join(tempDir, '_server-entry.ts')
