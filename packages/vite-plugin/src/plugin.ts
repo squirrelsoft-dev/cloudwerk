@@ -42,43 +42,47 @@ import { transformClientComponent } from './transform-client-component.js'
 async function scanClientComponents(root: string, state: PluginState): Promise<void> {
   const appDir = path.resolve(root, state.options.appDir)
 
-  if (!fs.existsSync(appDir)) {
-    return
+  try {
+    await fs.promises.access(appDir)
+  } catch {
+    return // Directory does not exist or is not accessible
   }
 
   async function scanDir(dir: string): Promise<void> {
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true })
 
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name)
+    await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dir, entry.name)
 
-      if (entry.isDirectory()) {
-        // Skip node_modules and hidden directories
-        if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
-          await scanDir(fullPath)
-        }
-      } else if (entry.isFile() && (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts'))) {
-        // Read file and check for 'use client' directive
-        const content = fs.readFileSync(fullPath, 'utf-8')
-
-        if (hasUseClientDirective(content)) {
-          const componentId = generateComponentId(fullPath, root)
-          const bundlePath = `${state.options.hydrationEndpoint}/${componentId}.js`
-
-          const info: ClientComponentInfo = {
-            componentId,
-            bundlePath,
-            absolutePath: fullPath,
+        if (entry.isDirectory()) {
+          // Skip node_modules and hidden directories
+          if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
+            await scanDir(fullPath)
           }
+        } else if (entry.isFile() && (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts'))) {
+          // Read file and check for 'use client' directive
+          const content = await fs.promises.readFile(fullPath, 'utf-8')
 
-          state.clientComponents.set(fullPath, info)
+          if (hasUseClientDirective(content)) {
+            const componentId = generateComponentId(fullPath, root)
+            const bundlePath = `${state.options.hydrationEndpoint}/${componentId}.js`
 
-          if (state.options.verbose) {
-            console.log(`[cloudwerk] Pre-scanned client component: ${componentId}`)
+            const info: ClientComponentInfo = {
+              componentId,
+              bundlePath,
+              absolutePath: fullPath,
+            }
+
+            state.clientComponents.set(fullPath, info)
+
+            if (state.options.verbose) {
+              console.log(`[cloudwerk] Pre-scanned client component: ${componentId}`)
+            }
           }
         }
-      }
-    }
+      })
+    )
   }
 
   await scanDir(appDir)
