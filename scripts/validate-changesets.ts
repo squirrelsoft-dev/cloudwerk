@@ -25,7 +25,7 @@ const PACKAGES = [
   { name: '@cloudwerk/core', path: 'packages/core' },
   { name: '@cloudwerk/ui', path: 'packages/ui' },
   { name: '@cloudwerk/cli', path: 'packages/cli' },
-  { name: '@cloudwerk/create-app', path: 'apps/create-cloudwerk-app' },
+  { name: '@cloudwerk/create-app', path: 'packages/create-app' },
 ]
 
 // Files that don't require changesets
