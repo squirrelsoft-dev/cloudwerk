@@ -71,38 +71,37 @@ export async function destroySession(
 
 ```typescript
 // app/api/auth/login/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { json, getContext } from '@cloudwerk/core';
-import { createSession } from '../../../../lib/auth/session';
-import { verifyPassword } from '../../../../lib/auth/password';
+import { DB, SESSIONS } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
+import { createSession } from '../../../../lib/auth/session'
+import { verifyPassword } from '../../../../lib/auth/password'
 
-export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const formData = await request.formData();
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const email = formData.get('email') as string
+  const password = formData.get('password') as string
 
   // Find user
-  const user = await env.DB
+  const user = await DB
     .prepare('SELECT * FROM users WHERE email = ?')
     .bind(email)
-    .first();
+    .first()
 
   if (!user) {
-    return json({ error: 'Invalid credentials' }, { status: 401 });
+    return json({ error: 'Invalid credentials' }, { status: 401 })
   }
 
   // Verify password
-  const valid = await verifyPassword(password, user.password_hash);
+  const valid = await verifyPassword(password, user.password_hash)
   if (!valid) {
-    return json({ error: 'Invalid credentials' }, { status: 401 });
+    return json({ error: 'Invalid credentials' }, { status: 401 })
   }
 
   // Create session
-  const sessionId = await createSession(env.SESSIONS, {
+  const sessionId = await createSession(SESSIONS, {
     userId: user.id,
     email: user.email,
-  });
+  })
 
   // Return response with session cookie
   return new Response(JSON.stringify({ success: true }), {
@@ -111,7 +110,7 @@ export async function POST(request: Request, { params }: CloudwerkHandlerContext
       'Content-Type': 'application/json',
       'Set-Cookie': `session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`,
     },
-  });
+  })
 }
 ```
 
@@ -119,17 +118,15 @@ export async function POST(request: Request, { params }: CloudwerkHandlerContext
 
 ```typescript
 // app/api/auth/logout/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { getContext } from '@cloudwerk/core';
-import { destroySession } from '../../../../lib/auth/session';
+import { SESSIONS } from '@cloudwerk/core/bindings'
+import { destroySession } from '../../../../lib/auth/session'
 
-export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const cookie = request.headers.get('Cookie') ?? '';
-  const sessionId = cookie.match(/session=([^;]+)/)?.[1];
+export async function POST(request: Request) {
+  const cookie = request.headers.get('Cookie') ?? ''
+  const sessionId = cookie.match(/session=([^;]+)/)?.[1]
 
   if (sessionId) {
-    await destroySession(env.SESSIONS, sessionId);
+    await destroySession(SESSIONS, sessionId)
   }
 
   // Clear cookie and redirect
@@ -139,7 +136,7 @@ export async function POST(request: Request, { params }: CloudwerkHandlerContext
       'Location': '/',
       'Set-Cookie': 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0',
     },
-  });
+  })
 }
 ```
 
@@ -223,33 +220,33 @@ export default function DashboardPage({ user, posts }: PageProps & LoaderData) {
 
 ```typescript
 // app/api/auth/token/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { json, getContext } from '@cloudwerk/core';
-import { SignJWT } from 'jose';
+import { DB } from '@cloudwerk/core/bindings'
+import { env } from '@cloudwerk/core/context'
+import { json } from '@cloudwerk/core'
+import { SignJWT } from 'jose'
 
-export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const { email, password } = await request.json();
+export async function POST(request: Request) {
+  const { email, password } = await request.json()
 
   // Authenticate user
-  const user = await env.DB
+  const user = await DB
     .prepare('SELECT * FROM users WHERE email = ?')
     .bind(email)
-    .first();
+    .first()
 
   if (!user || !(await verifyPassword(password, user.password_hash))) {
-    return json({ error: 'Invalid credentials' }, { status: 401 });
+    return json({ error: 'Invalid credentials' }, { status: 401 })
   }
 
   // Generate JWT
-  const secret = new TextEncoder().encode(env.JWT_SECRET);
+  const secret = new TextEncoder().encode(env.JWT_SECRET as string)
   const token = await new SignJWT({ sub: user.id, email: user.email })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
-    .sign(secret);
+    .sign(secret)
 
-  return json({ token, expiresIn: 86400 });
+  return json({ token, expiresIn: 86400 })
 }
 ```
 
@@ -290,40 +287,36 @@ export const middleware: Middleware = async (request, next) => {
 
 ```typescript
 // app/api/auth/github/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { getContext } from '@cloudwerk/core';
+import { env } from '@cloudwerk/core/context'
 
-export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-
-  const authUrl = new URL('https://github.com/login/oauth/authorize');
-  authUrl.searchParams.set('client_id', env.GITHUB_CLIENT_ID);
-  authUrl.searchParams.set('redirect_uri', `${env.APP_URL}/api/auth/github/callback`);
-  authUrl.searchParams.set('scope', 'user:email');
+export async function GET() {
+  const authUrl = new URL('https://github.com/login/oauth/authorize')
+  authUrl.searchParams.set('client_id', env.GITHUB_CLIENT_ID as string)
+  authUrl.searchParams.set('redirect_uri', `${env.APP_URL as string}/api/auth/github/callback`)
+  authUrl.searchParams.set('scope', 'user:email')
 
   return new Response(null, {
     status: 302,
     headers: { 'Location': authUrl.toString() },
-  });
+  })
 }
 ```
 
 ```typescript
 // app/api/auth/github/callback/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { getContext } from '@cloudwerk/core';
-import { createSession } from '../../../../../lib/auth/session';
+import { DB, SESSIONS } from '@cloudwerk/core/bindings'
+import { env } from '@cloudwerk/core/context'
+import { createSession } from '../../../../../lib/auth/session'
 
-export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const url = new URL(request.url);
-  const code = url.searchParams.get('code');
+export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
 
   if (!code) {
     return new Response(null, {
       status: 302,
       headers: { 'Location': '/login?error=oauth_failed' },
-    });
+    })
   }
 
   // Exchange code for access token
@@ -338,9 +331,9 @@ export async function GET(request: Request, { params }: CloudwerkHandlerContext)
       client_secret: env.GITHUB_CLIENT_SECRET,
       code,
     }),
-  });
+  })
 
-  const { access_token } = await tokenResponse.json();
+  const { access_token } = await tokenResponse.json()
 
   // Get user profile
   const profileResponse = await fetch('https://api.github.com/user', {
@@ -348,31 +341,31 @@ export async function GET(request: Request, { params }: CloudwerkHandlerContext)
       'Authorization': `Bearer ${access_token}`,
       'User-Agent': 'Cloudwerk-App',
     },
-  });
+  })
 
-  const profile = await profileResponse.json();
+  const profile = await profileResponse.json()
 
   // Find or create user
-  let user = await env.DB
+  let user = await DB
     .prepare('SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?')
     .bind('github', profile.id.toString())
-    .first();
+    .first()
 
   if (!user) {
-    const userId = crypto.randomUUID();
-    await env.DB
+    const userId = crypto.randomUUID()
+    await DB
       .prepare('INSERT INTO users (id, email, name, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?)')
       .bind(userId, profile.email, profile.name || profile.login, 'github', profile.id.toString())
-      .run();
+      .run()
 
-    user = { id: userId, email: profile.email };
+    user = { id: userId, email: profile.email }
   }
 
   // Create session
-  const sessionId = await createSession(env.SESSIONS, {
+  const sessionId = await createSession(SESSIONS, {
     userId: user.id,
     email: user.email,
-  });
+  })
 
   return new Response(null, {
     status: 302,
@@ -380,7 +373,7 @@ export async function GET(request: Request, { params }: CloudwerkHandlerContext)
       'Location': '/dashboard',
       'Set-Cookie': `session=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${60 * 60 * 24 * 7}`,
     },
-  });
+  })
 }
 ```
 

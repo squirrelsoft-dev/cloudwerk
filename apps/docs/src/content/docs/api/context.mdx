@@ -7,25 +7,136 @@ The `CloudwerkContext` object provides access to bindings, utilities, and reques
 
 ## Overview
 
-Context is available in loaders, handlers, and middleware:
+There are three ways to access context in Cloudwerk:
+
+1. **Importable helpers** (route handlers) - Import `params`, `request`, `get`, `set` directly
+2. **`getContext()`** (route handlers, middleware) - Call to get the full context object
+3. **`context` parameter** (loaders) - Receive context as a function parameter
 
 ```typescript
-// In a loader
+// In a loader - use context parameter
 export async function loader({ context }: LoaderArgs) {
   const user = await context.auth.getUser();
   return { user };
 }
 
-// In a handler
-export async function GET(request: Request, { context }: CloudwerkHandlerContext) {
-  return context.json({ message: 'Hello' });
+// In a route handler - use importable helpers (recommended)
+import { params, request, get } from '@cloudwerk/core/context'
+
+export async function GET() {
+  const userId = params.id
+  const user = get<User>('user')
+  return json({ userId, user })
 }
 
-// In middleware
-export const middleware: Middleware = async (request, next, context) => {
-  console.log('Request:', request.url);
-  return next(request);
+// In a route handler - use getContext()
+import { getContext, json } from '@cloudwerk/core'
+
+export async function GET() {
+  const ctx = getContext()
+  return json({ userId: ctx.params.id })
+}
+
+// In middleware - use getContext() for set()
+import { getContext } from '@cloudwerk/core'
+
+export const middleware: Middleware = async (request, next) => {
+  const ctx = getContext()
+  ctx.set('user', await validateSession(request))
+  return next()
 };
+```
+
+## Context Helpers (Route Handlers)
+
+For route handlers, import context helpers directly from `@cloudwerk/core/context`:
+
+```typescript
+import { params, request, get, set, getRequestId } from '@cloudwerk/core/context'
+
+export async function GET() {
+  const userId = params.id
+  const authHeader = request.headers.get('Authorization')
+  const user = get<User>('user') // From middleware
+  return json({ userId, requestId: getRequestId() })
+}
+```
+
+### Available Exports
+
+| Export | Type | Description |
+|--------|------|-------------|
+| `params` | `Record<string, string>` | Route parameters from dynamic segments |
+| `request` | `Request` | Current request object |
+| `env` | `Record<string, unknown>` | Environment bindings |
+| `executionCtx` | `ExecutionContext` | For `waitUntil()` background tasks |
+| `getRequestId()` | `() => string` | Get unique request ID for tracing |
+| `get<T>(key)` | `(key: string) => T \| undefined` | Get middleware data |
+| `set<T>(key, value)` | `(key: string, value: T) => void` | Set data for downstream handlers |
+
+### Examples
+
+**Access route parameters:**
+```typescript
+import { params } from '@cloudwerk/core/context'
+
+// For route /users/[id]/posts/[postId]
+export async function GET() {
+  const { id, postId } = params
+  return json({ userId: id, postId })
+}
+```
+
+**Access request data:**
+```typescript
+import { request } from '@cloudwerk/core/context'
+
+export async function POST() {
+  const body = await request.json()
+  const contentType = request.headers.get('Content-Type')
+  return json({ received: body })
+}
+```
+
+**Background tasks with executionCtx:**
+```typescript
+import { executionCtx, request } from '@cloudwerk/core/context'
+import { json } from '@cloudwerk/core'
+
+export async function POST() {
+  const data = await request.json()
+
+  // Fire-and-forget background task
+  executionCtx.waitUntil(
+    sendAnalytics({ event: 'data_submitted', data })
+  )
+
+  return json({ success: true })
+}
+```
+
+**Share data between middleware and handlers:**
+```typescript
+// middleware.ts
+import { set } from '@cloudwerk/core/context'
+
+export const middleware: Middleware = async (request, next) => {
+  const user = await validateSession(request)
+  set('user', user)
+  return next()
+}
+
+// route.ts
+import { get } from '@cloudwerk/core/context'
+import { json } from '@cloudwerk/core'
+
+export async function GET() {
+  const user = get<User>('user')
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  return json({ user })
+}
 ```
 
 ## Properties

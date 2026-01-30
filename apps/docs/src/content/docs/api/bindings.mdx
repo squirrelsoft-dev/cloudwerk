@@ -5,11 +5,74 @@ description: Reference for Cloudflare bindings available in Cloudwerk.
 
 import { Aside } from '@astrojs/starlight/components';
 
-Cloudwerk provides seamless access to all Cloudflare bindings through the `context` object.
+Cloudwerk provides seamless access to all Cloudflare bindings. In route handlers, you can import bindings directly for a clean, ergonomic API.
 
-## Accessing Bindings
+## Importable Bindings (Recommended)
 
-Bindings are available in loaders, handlers, and middleware:
+The simplest way to access bindings in route handlers is to import them directly:
+
+```typescript
+// app/api/posts/route.ts
+import { DB, CACHE } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
+
+export async function GET() {
+  const { results: posts } = await DB.prepare('SELECT * FROM posts').all()
+  return json(posts)
+}
+```
+
+<Aside type="tip">
+Importable bindings use proxies that resolve from the current request context at access time. This means the binding is always the correct instance for the current request.
+</Aside>
+
+### Setup
+
+Run the type generator to enable TypeScript autocomplete for your bindings:
+
+```bash
+cloudwerk bindings generate-types
+```
+
+This creates `.cloudwerk/types/` with type definitions for your bindings and updates your `tsconfig.json` to include them.
+
+### Available Exports
+
+The `@cloudwerk/core/bindings` module provides:
+
+| Export | Description |
+|--------|-------------|
+| Named exports (e.g., `DB`, `KV`, `BUCKET`) | Direct access to bindings by name |
+| `bindings` | Proxy object for dynamic access to any binding |
+| `getBinding<T>(name)` | Type-safe binding retrieval |
+| `hasBinding(name)` | Check if a binding exists |
+| `getBindingNames()` | List all available binding names |
+
+```typescript
+import { bindings, getBinding, hasBinding, getBindingNames } from '@cloudwerk/core/bindings'
+
+export async function GET() {
+  // Dynamic access
+  const db = bindings.DB as D1Database
+
+  // Type-safe retrieval
+  const kv = getBinding<KVNamespace>('CACHE')
+
+  // Conditional access
+  if (hasBinding('ANALYTICS')) {
+    const analytics = getBinding<AnalyticsEngine>('ANALYTICS')
+    // Use analytics...
+  }
+
+  // List all bindings
+  const available = getBindingNames()
+  return json({ availableBindings: available })
+}
+```
+
+## Accessing Bindings in Loaders
+
+In loader functions, access bindings via the `context` parameter:
 
 ```typescript
 export async function loader({ context }: LoaderArgs) {
@@ -20,6 +83,10 @@ export async function loader({ context }: LoaderArgs) {
   const env = context.env;    // Environment variables
 }
 ```
+
+<Aside>
+In loaders, you receive the context as a parameter. In route handlers, use importable bindings or `getContext()` to access bindings.
+</Aside>
 
 ## D1 Database
 

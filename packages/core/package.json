@@ -20,6 +20,14 @@
     "./build": {
       "types": "./dist/build.d.ts",
       "import": "./dist/build.js"
+    },
+    "./bindings": {
+      "types": "./dist/bindings.d.ts",
+      "import": "./dist/bindings.js"
+    },
+    "./context": {
+      "types": "./dist/context-exports.d.ts",
+      "import": "./dist/context-exports.js"
     }
   },
   "files": [

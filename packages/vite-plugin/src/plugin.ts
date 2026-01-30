@@ -35,6 +35,10 @@ import {
 import { generateServerEntry } from './virtual-modules/server-entry.js'
 import { generateClientEntry } from './virtual-modules/client-entry.js'
 import { transformClientComponent } from './transform-client-component.js'
+import {
+  regenerateCloudwerkTypes,
+  findWranglerTomlPath,
+} from './wrangler-watcher.js'
 
 /**
  * Recursively scan a directory for .tsx files with 'use client' directive.
@@ -309,6 +313,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       if (!state) return
 
       const appDir = path.resolve(state.options.root, state.options.appDir)
+      const root = state.options.root
+      const verbose = state.options.verbose
 
       // Watch for route file changes
       devServer.watcher.on('add', async (filePath: string) => {
@@ -339,7 +345,25 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildManifest(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for wrangler.toml changes to regenerate .cloudwerk/types/
+        const wranglerPath = findWranglerTomlPath(root)
+        if (wranglerPath && filePath === wranglerPath) {
+          if (verbose) {
+            console.log(`[cloudwerk] wrangler.toml changed, regenerating types...`)
+          }
+          const result = regenerateCloudwerkTypes(root)
+          if (result && verbose) {
+            console.log(`[cloudwerk] Regenerated .cloudwerk/types/ with ${result.bindingCount} binding(s)`)
+          }
+        }
       })
+
+      // Add wrangler.toml to the watcher if it exists
+      const wranglerPath = findWranglerTomlPath(root)
+      if (wranglerPath) {
+        devServer.watcher.add(wranglerPath)
+      }
     },
 
     /**

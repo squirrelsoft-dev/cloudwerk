@@ -16,6 +16,8 @@ import {
   extractBindings,
 } from '../../utils/wrangler-toml.js'
 import { generateEnvTypes } from '../../utils/env-types.js'
+import { generateCloudwerkTypes } from '../../utils/type-generator.js'
+import { updateTsConfigPaths } from '../../utils/tsconfig-updater.js'
 
 // ============================================================================
 // Generate Types Command
@@ -65,7 +67,7 @@ export async function bindingsGenerateTypes(
     console.log()
     logger.info('Generating TypeScript types...')
 
-    // Generate types
+    // Generate env.d.ts (legacy types)
     const result = generateEnvTypes(cwd, bindings)
 
     console.log()
@@ -79,17 +81,56 @@ export async function bindingsGenerateTypes(
       console.log(`    ${pc.cyan(binding.name)}: ${pc.dim(binding.type)}`)
     }
 
+    // Generate .cloudwerk/types/ (new importable singletons)
+    logger.debug('Generating .cloudwerk/types/...')
+    const cloudwerkResult = generateCloudwerkTypes(cwd, bindings)
+
+    console.log()
+    console.log(
+      pc.green('\u2713') +
+        ` Generated ${pc.bold('.cloudwerk/types/')} for importable bindings:`
+    )
+    console.log(`    ${pc.dim(cloudwerkResult.files.bindings)}`)
+    console.log(`    ${pc.dim(cloudwerkResult.files.context)}`)
+
+    // Update tsconfig.json
+    logger.debug('Updating tsconfig.json...')
+    const tsconfigResult = updateTsConfigPaths(cwd)
+
+    if (tsconfigResult.modified) {
+      console.log()
+      console.log(
+        pc.green('\u2713') +
+          ` Updated ${pc.bold('tsconfig.json')}:`
+      )
+      if (tsconfigResult.changes.setBaseUrl) {
+        console.log(`    ${pc.dim('Added baseUrl: "."')}`)
+      }
+      for (const pathKey of tsconfigResult.changes.addedPaths) {
+        console.log(`    ${pc.dim(`Added paths: "${pathKey}"`)}`)
+      }
+      for (const include of tsconfigResult.changes.addedIncludes) {
+        console.log(`    ${pc.dim(`Added include: "${include}"`)}`)
+      }
+    } else {
+      logger.debug('tsconfig.json already configured')
+    }
+
     console.log()
     logger.success('Types generated successfully!')
     console.log()
 
     // Show usage hint
-    console.log(
-      pc.dim('Make sure env.d.ts is included in your tsconfig.json:')
-    )
-    console.log(
-      pc.dim('  "include": ["env.d.ts", "app/**/*"]')
-    )
+    console.log(pc.bold('Usage:'))
+    console.log()
+    console.log(pc.dim('  // Import bindings directly (new)'))
+    console.log(pc.cyan(`  import { ${bindings[0]?.name || 'DB'} } from '@cloudwerk/core/bindings'`))
+    console.log()
+    console.log(pc.dim('  // Import context helpers (new)'))
+    console.log(pc.cyan(`  import { params, request, get } from '@cloudwerk/core/context'`))
+    console.log()
+    console.log(pc.dim('  // Or use getContext() (existing)'))
+    console.log(pc.cyan(`  import { getContext } from '@cloudwerk/core'`))
     console.log()
   } catch (error) {
     handleCommandError(error, verbose)

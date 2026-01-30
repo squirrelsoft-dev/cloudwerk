@@ -85,17 +85,32 @@ export default function UsersPage({ users }: PageProps & { users: User[] }) {
 
 ## Using D1 in Route Handlers
 
-Access D1 via `getContext().env.DB` in route handlers:
+Import the `DB` binding directly from `@cloudwerk/core/bindings`:
 
 ```typescript
 // app/api/users/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { json, getContext } from '@cloudwerk/core';
+import { DB } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
 
-export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const { results: users } = await env.DB.prepare('SELECT * FROM users').all();
-  return json(users);
+export async function GET() {
+  const { results: users } = await DB.prepare('SELECT * FROM users').all()
+  return json(users)
+}
+```
+
+<Aside type="tip">
+Run `cloudwerk bindings generate-types` to enable TypeScript autocomplete for your D1 database binding.
+</Aside>
+
+Alternatively, use `getContext()` for full context access:
+
+```typescript
+import { json, getContext } from '@cloudwerk/core'
+
+export async function GET() {
+  const { env } = getContext()
+  const { results: users } = await env.DB.prepare('SELECT * FROM users').all()
+  return json(users)
 }
 ```
 
