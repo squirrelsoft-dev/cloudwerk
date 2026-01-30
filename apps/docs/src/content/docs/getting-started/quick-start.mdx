@@ -150,31 +150,33 @@ API routes handle HTTP requests without rendering UI:
 
 ```typescript
 // app/api/posts/route.ts
-import type { CloudwerkHandlerContext } from '@cloudwerk/core';
-import { json, getContext } from '@cloudwerk/core';
+import { DB } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
 
-export async function GET(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const { results: posts } = await env.DB
+export async function GET() {
+  const { results: posts } = await DB
     .prepare('SELECT * FROM posts ORDER BY created_at DESC')
-    .all();
+    .all()
 
-  return json(posts);
+  return json(posts)
 }
 
-export async function POST(request: Request, { params }: CloudwerkHandlerContext) {
-  const { env } = getContext();
-  const body = await request.json();
-  const id = crypto.randomUUID();
+export async function POST(request: Request) {
+  const body = await request.json()
+  const id = crypto.randomUUID()
 
-  await env.DB
+  await DB
     .prepare('INSERT INTO posts (id, title, content, created_at) VALUES (?, ?, ?, ?)')
     .bind(id, body.title, body.content, new Date().toISOString())
-    .run();
+    .run()
 
-  return json({ id, title: body.title }, { status: 201 });
+  return json({ id, title: body.title }, { status: 201 })
 }
 ```
+
+<Aside type="tip">
+Run `cloudwerk bindings generate-types` to enable TypeScript autocomplete for your bindings like `DB`, `KV`, etc.
+</Aside>
 
 ## Add Middleware
 
