@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/durable-object",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Durable Objects support for Cloudwerk",
   "repository": {
     "type": "git",
