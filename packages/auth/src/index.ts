@@ -91,3 +91,18 @@ export {
 // ============================================================================
 
 export { hashPassword, verifyPassword } from './password/index.js'
+
+// ============================================================================
+// Providers
+// ============================================================================
+
+export {
+  credentials,
+  handleCredentialsSignIn,
+  type CredentialsConfig,
+  type CredentialsAuthorizeContext,
+  type AuthorizeResult,
+  type HandleCredentialsSignInOptions,
+  type CredentialsSignInHandlerConfig,
+  type CredentialsSignInResult,
+} from './providers/index.js'

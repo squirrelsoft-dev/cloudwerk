@@ -6,6 +6,7 @@ export default defineConfig({
     session: 'src/session/index.ts',
     middleware: 'src/middleware/index.ts',
     password: 'src/password/index.ts',
+    providers: 'src/providers/index.ts',
   },
   format: ['esm'],
   dts: true,

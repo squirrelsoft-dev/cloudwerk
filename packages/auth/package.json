@@ -24,6 +24,10 @@
     "./password": {
       "types": "./dist/password.d.ts",
       "import": "./dist/password.js"
+    },
+    "./providers": {
+      "types": "./dist/providers.d.ts",
+      "import": "./dist/providers.js"
     }
   },
   "files": [
