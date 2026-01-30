@@ -284,6 +284,79 @@ return notFound('Resource not found');
 return error('Something went wrong', 500);
 ```
 
+## Client-Side Form Submission
+
+For enhanced user experience, you can submit forms using JavaScript:
+
+### Using Fetch
+
+```typescript
+async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  e.preventDefault()
+  const form = e.currentTarget
+
+  const response = await fetch('/api/contact', {
+    method: 'POST',
+    body: new FormData(form),
+  })
+
+  if (response.ok) {
+    // Handle success
+    form.reset()
+  } else {
+    // Handle error
+    const error = await response.json()
+    console.error(error)
+  }
+}
+
+function ContactForm() {
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="text" name="name" required />
+      <input type="email" name="email" required />
+      <textarea name="message" required />
+      <button type="submit">Send</button>
+    </form>
+  )
+}
+```
+
+### Using React Query / TanStack Query
+
+```tsx
+import { useMutation } from '@tanstack/react-query'
+
+function ContactForm() {
+  const mutation = useMutation({
+    mutationFn: (data: FormData) =>
+      fetch('/api/contact', { method: 'POST', body: data })
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to send')
+          return res.json()
+        }),
+  })
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        mutation.mutate(new FormData(e.currentTarget))
+      }}
+    >
+      <input type="text" name="name" required />
+      <input type="email" name="email" required />
+      <textarea name="message" required />
+      <button disabled={mutation.isPending}>
+        {mutation.isPending ? 'Sending...' : 'Send'}
+      </button>
+      {mutation.isError && <p className="error">Failed to send message</p>}
+      {mutation.isSuccess && <p className="success">Message sent!</p>}
+    </form>
+  )
+}
+```
+
 ## Next Steps
 
 - **[Authentication](/guides/authentication/)** - Secure your forms

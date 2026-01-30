@@ -39,20 +39,19 @@ Cloudwerk uses `loader()` functions for server-side data fetching:
 
 ```tsx
 // app/page.tsx
-import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import type { PageProps } from '@cloudwerk/core'
+import { db } from '@cloudwerk/core/bindings'
 
-export async function loader({ context }: LoaderArgs) {
-  // Access D1 database via Cloudflare bindings
-  const db = context.env.DB;
+export async function loader() {
   const { results: posts } = await db
     .prepare('SELECT id, title, excerpt FROM posts ORDER BY created_at DESC LIMIT 10')
-    .all();
+    .all()
 
-  return { posts };
+  return { posts }
 }
 
 interface Props extends PageProps {
-  posts: Array<{ id: string; title: string; excerpt: string }>;
+  posts: Array<{ id: string; title: string; excerpt: string }>
 }
 
 export default function HomePage({ posts }: Props) {
@@ -68,7 +67,7 @@ export default function HomePage({ posts }: Props) {
         ))}
       </ul>
     </div>
-  );
+  )
 }
 ```
 
@@ -78,25 +77,26 @@ Use brackets `[param]` for dynamic route segments:
 
 ```tsx
 // app/posts/[id]/page.tsx
-import type { PageProps, LoaderArgs } from '@cloudwerk/core';
-import { NotFoundError } from '@cloudwerk/core';
+import type { PageProps } from '@cloudwerk/core'
+import { NotFoundError } from '@cloudwerk/core'
+import { params } from '@cloudwerk/core/context'
+import { db } from '@cloudwerk/core/bindings'
 
-export async function loader({ params, context }: LoaderArgs) {
-  const db = context.env.DB;
+export async function loader() {
   const post = await db
     .prepare('SELECT id, title, content FROM posts WHERE id = ?')
     .bind(params.id)
-    .first();
+    .first()
 
   if (!post) {
-    throw new NotFoundError('Post not found');
+    throw new NotFoundError('Post not found')
   }
 
-  return { post };
+  return { post }
 }
 
 interface Props extends PageProps {
-  post: { id: string; title: string; content: string };
+  post: { id: string; title: string; content: string }
 }
 
 export default function PostPage({ post }: Props) {
@@ -105,7 +105,7 @@ export default function PostPage({ post }: Props) {
       <h1>{post.title}</h1>
       <div>{post.content}</div>
     </article>
-  );
+  )
 }
 ```
 

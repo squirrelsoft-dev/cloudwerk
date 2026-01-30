@@ -166,6 +166,7 @@ Email/password authentication with customizable validation:
 ```typescript
 // app/auth/providers/credentials.ts
 import { defineProvider, credentials, verifyPassword } from '@cloudwerk/auth'
+import { db } from '@cloudwerk/core/bindings'
 
 export default defineProvider(
   credentials({
@@ -182,8 +183,8 @@ export default defineProvider(
         required: true,
       },
     },
-    async authorize(creds, ctx) {
-      const user = await ctx.env.DB
+    async authorize(creds) {
+      const user = await db
         .prepare('SELECT * FROM users WHERE email = ?')
         .bind(creds.email)
         .first()
@@ -236,6 +237,15 @@ export default defineProvider(
   })
 )
 ```
+
+<Aside type="note" title="How Magic Links Work">
+When a user clicks the magic link in their email, Cloudwerk's auth system automatically:
+1. Validates the token from the URL
+2. Creates a session for the user
+3. Redirects to your configured callback URL
+
+No additional route handler is needed—the `/auth/callback/email` route is handled automatically.
+</Aside>
 
 ### WebAuthn / Passkey Provider
 
@@ -507,6 +517,14 @@ export const middleware = authMiddleware({
 
 ## Multi-Tenancy
 
+Multi-tenancy allows a single application to serve multiple customers (tenants) with isolated data. Common patterns include:
+
+- **Subdomain-based**: `acme.yourapp.com` → tenant "acme"
+- **Path-based**: `yourapp.com/acme/dashboard` → tenant "acme"
+- **Header-based**: Custom `X-Tenant-ID` header
+
+The tenant resolver middleware runs before your routes, identifying the tenant from the request and making it available throughout your application.
+
 ### Tenant Resolution
 
 Configure how tenants are identified:
@@ -614,6 +632,42 @@ authStore.subscribe((state) => {
 const { user, status } = authStore.getState()
 ```
 
+### React Component Example
+
+Here's a complete example of using auth state in a React component:
+
+```tsx
+// components/AuthStatus.tsx
+'use client'
+
+import { createAuthStore, signIn, signOut } from '@cloudwerk/auth/client'
+import { useEffect, useState } from 'react'
+
+const authStore = createAuthStore()
+
+export function AuthStatus() {
+  const [session, setSession] = useState(authStore.getSession())
+
+  useEffect(() => {
+    // Subscribe to auth changes (e.g., after sign-in/sign-out)
+    return authStore.subscribe((state) => {
+      setSession(state.session)
+    })
+  }, [])
+
+  if (!session) {
+    return <button onClick={() => signIn('github')}>Sign In</button>
+  }
+
+  return (
+    <div>
+      <span>Welcome, {session.user.name}</span>
+      <button onClick={() => signOut()}>Sign Out</button>
+    </div>
+  )
+}
+```
+
 ## Auth Callbacks
 
 Customize the auth flow with lifecycle callbacks:
@@ -659,6 +713,16 @@ export default defineAuthConfig({
   },
 })
 ```
+
+### How CSRF Protection Works
+
+When you enable CSRF protection, Cloudwerk automatically:
+
+1. **Generates a token** for each session and stores it in a secure cookie
+2. **Validates the token** on all POST/PUT/PATCH/DELETE requests
+3. **Rejects requests** that don't include a valid token
+
+You don't need to add CSRF middleware manually—it's applied automatically when `csrf.enabled: true` in your auth config. Your only responsibility is embedding the token in forms using `getCsrfToken()`.
 
 In forms, include the CSRF token:
 

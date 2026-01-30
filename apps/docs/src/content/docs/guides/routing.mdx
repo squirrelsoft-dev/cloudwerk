@@ -180,6 +180,14 @@ export default function Layout({ sidebar, main }: LayoutProps) {
 
 ## Intercepting Routes
 
+Intercepting routes let you load a route within the context of another route. This is useful for patterns like:
+
+- **Modal overlays**: Show a photo in a modal when navigating from a feed, but show the full page when accessing directly
+- **Preview panes**: Show a preview in a sidebar while keeping the list visible
+- **Quick views**: Display item details without leaving the current page
+
+When a user navigates from `/feed` to `/feed/photo/123`, the intercepting route `(.)photo/[id]` renders within the feed layout. But if they access `/photo/123` directly (e.g., via a shared link), they see the full photo page.
+
 Intercept routes using `(.)`, `(..)`, or `(...)` prefixes:
 
 <FileTree>

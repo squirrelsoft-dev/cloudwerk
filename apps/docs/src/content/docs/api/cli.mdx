@@ -3,7 +3,7 @@ title: CLI Reference
 description: Complete reference for Cloudwerk CLI commands.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 The Cloudwerk CLI provides commands for development, building, and deployment.
 
@@ -22,7 +22,7 @@ pnpm add -D @cloudwerk/cli
 Start the development server with hot reload.
 
 ```bash
-cloudwerk dev [options]
+cloudwerk dev [path] [options]
 ```
 
 **Options:**
@@ -30,9 +30,9 @@ cloudwerk dev [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--port, -p` | Port number | `8787` |
-| `--host` | Host to bind | `localhost` |
-| `--https` | Enable HTTPS | `false` |
-| `--open, -o` | Open browser | `false` |
+| `--host, -H` | Host to bind | `localhost` |
+| `--config, -c` | Path to config file | Auto-detected |
+| `--verbose` | Enable verbose logging | `false` |
 
 **Examples:**
 
@@ -43,11 +43,11 @@ cloudwerk dev
 # Custom port
 cloudwerk dev --port 3000
 
-# Open browser
-cloudwerk dev --open
-
 # All interfaces
 cloudwerk dev --host 0.0.0.0
+
+# With custom config
+cloudwerk dev --config cloudwerk.staging.ts
 ```
 
 ### `cloudwerk build`
@@ -55,16 +55,20 @@ cloudwerk dev --host 0.0.0.0
 Build the application for production.
 
 ```bash
-cloudwerk build [options]
+cloudwerk build [path] [options]
 ```
 
 **Options:**
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--sourcemap` | Generate sourcemaps | `true` |
-| `--minify` | Minify output | `true` |
-| `--analyze` | Bundle analysis | `false` |
+| `--output, -o` | Output directory | `./dist` |
+| `--ssg` | Generate static pages for `rendering: static` routes | `false` |
+| `--minify` | Minify bundles | `true` |
+| `--no-minify` | Disable minification | - |
+| `--sourcemap` | Generate source maps | `false` |
+| `--config, -c` | Path to config file | Auto-detected |
+| `--verbose` | Enable verbose logging | `false` |
 
 **Examples:**
 
@@ -73,10 +77,13 @@ cloudwerk build [options]
 cloudwerk build
 
 # With bundle analysis
-cloudwerk build --analyze
+cloudwerk build --sourcemap
 
 # Development build
 cloudwerk build --no-minify
+
+# Static site generation
+cloudwerk build --ssg
 ```
 
 ### `cloudwerk deploy`
@@ -84,15 +91,18 @@ cloudwerk build --no-minify
 Deploy to Cloudflare Workers.
 
 ```bash
-cloudwerk deploy [options]
+cloudwerk deploy [path] [options]
 ```
 
 **Options:**
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--env, -e` | Environment | `production` |
+| `--env, -e` | Environment to deploy to | - |
 | `--dry-run` | Preview without deploying | `false` |
+| `--skip-build` | Skip the build step | `false` |
+| `--config, -c` | Path to config file | Auto-detected |
+| `--verbose` | Enable verbose logging | `false` |
 
 **Examples:**
 
@@ -107,207 +117,195 @@ cloudwerk deploy --env staging
 cloudwerk deploy --dry-run
 ```
 
-### `cloudwerk generate`
+### `cloudwerk config`
 
-Generate boilerplate files.
-
-```bash
-cloudwerk generate <type> <name> [options]
-```
-
-**Types:**
-
-| Type | Description |
-|------|-------------|
-| `page` | Create a new page |
-| `layout` | Create a new layout |
-| `route` | Create an API route |
-| `middleware` | Create middleware |
-| `component` | Create a component |
-
-**Examples:**
+Manage Cloudwerk configuration.
 
 ```bash
-# Generate a page
-cloudwerk generate page users/profile
-
-# Generate an API route
-cloudwerk generate route api/users
-
-# Generate middleware
-cloudwerk generate middleware auth
-
-# Generate with loader
-cloudwerk generate page products --loader
+cloudwerk config <command> [options]
 ```
 
-### `cloudwerk migrate`
-
-Run database migrations.
-
-```bash
-cloudwerk migrate <command> [options]
-```
-
-**Commands:**
+**Subcommands:**
 
 | Command | Description |
 |---------|-------------|
-| `create <name>` | Create new migration |
-| `up` | Run pending migrations |
-| `down` | Rollback last migration |
-| `status` | Show migration status |
-| `reset` | Reset all migrations |
-
-**Options:**
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--local` | Apply to local DB | `true` |
-| `--remote` | Apply to remote DB | `false` |
+| `get <key>` | Get a configuration value |
+| `set <key> <value>` | Set a configuration value |
 
 **Examples:**
 
 ```bash
-# Create migration
-cloudwerk migrate create add_users_table
+# Get config value
+cloudwerk config get appDir
 
-# Run local migrations
-cloudwerk migrate up
-
-# Run remote migrations
-cloudwerk migrate up --remote
-
-# Check status
-cloudwerk migrate status
-
-# Rollback
-cloudwerk migrate down
+# Set config value
+cloudwerk config set dev.port 3000
 ```
 
-### `cloudwerk routes`
+### `cloudwerk bindings`
 
-Display route information.
+Manage Cloudflare bindings (D1, KV, R2, Queues, etc.).
 
 ```bash
-cloudwerk routes [options]
+cloudwerk bindings [options]
+cloudwerk bindings <command> [options]
 ```
 
-**Options:**
+Running without a subcommand shows an overview of all configured bindings.
 
-| Option | Description |
-|--------|-------------|
-| `--json` | Output as JSON |
-| `--verbose` | Show detailed info |
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `add [type]` | Add a new binding (d1, kv, r2, queue, do, secret) |
+| `remove [name]` | Remove a binding |
+| `update [name]` | Update an existing binding |
+| `generate-types` | Regenerate TypeScript type definitions |
 
 **Examples:**
 
 ```bash
-# List all routes
-cloudwerk routes
+# Show bindings overview
+cloudwerk bindings
 
-# JSON output
-cloudwerk routes --json
+# Add D1 database
+cloudwerk bindings add d1
 
-# Detailed info
-cloudwerk routes --verbose
+# Add KV namespace
+cloudwerk bindings add kv
+
+# Remove a binding
+cloudwerk bindings remove --force
+
+# Regenerate types
+cloudwerk bindings generate-types
 ```
 
-**Output:**
+### `cloudwerk triggers`
 
-```
-Routes:
-  GET    /                      app/page.tsx
-  GET    /about                 app/about/page.tsx
-  GET    /users                 app/users/page.tsx
-  GET    /users/:id             app/users/[id]/page.tsx
-  GET    /api/health            app/api/health/route.ts
-  POST   /api/users             app/api/users/route.ts
-  GET    /api/users/:id         app/api/users/[id]/route.ts
-  PUT    /api/users/:id         app/api/users/[id]/route.ts
-  DELETE /api/users/:id         app/api/users/[id]/route.ts
-```
-
-### `cloudwerk typecheck`
-
-Run TypeScript type checking.
+Manage Cloudwerk triggers (scheduled, queue, R2, webhook, etc.).
 
 ```bash
-cloudwerk typecheck [options]
+cloudwerk triggers [options]
+cloudwerk triggers <command> [options]
 ```
 
-**Options:**
+Running without a subcommand shows an overview of all triggers.
 
-| Option | Description |
-|--------|-------------|
-| `--watch` | Watch mode |
-| `--strict` | Strict mode |
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all triggers with details |
+| `validate` | Validate trigger configurations |
+| `generate` | Regenerate wrangler.toml and TypeScript types |
 
 **Examples:**
 
 ```bash
-# Type check
-cloudwerk typecheck
+# Show triggers overview
+cloudwerk triggers
 
-# Watch mode
-cloudwerk typecheck --watch
+# List all triggers
+cloudwerk triggers list
+
+# Filter by type
+cloudwerk triggers list --type scheduled
+
+# Validate configs
+cloudwerk triggers validate --strict
+
+# Regenerate config
+cloudwerk triggers generate
+
+# Output as JSON
+cloudwerk triggers list --json
 ```
 
-### `cloudwerk lint`
+### `cloudwerk objects`
 
-Run ESLint on the codebase.
+Manage Cloudwerk Durable Objects.
 
 ```bash
-cloudwerk lint [options]
+cloudwerk objects [options]
+cloudwerk objects <command> [options]
 ```
 
-**Options:**
+Running without a subcommand shows an overview of all durable objects.
 
-| Option | Description |
-|--------|-------------|
-| `--fix` | Auto-fix issues |
-| `--format` | Output format |
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all durable objects with details |
+| `info <name>` | Show durable object details |
+| `migrations` | Show migration history for SQLite durable objects |
+| `generate` | Regenerate wrangler.toml and TypeScript types |
 
 **Examples:**
 
 ```bash
-# Check for issues
-cloudwerk lint
+# Show objects overview
+cloudwerk objects
 
-# Auto-fix
-cloudwerk lint --fix
+# List all durable objects
+cloudwerk objects list
+
+# Show details for specific object
+cloudwerk objects info Counter
+
+# View migrations
+cloudwerk objects migrations
+
+# Regenerate config
+cloudwerk objects generate
 ```
 
-### `cloudwerk test`
+### `cloudwerk services`
 
-Run tests.
+Manage Cloudwerk services (RPC bindings).
 
 ```bash
-cloudwerk test [options] [files]
+cloudwerk services [options]
+cloudwerk services <command> [options]
 ```
 
-**Options:**
+Running without a subcommand shows an overview of all services.
 
-| Option | Description |
-|--------|-------------|
-| `--watch` | Watch mode |
-| `--coverage` | Coverage report |
-| `--ui` | Open Vitest UI |
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all services with details |
+| `info <name>` | Show service details |
+| `extract <name>` | Extract service to separate Worker |
+| `inline <name>` | Convert extracted service back to local mode |
+| `deploy <name>` | Deploy extracted service |
+| `status` | Show status of all services |
 
 **Examples:**
 
 ```bash
-# Run all tests
-cloudwerk test
+# Show services overview
+cloudwerk services
 
-# Watch mode
-cloudwerk test --watch
+# List all services
+cloudwerk services list
 
-# Specific file
-cloudwerk test app/users/page.test.ts
+# Show details for specific service
+cloudwerk services info email
 
-# Coverage
-cloudwerk test --coverage
+# Extract service to separate Worker
+cloudwerk services extract payments
+
+# Convert back to local mode
+cloudwerk services inline payments
+
+# Deploy extracted service
+cloudwerk services deploy payments --env staging
+
+# Show all services status
+cloudwerk services status
 ```
 
 ## Global Options
@@ -320,7 +318,6 @@ These options work with all commands:
 | `--help, -h` | Show help |
 | `--version, -v` | Show version |
 | `--verbose` | Verbose output |
-| `--quiet, -q` | Minimal output |
 
 ## Configuration
 
@@ -339,6 +336,19 @@ cloudwerk dev --config cloudwerk.production.ts
 | `2` | Configuration error |
 | `3` | Build error |
 | `4` | Deployment error |
+
+## Planned Commands
+
+<Aside type="note" title="Coming Soon">
+The following commands are planned for future releases:
+
+- `cloudwerk generate` — Scaffold pages, layouts, routes, middleware, components
+- `cloudwerk migrate` — Database migrations (create, up, down, status, reset)
+- `cloudwerk routes` — Display registered routes
+- `cloudwerk typecheck` — Run TypeScript type checking
+- `cloudwerk lint` — Run ESLint with Cloudwerk-specific rules
+- `cloudwerk test` — Run Vitest tests with Cloudwerk test utilities
+</Aside>
 
 ## Next Steps
 

@@ -13,13 +13,12 @@ Export a `loader()` function from any page or layout to fetch data:
 
 ```tsx
 // app/users/page.tsx
-import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import type { PageProps } from '@cloudwerk/core'
+import { db } from '@cloudwerk/core/bindings'
 
-export async function loader({ context }: LoaderArgs) {
-  const db = context.env.DB;
-  const { results: users } = await db.prepare('SELECT * FROM users').all();
-
-  return { users };
+export async function loader() {
+  const { results: users } = await db.prepare('SELECT * FROM users').all()
+  return { users }
 }
 
 export default function UsersPage({ users }: PageProps & { users: User[] }) {
@@ -29,7 +28,7 @@ export default function UsersPage({ users }: PageProps & { users: User[] }) {
         <li key={user.id}>{user.name}</li>
       ))}
     </ul>
-  );
+  )
 }
 ```
 
@@ -65,45 +64,69 @@ export async function loader({ request }: LoaderArgs) {
 
 ```tsx
 // app/users/[id]/page.tsx
-export async function loader({ params, context }: LoaderArgs) {
-  const db = context.env.DB;
+import { params } from '@cloudwerk/core/context'
+import { db } from '@cloudwerk/core/bindings'
+
+export async function loader() {
   const user = await db
     .prepare('SELECT * FROM users WHERE id = ?')
     .bind(params.id)
-    .first();
+    .first()
 
-  return { user };
+  return { user }
 }
 ```
 
-### Using Context
+### Using Importable Bindings
 
-The `context` is a Hono context that provides access to Cloudflare bindings and middleware-set values:
+Import bindings directly from `@cloudwerk/core/bindings` for clean, ergonomic access:
+
+```tsx
+import { db, kv, r2 } from '@cloudwerk/core/bindings'
+import { getUser } from '@cloudwerk/auth'
+
+export async function loader() {
+  // Database (D1)
+  const { results: users } = await db.prepare('SELECT * FROM users').all()
+
+  // Key-Value store (KV)
+  const cached = await kv.get('cache-key')
+
+  // Object storage (R2)
+  const file = await r2.get('uploads/image.png')
+
+  // Get authenticated user
+  const user = getUser()
+
+  return { users, cached, user }
+}
+```
+
+<Aside type="tip">
+Run `cloudwerk bindings generate-types` to enable TypeScript autocomplete for your bindings.
+</Aside>
+
+### Using Context Parameter
+
+Alternatively, you can access bindings through the `context` parameter. This is useful when you need access to request-specific data or middleware-set values:
 
 ```tsx
 export async function loader({ context }: LoaderArgs) {
-  // Database (D1) - access via env bindings
-  const db = context.env.DB;
-  const { results: users } = await db.prepare('SELECT * FROM users').all();
+  // Database (D1) via context
+  const db = context.env.DB
+  const { results: users } = await db.prepare('SELECT * FROM users').all()
 
-  // Key-Value store (KV) - access via env bindings
-  const kv = context.env.CACHE;
-  const cached = await kv.get('cache-key');
-
-  // Object storage (R2) - access via env bindings
-  const bucket = context.env.UPLOADS;
-  const file = await bucket.get('uploads/image.png');
-
-  // Environment variables
-  const apiKey = context.env.API_KEY;
+  // Key-Value store (KV) via context
+  const kv = context.env.CACHE
+  const cached = await kv.get('cache-key')
 
   // Middleware-set values
-  const user = context.get('user');
+  const tenant = context.get('tenant')
 
   // Cookies
-  const session = context.req.cookie('session');
+  const theme = context.req.cookie('theme')
 
-  return { users };
+  return { users }
 }
 ```
 
@@ -114,20 +137,21 @@ export async function loader({ context }: LoaderArgs) {
 Throw `NotFoundError` to trigger a 404 response:
 
 ```tsx
-import { NotFoundError } from '@cloudwerk/core';
+import { NotFoundError } from '@cloudwerk/core'
+import { params } from '@cloudwerk/core/context'
+import { db } from '@cloudwerk/core/bindings'
 
-export async function loader({ params, context }: LoaderArgs) {
-  const db = context.env.DB;
+export async function loader() {
   const user = await db
     .prepare('SELECT * FROM users WHERE id = ?')
     .bind(params.id)
-    .first();
+    .first()
 
   if (!user) {
-    throw new NotFoundError('User not found');
+    throw new NotFoundError('User not found')
   }
 
-  return { user };
+  return { user }
 }
 ```
 
@@ -136,19 +160,16 @@ export async function loader({ params, context }: LoaderArgs) {
 Throw `RedirectError` to redirect:
 
 ```tsx
-import { RedirectError } from '@cloudwerk/core';
+import { RedirectError } from '@cloudwerk/core'
+import { getUser, isAuthenticated } from '@cloudwerk/auth'
 
-export async function loader({ context }: LoaderArgs) {
-  const session = context.req.cookie('session');
-
-  if (!session) {
-    throw new RedirectError('/login');
+export async function loader() {
+  if (!isAuthenticated()) {
+    throw new RedirectError('/login')
   }
 
-  // Validate session and get user from middleware or database
-  const user = context.get('user');
-
-  return { user };
+  const user = getUser()
+  return { user }
 }
 ```
 
@@ -174,10 +195,11 @@ Layouts can also have loaders. They execute from parent to child:
 
 ```tsx
 // app/layout.tsx
-export async function loader({ context }: LoaderArgs) {
-  const session = context.req.cookie('session');
-  const user = session ? context.get('user') : null;
-  return { user };
+import { getUser } from '@cloudwerk/auth'
+
+export async function loader() {
+  const user = getUser()
+  return { user }
 }
 
 export default function RootLayout({ children, user }: LayoutProps & { user: User | null }) {
@@ -188,28 +210,29 @@ export default function RootLayout({ children, user }: LayoutProps & { user: Use
         {children}
       </body>
     </html>
-  );
+  )
 }
 ```
 
 ```tsx
 // app/dashboard/layout.tsx
-import { RedirectError } from '@cloudwerk/core';
+import { RedirectError } from '@cloudwerk/core'
+import { getUser } from '@cloudwerk/auth'
+import { db } from '@cloudwerk/core/bindings'
 
-export async function loader({ context }: LoaderArgs) {
+export async function loader() {
   // This runs AFTER the root layout loader
-  const user = context.get('user');
+  const user = getUser()
   if (!user) {
-    throw new RedirectError('/login');
+    throw new RedirectError('/login')
   }
 
-  const db = context.env.DB;
   const { results: notifications } = await db
-    .prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10')
+    .prepare('SELECT * FROM notifications WHERE user_id = ? AND read = 0')
     .bind(user.id)
-    .all();
+    .all()
 
-  return { notifications };
+  return { notifications: notifications }
 }
 ```
 
@@ -234,9 +257,10 @@ Structure your loaders to be independent when possible. This enables parallel ex
 Set cache headers in your loader:
 
 ```tsx
-export async function loader({ context }: LoaderArgs) {
-  const db = context.env.DB;
-  const { results: data } = await db.prepare('SELECT * FROM posts').all();
+import { db } from '@cloudwerk/core/bindings'
+
+export async function loader() {
+  const { results: data } = await db.prepare('SELECT * FROM posts').all()
 
   return {
     data,
@@ -244,7 +268,7 @@ export async function loader({ context }: LoaderArgs) {
     headers: {
       'Cache-Control': 'public, max-age=3600',
     },
-  };
+  }
 }
 ```
 
@@ -253,28 +277,28 @@ export async function loader({ context }: LoaderArgs) {
 Use Cloudflare KV for server-side caching:
 
 ```tsx
-export async function loader({ context }: LoaderArgs) {
-  const kv = context.env.CACHE;
-  const db = context.env.DB;
-  const cacheKey = 'popular-posts';
+import { kv, db } from '@cloudwerk/core/bindings'
+
+export async function loader() {
+  const cacheKey = 'popular-posts'
 
   // Try cache first
-  const cached = await kv.get(cacheKey, 'json');
+  const cached = await kv.get(cacheKey, 'json')
   if (cached) {
-    return { posts: cached };
+    return { posts: cached }
   }
 
   // Fetch fresh data
   const { results: posts } = await db
     .prepare('SELECT * FROM posts ORDER BY views DESC LIMIT 10')
-    .all();
+    .all()
 
   // Cache for 5 minutes
   await kv.put(cacheKey, JSON.stringify(posts), {
     expirationTtl: 300,
-  });
+  })
 
-  return { posts };
+  return { posts }
 }
 ```
 
@@ -283,42 +307,43 @@ export async function loader({ context }: LoaderArgs) {
 Define your loader return type for full type safety:
 
 ```tsx
-import type { PageProps, LoaderArgs } from '@cloudwerk/core';
+import type { PageProps } from '@cloudwerk/core'
+import { NotFoundError } from '@cloudwerk/core'
+import { params } from '@cloudwerk/core/context'
+import { db } from '@cloudwerk/core/bindings'
 
 interface User {
-  id: string;
-  name: string;
-  email: string;
+  id: string
+  name: string
+  email: string
 }
 
 interface Post {
-  id: string;
-  title: string;
+  id: string
+  title: string
 }
 
 interface LoaderData {
-  user: User;
-  posts: Post[];
+  user: User
+  posts: Post[]
 }
 
-export async function loader({ params, context }: LoaderArgs): Promise<LoaderData> {
-  const db = context.env.DB;
-
+export async function loader(): Promise<LoaderData> {
   const user = await db
     .prepare('SELECT * FROM users WHERE id = ?')
     .bind(params.id)
-    .first();
+    .first<User>()
 
   if (!user) {
-    throw new NotFoundError('User not found');
+    throw new NotFoundError('User not found')
   }
 
   const { results: posts } = await db
     .prepare('SELECT * FROM posts WHERE author_id = ?')
     .bind(user.id)
-    .all();
+    .all<Post>()
 
-  return { user, posts };
+  return { user, posts }
 }
 
 export default function UserPage({ user, posts }: PageProps & LoaderData) {
@@ -331,7 +356,7 @@ export default function UserPage({ user, posts }: PageProps & LoaderData) {
         {posts.map(post => <li key={post.id}>{post.title}</li>)}
       </ul>
     </div>
-  );
+  )
 }
 ```
 

@@ -7,6 +7,18 @@ import { Aside } from '@astrojs/starlight/components';
 
 The `cloudwerk.config.ts` file is the central configuration for your Cloudwerk application.
 
+<Aside type="tip" title="Convention Over Configuration">
+Most Cloudwerk features use **convention-based discovery** and don't require explicit configuration:
+
+- **Routes**: Auto-discovered from `app/` directory
+- **Triggers**: Auto-discovered from `app/triggers/`
+- **Services**: Auto-discovered from `app/services/`
+- **Queues**: Auto-discovered from `app/queues/`
+- **Durable Objects**: Auto-discovered from `app/objects/`
+
+The `cloudwerk.config.ts` file is for customizing defaults, not defining everything manually.
+</Aside>
+
 ## Basic Configuration
 
 ```typescript

@@ -7,6 +7,55 @@ import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/compon
 
 Cloudwerk provides a powerful event-driven trigger system through `@cloudwerk/trigger`. Define handlers for 7 different event sources with automatic configuration, type safety, built-in webhook verification, and observability.
 
+## What Are Triggers?
+
+Triggers are event handlers that respond to various sources in your Cloudflare infrastructure. Each trigger type maps to a specific Cloudflare feature:
+
+| Trigger Type | Cloudflare Feature | Use Case |
+|-------------|-------------------|----------|
+| `scheduled` | Cron Triggers | Periodic tasks (cleanup, reports, syncs) |
+| `queue` | Queue Consumer | Process async messages |
+| `r2` | R2 Event Notifications | React to file uploads/deletions |
+| `webhook` | HTTP Route | Receive external webhooks |
+| `email` | Email Workers | Process incoming emails |
+| `d1` | D1 (via triggers) | React to database changes |
+| `tail` | Tail Workers | Process logs from other Workers |
+
+<Aside type="note">
+Learn more about [Cloudflare Workers triggers](https://developers.cloudflare.com/workers/runtime-apis/handlers/) in the Cloudflare documentation.
+</Aside>
+
+### Direct Execution vs. Queue Handoff
+
+Triggers can either execute code directly or hand off work to a queue:
+
+**Direct Execution** — Handle the event immediately in the trigger handler:
+
+```typescript
+export default defineTrigger({
+  source: { type: 'r2', bucket: 'uploads', events: ['object-create'] },
+  async handle(event, ctx) {
+    await processImage(event.key)
+  }
+})
+```
+
+**Queue Handoff** — Send a message to a queue for async processing:
+
+```typescript
+export default defineTrigger({
+  source: { type: 'r2', bucket: 'uploads', events: ['object-create'] },
+  async handle(event, ctx) {
+    await ctx.env.IMAGE_QUEUE.send({
+      key: event.key,
+      action: event.type,
+    })
+  }
+})
+```
+
+Choose based on your use case: direct execution for simple, fast operations; queue handoff when you need batching, retries, or want to decouple processing from the trigger.
+
 ## Quick Start
 
 <Steps>

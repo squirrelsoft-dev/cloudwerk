@@ -104,14 +104,15 @@ export default function RootLayout({ children }: LayoutProps) {
 Layouts can also have their own `loader()` functions:
 
 ```tsx
-export async function loader({ context }: LoaderArgs) {
-  // Access session from cookies or middleware-set values
-  const session = context.req.cookie('session');
-  const user = session ? context.get('user') : null;
-  return { user };
+import { getUser, getSession } from '@cloudwerk/auth'
+
+export async function loader() {
+  const user = getUser()
+  const session = getSession()
+  return { user, session }
 }
 
-export default function DashboardLayout({ children, user }: LayoutProps & { user: User }) {
+export default function DashboardLayout({ children, user }: LayoutProps & { user: User | null }) {
   return (
     <div>
       <Sidebar user={user} />

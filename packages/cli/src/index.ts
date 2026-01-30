@@ -23,6 +23,22 @@ import {
   triggersValidate,
   triggersGenerate,
 } from './commands/triggers/index.js'
+import { objects } from './commands/objects.js'
+import {
+  objectsList,
+  objectsInfo,
+  objectsMigrations,
+  objectsGenerate,
+} from './commands/objects/index.js'
+import { services } from './commands/services.js'
+import {
+  servicesList,
+  servicesInfo,
+  servicesExtract,
+  servicesInline,
+  servicesDeploy,
+  servicesStatus,
+} from './commands/services/index.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -177,6 +193,101 @@ triggersCmd
   .option('--json', 'Output as JSON')
   .option('--verbose', 'Enable verbose logging')
   .action(triggersGenerate)
+
+// ============================================================================
+// Objects Command
+// ============================================================================
+
+const objectsCmd = program
+  .command('objects')
+  .description('Manage Cloudwerk Durable Objects')
+  .enablePositionalOptions()
+  .passThroughOptions()
+  .option('--verbose', 'Enable verbose logging')
+  .action(objects)
+
+objectsCmd
+  .command('list')
+  .description('List all durable objects with details')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(objectsList)
+
+objectsCmd
+  .command('info <name>')
+  .description('Show durable object details')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(objectsInfo)
+
+objectsCmd
+  .command('migrations')
+  .description('Show migration history for SQLite durable objects')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(objectsMigrations)
+
+objectsCmd
+  .command('generate')
+  .description('Regenerate wrangler.toml and TypeScript types')
+  .option('--wrangler', 'Only generate wrangler.toml config')
+  .option('--types', 'Only generate TypeScript types')
+  .option('--dry-run', 'Show what would be generated without writing')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(objectsGenerate)
+
+// ============================================================================
+// Services Command
+// ============================================================================
+
+const servicesCmd = program
+  .command('services')
+  .description('Manage Cloudwerk services (RPC bindings)')
+  .enablePositionalOptions()
+  .passThroughOptions()
+  .option('--verbose', 'Enable verbose logging')
+  .action(services)
+
+servicesCmd
+  .command('list')
+  .description('List all services with details')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesList)
+
+servicesCmd
+  .command('info <name>')
+  .description('Show service details')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesInfo)
+
+servicesCmd
+  .command('extract <name>')
+  .description('Extract service to separate Worker')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesExtract)
+
+servicesCmd
+  .command('inline <name>')
+  .description('Convert extracted service back to local mode')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesInline)
+
+servicesCmd
+  .command('deploy <name>')
+  .description('Deploy extracted service')
+  .option('-e, --env <environment>', 'Environment to deploy to')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesDeploy)
+
+servicesCmd
+  .command('status')
+  .description('Show status of all services')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(servicesStatus)
 
 // ============================================================================
 // Parse Arguments
