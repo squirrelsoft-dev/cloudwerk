@@ -1189,6 +1189,78 @@ export interface AuthContext<TUser = User, TSession = Session> {
 }
 
 // ============================================================================
+// RBAC Types
+// ============================================================================
+
+/**
+ * Role-based access control configuration.
+ *
+ * Used in user data to define roles, permissions, and role-permission mappings.
+ *
+ * @example
+ * ```typescript
+ * const user: User<RBACConfig> = {
+ *   id: '1',
+ *   email: 'admin@example.com',
+ *   emailVerified: new Date(),
+ *   createdAt: new Date(),
+ *   updatedAt: new Date(),
+ *   data: {
+ *     roles: ['admin', 'editor'],
+ *     permissions: ['posts:delete'],
+ *     rolePermissions: {
+ *       admin: ['users:manage', 'settings:edit'],
+ *       editor: ['posts:create', 'posts:edit'],
+ *     },
+ *   },
+ * }
+ * ```
+ */
+export interface RBACConfig {
+  /** User's assigned roles */
+  roles?: string[]
+
+  /** Role to permissions mapping */
+  rolePermissions?: Record<string, string[]>
+
+  /** Direct permissions assigned to user (in addition to role-based) */
+  permissions?: string[]
+}
+
+/**
+ * User type with RBAC fields included.
+ *
+ * Convenience type for users with role-based access control.
+ *
+ * @typeParam T - Additional user data fields
+ *
+ * @example
+ * ```typescript
+ * import type { UserWithRBAC } from '@cloudwerk/auth'
+ *
+ * interface MyUserData {
+ *   department: string
+ * }
+ *
+ * // User with RBAC + custom data
+ * type MyUser = UserWithRBAC<MyUserData>
+ *
+ * const user: MyUser = {
+ *   id: '1',
+ *   email: 'test@example.com',
+ *   emailVerified: new Date(),
+ *   createdAt: new Date(),
+ *   updatedAt: new Date(),
+ *   data: {
+ *     roles: ['editor'],
+ *     department: 'marketing',
+ *   },
+ * }
+ * ```
+ */
+export type UserWithRBAC<T = Record<string, unknown>> = User<T & RBACConfig>
+
+// ============================================================================
 // Error Types
 // ============================================================================
 
