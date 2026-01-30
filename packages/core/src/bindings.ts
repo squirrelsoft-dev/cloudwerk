@@ -650,3 +650,422 @@ export function getQueueNames(): string[] {
   const queueBindings = getQueueBindingNames(env)
   return queueBindings.map(bindingNameToQueueName)
 }
+
+// ============================================================================
+// Service Types
+// ============================================================================
+
+/**
+ * A service interface representing methods callable via RPC or locally.
+ *
+ * @typeParam T - The service methods type
+ */
+export type Service<T extends Record<string, (...args: unknown[]) => unknown> = Record<string, (...args: unknown[]) => unknown>> = T
+
+// ============================================================================
+// Service Error Messages
+// ============================================================================
+
+const SERVICE_OUTSIDE_CONTEXT_ERROR = `Service accessed outside of request handler.
+
+This can happen when:
+1. Accessing services at module-load time (top-level code)
+2. Accessing services in a setTimeout/setInterval callback
+3. The request context was not properly initialized
+
+Services can only be accessed during request handling within a Cloudwerk application.
+
+Example of correct usage:
+  import { services } from '@cloudwerk/core/bindings'
+
+  export async function POST() {
+    const result = await services.email.send({ to: 'user@example.com', subject: 'Hello' })
+    return json(result)
+  }
+`
+
+function createMissingServiceError(name: string, availableServices: string[]): string {
+  const available =
+    availableServices.length > 0
+      ? `Available services: ${availableServices.join(', ')}`
+      : 'No services are configured'
+
+  return `Service '${name}' not found in current environment.
+
+${available}
+
+To add this service, create a file at app/services/${name}/service.ts with:
+  import { defineService } from '@cloudwerk/service'
+  export default defineService({
+    methods: {
+      async yourMethod(params) { ... }
+    }
+  })
+`
+}
+
+// ============================================================================
+// Service Helper Functions
+// ============================================================================
+
+/**
+ * Get all service binding names from the environment.
+ * Service bindings end with _SERVICE by convention.
+ */
+function getServiceBindingNames(env: Record<string, unknown>): string[] {
+  return Object.keys(env).filter(
+    (key) => key.endsWith('_SERVICE') && env[key] !== undefined
+  )
+}
+
+/**
+ * Convert a service name (camelCase) to binding name (SCREAMING_SNAKE_CASE_SERVICE).
+ */
+function serviceNameToBindingName(serviceName: string): string {
+  const screaming = serviceName
+    .replace(/([A-Z])/g, '_$1')
+    .toUpperCase()
+    .replace(/^_/, '')
+
+  return `${screaming}_SERVICE`
+}
+
+/**
+ * Convert a binding name (SCREAMING_SNAKE_CASE_SERVICE) to service name (camelCase).
+ */
+function bindingNameToServiceName(bindingName: string): string {
+  // Remove _SERVICE suffix and convert to camelCase
+  const withoutSuffix = bindingName.replace(/_SERVICE$/, '')
+  return withoutSuffix.toLowerCase().replace(/_([a-z])/g, (_, letter) =>
+    letter.toUpperCase()
+  )
+}
+
+// ============================================================================
+// Local Services Registry
+// ============================================================================
+
+/**
+ * Registry for local service implementations.
+ * Used when services are running in 'local' mode (not extracted).
+ */
+const localServices = new Map<string, Record<string, (...args: unknown[]) => unknown>>()
+
+/**
+ * Register a local service implementation.
+ * Called by the Vite plugin during dev/build.
+ *
+ * @param name - Service name (camelCase)
+ * @param methods - Service methods
+ */
+export function registerLocalService(
+  name: string,
+  methods: Record<string, (...args: unknown[]) => unknown>
+): void {
+  localServices.set(name, methods)
+}
+
+/**
+ * Unregister a local service.
+ *
+ * @param name - Service name to remove
+ */
+export function unregisterLocalService(name: string): void {
+  localServices.delete(name)
+}
+
+/**
+ * Clear all local service registrations.
+ */
+export function clearLocalServices(): void {
+  localServices.clear()
+}
+
+// ============================================================================
+// Services Proxy
+// ============================================================================
+
+/**
+ * Proxy object that provides typed access to services.
+ *
+ * Services can run in two modes:
+ * - **Local**: Direct function calls within your main Worker
+ * - **Extracted**: As separate Workers using Cloudflare's native RPC (service bindings)
+ *
+ * The API is the same in both modes - the proxy transparently routes to the
+ * appropriate implementation based on configuration.
+ *
+ * @example
+ * ```typescript
+ * import { services } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request) {
+ *   const data = await request.json()
+ *
+ *   // Call a service method - works the same whether local or extracted
+ *   const result = await services.email.send({
+ *     to: data.email,
+ *     subject: 'Welcome!',
+ *     body: 'Thanks for signing up.',
+ *   })
+ *
+ *   // Call another service
+ *   await services.analytics.track({
+ *     event: 'signup',
+ *     userId: data.id,
+ *   })
+ *
+ *   return json(result)
+ * }
+ * ```
+ */
+export const services: Record<string, Service> = new Proxy(
+  {} as Record<string, Service>,
+  {
+    get(_target, prop) {
+      // Ignore symbol access
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      // Get current context
+      let ctx
+      try {
+        ctx = getContext()
+      } catch {
+        throw new Error(SERVICE_OUTSIDE_CONTEXT_ERROR)
+      }
+
+      const env = ctx.env as Record<string, unknown>
+
+      // Check for local service first
+      const localService = localServices.get(prop)
+      if (localService) {
+        return localService
+      }
+
+      // Check for extracted service (service binding)
+      const bindingName = serviceNameToBindingName(prop)
+      const binding = env[bindingName]
+
+      if (binding !== undefined) {
+        // Service binding - Cloudflare handles RPC natively
+        // The binding is a WorkerEntrypoint instance with callable methods
+        return binding
+      }
+
+      // Service not found
+      const serviceBindings = getServiceBindingNames(env)
+      const availableServices = [
+        ...Array.from(localServices.keys()),
+        ...serviceBindings.map(bindingNameToServiceName),
+      ]
+      throw new Error(createMissingServiceError(prop, availableServices))
+    },
+
+    has(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return false
+      }
+
+      // Check local services
+      if (localServices.has(prop)) {
+        return true
+      }
+
+      // Check extracted services
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = serviceNameToBindingName(prop)
+        return bindingName in env && env[bindingName] !== undefined
+      } catch {
+        return false
+      }
+    },
+
+    ownKeys() {
+      const localServiceNames = Array.from(localServices.keys())
+
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const serviceBindings = getServiceBindingNames(env)
+        const extractedNames = serviceBindings.map(bindingNameToServiceName)
+
+        // Combine unique names
+        return [...new Set([...localServiceNames, ...extractedNames])]
+      } catch {
+        return localServiceNames
+      }
+    },
+
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      // Check local services
+      const localService = localServices.get(prop)
+      if (localService) {
+        return {
+          enumerable: true,
+          configurable: true,
+          value: localService,
+        }
+      }
+
+      // Check extracted services
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = serviceNameToBindingName(prop)
+        if (bindingName in env && env[bindingName] !== undefined) {
+          return {
+            enumerable: true,
+            configurable: true,
+            value: env[bindingName],
+          }
+        }
+      } catch {
+        // Outside context
+      }
+      return undefined
+    },
+  }
+)
+
+/**
+ * Get a specific service with type safety.
+ *
+ * @param name - The service name (camelCase)
+ * @returns The typed service interface
+ * @throws Error if called outside request context
+ * @throws Error if service is not found
+ *
+ * @example
+ * ```typescript
+ * import { getService } from '@cloudwerk/core/bindings'
+ *
+ * interface EmailService {
+ *   send(params: { to: string; subject: string; body: string }): Promise<{ success: boolean }>
+ * }
+ *
+ * export async function POST(request: Request) {
+ *   const email = getService<EmailService>('email')
+ *   const result = await email.send({
+ *     to: 'user@example.com',
+ *     subject: 'Hello',
+ *     body: 'Welcome!',
+ *   })
+ *   return json(result)
+ * }
+ * ```
+ */
+export function getService<T extends Record<string, (...args: unknown[]) => unknown> = Record<string, (...args: unknown[]) => unknown>>(name: string): T {
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    throw new Error(SERVICE_OUTSIDE_CONTEXT_ERROR)
+  }
+
+  // Check local services first
+  const localService = localServices.get(name)
+  if (localService) {
+    return localService as T
+  }
+
+  // Check extracted services
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = serviceNameToBindingName(name)
+  const binding = env[bindingName]
+
+  if (binding !== undefined) {
+    return binding as T
+  }
+
+  // Service not found
+  const serviceBindings = getServiceBindingNames(env)
+  const availableServices = [
+    ...Array.from(localServices.keys()),
+    ...serviceBindings.map(bindingNameToServiceName),
+  ]
+  throw new Error(createMissingServiceError(name, availableServices))
+}
+
+/**
+ * Check if a service exists in the current environment.
+ *
+ * @param name - The service name (camelCase) to check
+ * @returns true if the service exists, false otherwise
+ * @throws Error if called outside request context (for extracted services)
+ *
+ * @example
+ * ```typescript
+ * import { hasService, getService } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request) {
+ *   if (hasService('email')) {
+ *     const email = getService('email')
+ *     await email.send({ ... })
+ *   } else {
+ *     // Fallback or skip
+ *   }
+ * }
+ * ```
+ */
+export function hasService(name: string): boolean {
+  // Check local services first
+  if (localServices.has(name)) {
+    return true
+  }
+
+  // Check extracted services
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    // Outside context, can only check local services
+    return false
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = serviceNameToBindingName(name)
+  return bindingName in env && env[bindingName] !== undefined
+}
+
+/**
+ * Get all available service names in the current environment.
+ *
+ * @returns Array of service names (camelCase)
+ * @throws Error if called outside request context (only returns local services outside context)
+ *
+ * @example
+ * ```typescript
+ * import { getServiceNames } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET() {
+ *   const names = getServiceNames()
+ *   return json({ availableServices: names })
+ * }
+ * ```
+ */
+export function getServiceNames(): string[] {
+  const localServiceNames = Array.from(localServices.keys())
+
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    // Outside context, only return local services
+    return localServiceNames
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const serviceBindings = getServiceBindingNames(env)
+  const extractedNames = serviceBindings.map(bindingNameToServiceName)
+
+  // Return unique names
+  return [...new Set([...localServiceNames, ...extractedNames])]
+}

@@ -5,7 +5,7 @@
  * a Hono app with all routes registered from the file-based routing manifest.
  */
 
-import type { RouteManifest, ScanResult, QueueManifest } from '@cloudwerk/core/build'
+import type { RouteManifest, ScanResult, QueueManifest, ServiceManifest } from '@cloudwerk/core/build'
 import type { ResolvedCloudwerkOptions } from '../types.js'
 import * as path from 'node:path'
 
@@ -15,6 +15,8 @@ import * as path from 'node:path'
 export interface GenerateServerEntryOptions {
   /** Queue manifest if queues are configured */
   queueManifest?: QueueManifest | null
+  /** Service manifest if services are configured */
+  serviceManifest?: ServiceManifest | null
 }
 
 /**
@@ -39,6 +41,7 @@ export function generateServerEntry(
   entryOptions?: GenerateServerEntryOptions
 ): string {
   const queueManifest = entryOptions?.queueManifest
+  const serviceManifest = entryOptions?.serviceManifest
   const imports: string[] = []
   const pageRegistrations: string[] = []
   const routeRegistrations: string[] = []
@@ -581,6 +584,7 @@ app.onError(async (err, c) => {
 
 export default app
 ${generateQueueExports(queueManifest)}
+${generateServiceRegistration(serviceManifest)}
 `
 }
 
@@ -692,6 +696,53 @@ async function handle_${queue.name}_queue(batch, env, ctx) {
 
   lines.push('  console.warn(\\`Unknown queue: \\${queueName}\\`)')
   lines.push('}')
+
+  return lines.join('\n')
+}
+
+/**
+ * Generate service registration code for local mode services.
+ * This registers each service with the services proxy so they can be called via services.<name>.<method>
+ */
+function generateServiceRegistration(serviceManifest: ServiceManifest | null | undefined): string {
+  if (!serviceManifest || serviceManifest.services.length === 0) {
+    return ''
+  }
+
+  const lines: string[] = []
+  const imports: string[] = []
+  const registrations: string[] = []
+
+  lines.push('')
+  lines.push('// ============================================================================')
+  lines.push('// Service Registration')
+  lines.push('// ============================================================================')
+  lines.push('')
+
+  // Import registerLocalService from bindings
+  imports.push("import { registerLocalService } from '@cloudwerk/core/bindings'")
+
+  // Import each service definition
+  for (let i = 0; i < serviceManifest.services.length; i++) {
+    const service = serviceManifest.services[i]
+    const varName = `serviceDef_${i}`
+    imports.push(`import ${varName} from '${service.absolutePath}'`)
+
+    // Only register local mode services
+    if (service.mode === 'local') {
+      registrations.push(`registerLocalService('${service.name}', ${varName})`)
+    }
+  }
+
+  lines.push(imports.join('\n'))
+  lines.push('')
+
+  if (registrations.length > 0) {
+    lines.push('// Register local services')
+    for (const reg of registrations) {
+      lines.push(reg)
+    }
+  }
 
   return lines.join('\n')
 }

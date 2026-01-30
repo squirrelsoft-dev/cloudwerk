@@ -10,6 +10,8 @@ import type {
   ScanResult,
   QueueManifest,
   QueueScanResult,
+  ServiceManifest,
+  ServiceScanResult,
 } from '@cloudwerk/core/build'
 
 /**
@@ -114,6 +116,10 @@ export interface PluginState {
   queueManifest: QueueManifest | null
   /** Queue scan result (if queues are enabled) */
   queueScanResult: QueueScanResult | null
+  /** Service manifest (if services are enabled) */
+  serviceManifest: ServiceManifest | null
+  /** Service scan result (if services are enabled) */
+  serviceScanResult: ServiceScanResult | null
   /** Map of client component paths to their info */
   clientComponents: Map<string, ClientComponentInfo>
   /** Cached server entry code */

@@ -24,8 +24,14 @@ import {
   scanQueues,
   buildQueueManifest,
   QUEUES_DIR,
+  // Service scanning
+  scanServices,
+  buildServiceManifest,
+  SERVICES_DIR,
+  SERVICE_FILE_NAME,
   type CloudwerkConfig,
   type QueueManifest,
+  type ServiceManifest,
 } from '@cloudwerk/core/build'
 import type {
   CloudwerkVitePluginOptions,
@@ -200,6 +206,42 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
   }
 
   /**
+   * Build or rebuild the service manifest.
+   */
+  async function buildServiceManifestIfExists(root: string): Promise<void> {
+    if (!state) {
+      throw new Error('Plugin state not initialized')
+    }
+
+    // Check if services directory exists
+    const servicesPath = path.resolve(root, state.options.appDir, SERVICES_DIR)
+    try {
+      await fs.promises.access(servicesPath)
+    } catch {
+      // No services directory, skip
+      state.serviceScanResult = null
+      state.serviceManifest = null
+      return
+    }
+
+    // Scan services
+    state.serviceScanResult = await scanServices(
+      path.resolve(root, state.options.appDir),
+      { extensions: state.options.config.extensions }
+    )
+
+    // Build service manifest
+    state.serviceManifest = buildServiceManifest(
+      state.serviceScanResult,
+      root
+    )
+
+    if (state.options.verbose && state.serviceManifest.services.length > 0) {
+      console.log(`[cloudwerk] Found ${state.serviceManifest.services.length} service(s)`)
+    }
+  }
+
+  /**
    * Check if a file is a route file that should trigger rebuild.
    */
   function isRouteFile(filePath: string): boolean {
@@ -229,6 +271,27 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
     // Must be a supported extension
     const ext = path.extname(filePath)
+    return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
+  }
+
+  /**
+   * Check if a file is a service file that should trigger rebuild.
+   * Services are in app/services/<name>/service.ts
+   */
+  function isServiceFile(filePath: string): boolean {
+    if (!state) return false
+
+    const servicesDir = path.resolve(state.options.root, state.options.appDir, SERVICES_DIR)
+    if (!filePath.startsWith(servicesDir)) return false
+
+    // Service files must be named 'service' with a supported extension
+    const basename = path.basename(filePath)
+    const ext = path.extname(filePath)
+    const nameWithoutExt = basename.replace(ext, '')
+
+    if (nameWithoutExt !== SERVICE_FILE_NAME) return false
+
+    // Must be a supported extension
     return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
   }
 
@@ -354,6 +417,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         },
         queueManifest: null,
         queueScanResult: null,
+        serviceManifest: null,
+        serviceScanResult: null,
         clientComponents: new Map(),
         serverEntryCache: null,
         clientEntryCache: null,
@@ -364,6 +429,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Build queue manifest if queues directory exists
       await buildQueueManifestIfExists(root)
+
+      // Build service manifest if services directory exists
+      await buildServiceManifestIfExists(root)
 
       // Pre-scan for client components (needed for production builds)
       await scanClientComponents(root, state)
@@ -400,6 +468,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildQueueManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for service file additions
+        if (isServiceFile(filePath)) {
+          const servicesDir = path.resolve(root, state!.options.appDir, SERVICES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Service added: ${path.relative(servicesDir, filePath)}`)
+          }
+          await buildServiceManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('unlink', async (filePath: string) => {
@@ -420,6 +498,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildQueueManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for service file removals
+        if (isServiceFile(filePath)) {
+          const servicesDir = path.resolve(root, state!.options.appDir, SERVICES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Service removed: ${path.relative(servicesDir, filePath)}`)
+          }
+          await buildServiceManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('change', async (filePath: string) => {
@@ -438,6 +526,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             console.log(`[cloudwerk] Queue changed: ${path.relative(queuesDir, filePath)}`)
           }
           await buildQueueManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
+
+        // Watch for service file changes
+        if (isServiceFile(filePath)) {
+          const servicesDir = path.resolve(root, state!.options.appDir, SERVICES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Service changed: ${path.relative(servicesDir, filePath)}`)
+          }
+          await buildServiceManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
 
@@ -496,7 +594,10 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             state.manifest,
             state.scanResult,
             state.options,
-            { queueManifest: state.queueManifest }
+            {
+              queueManifest: state.queueManifest,
+              serviceManifest: state.serviceManifest,
+            }
           )
         }
         return state.serverEntryCache

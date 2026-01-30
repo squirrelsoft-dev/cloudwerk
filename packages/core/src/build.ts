@@ -275,3 +275,58 @@ export type {
   QueueManifest,
   BuildQueueManifestOptions,
 } from './queue-compiler.js'
+
+// ============================================================================
+// Service Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isServiceFile,
+
+  // Name Conversion
+  directoryNameToServiceName,
+  serviceNameToBindingName,
+  serviceNameToWorkerName,
+  serviceNameToEntrypointClass,
+
+  // Service Scanning
+  scanServices,
+  scanServicesSync,
+
+  // Constants
+  SERVICES_DIR,
+  SERVICE_FILE_NAME,
+} from './service-scanner.js'
+
+export type { ScannedService, ServiceScanResult } from './service-scanner.js'
+
+// ============================================================================
+// Service Compiler Exports
+// ============================================================================
+
+export {
+  // Service Compilation
+  compileService,
+  buildServiceManifest,
+  updateServiceEntryFromDefinition,
+  addServiceWarnings,
+
+  // Formatting
+  formatServiceErrors,
+  formatServiceWarnings,
+
+  // Utilities
+  hasServiceErrors,
+  hasServiceWarnings,
+} from './service-compiler.js'
+
+export type {
+  ServiceMode,
+  ServiceProcessingConfig,
+  ServiceEntry,
+  ServiceValidationError,
+  ServiceValidationWarning,
+  ServiceManifest,
+  BuildServiceManifestOptions,
+} from './service-compiler.js'
