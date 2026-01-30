@@ -80,7 +80,7 @@ function parseSimpleToml(content: string): WranglerConfig {
 
   // Simple regex-based extraction for arrays of tables
   // D1 databases: [[d1_databases]]
-  const d1Matches = content.matchAll(/\[\[d1_databases\]\]\s*\n([^\[]*)/g)
+  const d1Matches = content.matchAll(/\[\[d1_databases\]\]\s*\n([^[]*)/g)
   for (const match of d1Matches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -90,7 +90,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // KV namespaces: [[kv_namespaces]]
-  const kvMatches = content.matchAll(/\[\[kv_namespaces\]\]\s*\n([^\[]*)/g)
+  const kvMatches = content.matchAll(/\[\[kv_namespaces\]\]\s*\n([^[]*)/g)
   for (const match of kvMatches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -100,7 +100,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // R2 buckets: [[r2_buckets]]
-  const r2Matches = content.matchAll(/\[\[r2_buckets\]\]\s*\n([^\[]*)/g)
+  const r2Matches = content.matchAll(/\[\[r2_buckets\]\]\s*\n([^[]*)/g)
   for (const match of r2Matches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -110,7 +110,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Queue producers: [[queues.producers]]
-  const queueMatches = content.matchAll(/\[\[queues\.producers\]\]\s*\n([^\[]*)/g)
+  const queueMatches = content.matchAll(/\[\[queues\.producers\]\]\s*\n([^[]*)/g)
   for (const match of queueMatches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -121,7 +121,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Durable objects: [[durable_objects.bindings]]
-  const doMatches = content.matchAll(/\[\[durable_objects\.bindings\]\]\s*\n([^\[]*)/g)
+  const doMatches = content.matchAll(/\[\[durable_objects\.bindings\]\]\s*\n([^[]*)/g)
   for (const match of doMatches) {
     const nameMatch = match[1].match(/name\s*=\s*["']([^"']+)["']/)
     if (nameMatch) {
@@ -132,7 +132,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Services: [[services]]
-  const serviceMatches = content.matchAll(/\[\[services\]\]\s*\n([^\[]*)/g)
+  const serviceMatches = content.matchAll(/\[\[services\]\]\s*\n([^[]*)/g)
   for (const match of serviceMatches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -142,7 +142,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Vars: [vars] section
-  const varsMatch = content.match(/\[vars\]\s*\n([^\[]*)/s)
+  const varsMatch = content.match(/\[vars\]\s*\n([^[]*)/s)
   if (varsMatch) {
     const varsSection = varsMatch[1]
     const varMatches = varsSection.matchAll(/(\w+)\s*=\s*["']([^"']*)["']/g)
@@ -153,7 +153,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // AI binding: [ai]
-  const aiMatch = content.match(/\[ai\]\s*\n([^\[]*)/s)
+  const aiMatch = content.match(/\[ai\]\s*\n([^[]*)/s)
   if (aiMatch) {
     const bindingMatch = aiMatch[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -162,7 +162,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Vectorize: [[vectorize]]
-  const vectorizeMatches = content.matchAll(/\[\[vectorize\]\]\s*\n([^\[]*)/g)
+  const vectorizeMatches = content.matchAll(/\[\[vectorize\]\]\s*\n([^[]*)/g)
   for (const match of vectorizeMatches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
@@ -172,7 +172,7 @@ function parseSimpleToml(content: string): WranglerConfig {
   }
 
   // Hyperdrive: [[hyperdrive]]
-  const hyperdriveMatches = content.matchAll(/\[\[hyperdrive\]\]\s*\n([^\[]*)/g)
+  const hyperdriveMatches = content.matchAll(/\[\[hyperdrive\]\]\s*\n([^[]*)/g)
   for (const match of hyperdriveMatches) {
     const bindingMatch = match[1].match(/binding\s*=\s*["']([^"']+)["']/)
     if (bindingMatch) {
