@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     session: 'src/session/index.ts',
+    middleware: 'src/middleware/index.ts',
   },
   format: ['esm'],
   dts: true,

@@ -60,3 +60,28 @@ export {
   createCookieSessionStore,
   createSessionManager,
 } from './session/index.js'
+
+// ============================================================================
+// Middleware
+// ============================================================================
+
+export {
+  // Core auth middleware
+  createCoreAuthMiddleware,
+
+  // Route protection middleware
+  authMiddleware,
+
+  // CSRF middleware
+  csrfMiddleware,
+  generateCsrfToken,
+  setCsrfCookie,
+
+  // Middleware types
+  type AuthMiddlewareOptions,
+  type CoreAuthMiddlewareConfig,
+  type CSRFMiddlewareOptions,
+  type OnSessionParams,
+  type OnSessionResult,
+  type SetCsrfCookieOptions,
+} from './middleware/index.js'
