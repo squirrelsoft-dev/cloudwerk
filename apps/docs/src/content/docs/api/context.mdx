@@ -9,18 +9,14 @@ The `CloudwerkContext` object provides access to bindings, utilities, and reques
 
 There are three ways to access context in Cloudwerk:
 
-1. **Importable helpers** (route handlers) - Import `params`, `request`, `get`, `set` directly
-2. **`getContext()`** (route handlers, middleware) - Call to get the full context object
-3. **`context` parameter** (loaders) - Receive context as a function parameter
+1. **Importable helpers** (recommended) - Import `params`, `request`, `get`, `set` directly
+2. **`getContext()`** - Call to get the full context object
+3. **`context` parameter** (loaders only) - Receive context as a function parameter
+
+All three methods work anywhere within a request: route handlers, loaders, pages, layouts, and middleware.
 
 ```typescript
-// In a loader - use context parameter
-export async function loader({ context }: LoaderArgs) {
-  const user = await context.auth.getUser();
-  return { user };
-}
-
-// In a route handler - use importable helpers (recommended)
+// Importable helpers - work everywhere (recommended)
 import { params, request, get } from '@cloudwerk/core/context'
 
 export async function GET() {
@@ -29,7 +25,21 @@ export async function GET() {
   return json({ userId, user })
 }
 
-// In a route handler - use getContext()
+// In a loader - importable helpers or context parameter both work
+import { params, get } from '@cloudwerk/core/context'
+
+export async function loader({ context }: LoaderArgs) {
+  // Option 1: Use importable helpers (recommended)
+  const userId = params.id
+  const user = get<User>('user')
+
+  // Option 2: Use context parameter
+  const userId2 = context.params.id
+
+  return { userId, user };
+}
+
+// getContext() - also works everywhere
 import { getContext, json } from '@cloudwerk/core'
 
 export async function GET() {
@@ -37,19 +47,18 @@ export async function GET() {
   return json({ userId: ctx.params.id })
 }
 
-// In middleware - use getContext() for set()
-import { getContext } from '@cloudwerk/core'
+// In middleware
+import { set } from '@cloudwerk/core/context'
 
 export const middleware: Middleware = async (request, next) => {
-  const ctx = getContext()
-  ctx.set('user', await validateSession(request))
+  set('user', await validateSession(request))
   return next()
 };
 ```
 
-## Context Helpers (Route Handlers)
+## Importable Context Helpers
 
-For route handlers, import context helpers directly from `@cloudwerk/core/context`:
+Import context helpers directly from `@cloudwerk/core/context`. These work in route handlers, loaders, pages, layouts, and middleware - anywhere within a request:
 
 ```typescript
 import { params, request, get, set, getRequestId } from '@cloudwerk/core/context'
