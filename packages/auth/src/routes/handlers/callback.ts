@@ -129,7 +129,7 @@ export async function handleOAuthCallback(
     // Create user object
     const user: User = {
       id: userData.id ?? crypto.randomUUID(),
-      email: userData.email ?? '',
+      email: userData.email ?? null,
       emailVerified: userData.emailVerified ?? null,
       name: userData.name,
       image: userData.image,

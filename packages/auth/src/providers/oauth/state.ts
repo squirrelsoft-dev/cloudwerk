@@ -146,6 +146,15 @@ export async function storeState(
  *
  * The state is deleted after retrieval to prevent replay attacks.
  *
+ * **Concurrency Note**: Cloudflare KV does not support atomic get-and-delete.
+ * The get and delete operations are separate, which means under high concurrency
+ * two requests with the same state could potentially both read the state before
+ * either deletes it. However, this is mitigated by OAuth providers rejecting
+ * duplicate authorization code exchanges - the second request would fail at
+ * the token exchange step. For applications requiring strict atomic state
+ * consumption, consider using Durable Objects instead.
+ * See: https://github.com/squirrelsoft-dev/cloudwerk/issues/219
+ *
  * @param config - Storage configuration
  * @param stateValue - The state value from callback
  * @returns The OAuth state if valid, null if not found or expired
@@ -172,7 +181,7 @@ export async function consumeState(
 ): Promise<OAuthState | null> {
   const key = `${config.prefix ?? STATE_KEY_PREFIX}${stateValue}`
 
-  // Get and delete atomically
+  // Note: KV get and delete are NOT atomic - see JSDoc above for implications
   const data = await config.kv.get(key)
 
   if (!data) {

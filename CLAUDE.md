@@ -36,13 +36,27 @@ pnpm dev
 
 ## Package Structure
 
-This is a pnpm monorepo with linked packages. The three active packages are:
+This is a pnpm monorepo with linked packages.
+
+### Core Packages
 
 - **@cloudwerk/core** (`packages/core/`) - Route compiler, file scanner, middleware adapter, config loader, response helpers. All core types are defined here.
 - **@cloudwerk/cli** (`packages/cli/`) - Dev server, route registration with Hono, module loading (pages, layouts, handlers, middleware). Depends on core and ui.
 - **@cloudwerk/ui** (`packages/ui/`) - Renderer abstraction for SSR. Currently wraps Hono JSX.
 
-Other packages (`data`, `auth`, `queue`, `storage`, `realtime`) are planned but not yet implemented.
+### Feature Packages
+
+- **@cloudwerk/auth** (`packages/auth/`) - Authentication and session management. OAuth providers, session adapters, rate limiting, CSRF protection.
+- **@cloudwerk/queue** (`packages/queue/`) - Queue consumer and producer abstractions for Cloudflare Queues.
+- **@cloudwerk/trigger** (`packages/trigger/`) - Cron triggers and scheduled task handling.
+- **@cloudwerk/durable-object** (`packages/durable-object/`) - Durable Object base classes and utilities.
+- **@cloudwerk/service** (`packages/service/`) - Service bindings and RPC utilities.
+
+### Planned Packages
+
+- **@cloudwerk/data** - D1 database integration and query builder (planned)
+- **@cloudwerk/storage** - R2 object storage integration (planned)
+- **@cloudwerk/realtime** - WebSocket and real-time communication (planned)
 
 ## Architecture
 

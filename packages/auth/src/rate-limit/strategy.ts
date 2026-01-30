@@ -31,6 +31,12 @@ interface FixedWindowData {
  * Cons:
  * - Burst at window boundaries (user can make 2x limit requests at boundary)
  *
+ * **Concurrency Note**: Cloudflare KV does not support atomic increment operations.
+ * Under high concurrency, the read-modify-write pattern may allow some requests
+ * to slip through beyond the configured limit. For strict atomic rate limiting
+ * where accuracy is critical, consider using Durable Objects instead.
+ * See: https://github.com/squirrelsoft-dev/cloudwerk/issues/218
+ *
  * @param kv - KV namespace
  * @param prefix - Key prefix
  * @returns Rate limit storage
@@ -141,6 +147,12 @@ interface SlidingWindowData {
  * Cons:
  * - Higher storage requirements (stores individual timestamps)
  * - More complex to implement
+ *
+ * **Concurrency Note**: Cloudflare KV does not support atomic increment operations.
+ * Under high concurrency, the read-modify-write pattern may allow some requests
+ * to slip through beyond the configured limit. For strict atomic rate limiting
+ * where accuracy is critical, consider using Durable Objects instead.
+ * See: https://github.com/squirrelsoft-dev/cloudwerk/issues/218
  *
  * @param kv - KV namespace
  * @param prefix - Key prefix

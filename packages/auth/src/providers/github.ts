@@ -124,7 +124,7 @@ export function github(
 
       return {
         id: String(profile.id),
-        email: email ?? '',
+        email: email ?? null,
         emailVerified,
         name: profile.name ?? profile.login,
         image: profile.avatar_url,
@@ -134,12 +134,12 @@ export function github(
 }
 
 /**
- * Fetch user's primary email from GitHub emails API.
+ * Fetch emails from GitHub emails API.
  *
  * @param accessToken - GitHub access token
- * @returns Primary email address or null
+ * @returns Array of GitHub emails or null if request failed
  */
-async function fetchPrimaryEmail(accessToken: string): Promise<string | null> {
+async function fetchGitHubEmails(accessToken: string): Promise<GitHubEmail[] | null> {
   const response = await fetch(GITHUB_EMAILS_URL, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -152,7 +152,21 @@ async function fetchPrimaryEmail(accessToken: string): Promise<string | null> {
     return null
   }
 
-  const emails = (await response.json()) as GitHubEmail[]
+  return response.json() as Promise<GitHubEmail[]>
+}
+
+/**
+ * Fetch user's primary email from GitHub emails API.
+ *
+ * @param accessToken - GitHub access token
+ * @returns Primary email address or null
+ */
+async function fetchPrimaryEmail(accessToken: string): Promise<string | null> {
+  const emails = await fetchGitHubEmails(accessToken)
+
+  if (!emails) {
+    return null
+  }
 
   // Find primary verified email
   const primary = emails.find((e) => e.primary && e.verified)
@@ -179,19 +193,11 @@ async function fetchPrimaryEmail(accessToken: string): Promise<string | null> {
 async function fetchPrimaryEmailWithVerification(
   accessToken: string
 ): Promise<{ email: string; verified: boolean } | null> {
-  const response = await fetch(GITHUB_EMAILS_URL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      'User-Agent': 'Cloudwerk-Auth',
-    },
-  })
+  const emails = await fetchGitHubEmails(accessToken)
 
-  if (!response.ok) {
+  if (!emails) {
     return null
   }
-
-  const emails = (await response.json()) as GitHubEmail[]
 
   // Find primary email (prefer verified)
   const primary = emails.find((e) => e.primary)

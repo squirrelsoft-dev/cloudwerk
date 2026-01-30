@@ -135,7 +135,7 @@ export interface SessionResponse {
   /** Current user */
   user: {
     id: string
-    email: string
+    email: string | null
     name?: string | null
     image?: string | null
   } | null

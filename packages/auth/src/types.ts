@@ -52,8 +52,8 @@ export interface User<TUserData = Record<string, unknown>> {
   /** Unique identifier for the user */
   id: string
 
-  /** User's email address (unique) */
-  email: string
+  /** User's email address (unique, null if not provided by OAuth provider) */
+  email: string | null
 
   /** Whether the email has been verified */
   emailVerified: Date | null
