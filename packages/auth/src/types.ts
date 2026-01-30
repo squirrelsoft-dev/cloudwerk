@@ -512,11 +512,12 @@ export interface AdapterConfig {
  *
  * @example
  * ```typescript
- * import { createKVSessionAdapter } from '@cloudwerk/auth/adapters/kv'
+ * import { createKVSessionAdapter } from '@cloudwerk/auth/session'
  *
  * const sessionAdapter = createKVSessionAdapter({
  *   binding: env.AUTH_SESSIONS,
  *   prefix: 'session:',
+ *   enableUserIndex: true,
  * })
  * ```
  */
@@ -526,6 +527,102 @@ export interface KVSessionAdapterConfig<TKV = unknown> extends AdapterConfig {
 
   /** Key prefix for session entries */
   prefix?: string
+
+  /** Enable user index for "sign out all devices" functionality */
+  enableUserIndex?: boolean
+
+  /** User adapter for getSessionAndUser (optional) */
+  userAdapter?: UserAdapter
+}
+
+/**
+ * Cookie session store interface for stateless JWT sessions.
+ *
+ * Unlike SessionAdapter, this only handles encoding/decoding session data
+ * to/from JWT tokens. It does not persist sessions server-side.
+ *
+ * @typeParam TSessionData - Custom session data fields
+ *
+ * @example
+ * ```typescript
+ * import { createCookieSessionStore } from '@cloudwerk/auth/session'
+ *
+ * const store = createCookieSessionStore({
+ *   secret: env.SESSION_SECRET,
+ *   maxAge: 30 * 24 * 60 * 60, // 30 days
+ * })
+ *
+ * // Encode session to JWT
+ * const token = await store.encode(session)
+ *
+ * // Decode JWT to session
+ * const session = await store.decode(token)
+ * ```
+ */
+export interface CookieSessionStore<TSessionData = Record<string, unknown>> {
+  /** Encode session data to a signed JWT token */
+  encode(session: Session<TSessionData>): Awaitable<string>
+
+  /** Decode and verify JWT token to session data (null if invalid/expired) */
+  decode(token: string): Awaitable<Session<TSessionData> | null>
+}
+
+/**
+ * Configuration for cookie-based session store.
+ *
+ * Uses JWT tokens signed with HMAC for stateless session management.
+ *
+ * @example
+ * ```typescript
+ * const config: CookieSessionStoreConfig = {
+ *   secret: env.SESSION_SECRET,
+ *   algorithm: 'HS256',
+ *   maxAge: 30 * 24 * 60 * 60,
+ *   issuer: 'https://myapp.com',
+ * }
+ * ```
+ */
+export interface CookieSessionStoreConfig {
+  /** Secret key for signing JWTs (min 32 chars recommended) */
+  secret: string
+
+  /** HMAC algorithm for signing (default: 'HS256') */
+  algorithm?: 'HS256' | 'HS384' | 'HS512'
+
+  /** Maximum token age in seconds (default: 30 days) */
+  maxAge?: number
+
+  /** JWT issuer claim */
+  issuer?: string
+
+  /** JWT audience claim */
+  audience?: string
+}
+
+/**
+ * Configuration for session cookie handling.
+ *
+ * Controls cookie name and attributes for session tokens.
+ *
+ * @example
+ * ```typescript
+ * const config: SessionCookieConfig = {
+ *   name: 'my-app-session',
+ *   attributes: {
+ *     secure: true,
+ *     httpOnly: true,
+ *     sameSite: 'strict',
+ *     path: '/',
+ *   },
+ * }
+ * ```
+ */
+export interface SessionCookieConfig {
+  /** Cookie name (default: 'cloudwerk.session-token') */
+  name?: string
+
+  /** Cookie attributes (secure defaults applied) */
+  attributes?: Partial<CookieAttributes>
 }
 
 /**

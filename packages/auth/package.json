@@ -12,6 +12,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "import": "./dist/session.js"
     }
   },
   "files": [
@@ -23,7 +27,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cloudwerk/core": "workspace:*"
+    "@cloudwerk/core": "workspace:*",
+    "jose": "^5.2.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
