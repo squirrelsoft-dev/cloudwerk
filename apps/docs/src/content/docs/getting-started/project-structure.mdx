@@ -3,7 +3,7 @@ title: Project Structure
 description: Learn the file conventions and directory structure of a Cloudwerk project.
 ---
 
-import { FileTree } from '@astrojs/starlight/components';
+import { FileTree, Aside } from '@astrojs/starlight/components';
 
 Cloudwerk uses a file-based routing system where your directory structure defines your application's routes. This guide covers all the file conventions you need to know.
 
@@ -33,6 +33,27 @@ A typical Cloudwerk project has this structure:
       - route.ts      # Users API (/api/users)
       - [id]/
         - route.ts    # User API (/api/users/:id)
+  - auth/             # Authentication config
+    - config.ts       # Auth configuration
+    - callbacks.ts    # Auth callbacks
+    - rbac.ts         # Role definitions
+    - providers/
+      - github.ts     # OAuth provider
+      - credentials.ts # Email/password
+  - queues/           # Queue consumers
+    - email.ts        # Email queue
+    - notifications.ts # Notifications queue
+  - services/         # Service definitions
+    - email/
+      - service.ts    # Email service
+    - payments/
+      - service.ts    # Payments service
+  - objects/          # Durable Objects
+    - counter.ts      # Counter DO
+    - chat-room.ts    # Chat room DO
+  - triggers/         # Event triggers
+    - daily-cleanup.ts # Scheduled trigger
+    - stripe-webhook.ts # Webhook trigger
 - public/             # Static assets
 - cloudwerk.config.ts # Configuration
 - wrangler.toml       # Cloudflare config
@@ -194,6 +215,228 @@ export default function NotFoundPage() {
 }
 ```
 
+---
+
+## Convention Directories
+
+Cloudwerk uses convention directories for authentication, queues, services, durable objects, and triggers. These are automatically discovered and registered.
+
+### app/auth/ - Authentication
+
+Authentication configuration files:
+
+<FileTree>
+- app/auth/
+  - config.ts         # Main auth configuration
+  - callbacks.ts      # Lifecycle callbacks
+  - pages.ts          # Custom page paths
+  - rbac.ts           # Role and permission definitions
+  - providers/
+    - github.ts       # OAuth provider
+    - google.ts       # OIDC provider
+    - credentials.ts  # Email/password
+    - email.ts        # Magic link
+</FileTree>
+
+```typescript
+// app/auth/config.ts
+import { defineAuthConfig } from '@cloudwerk/auth/convention'
+
+export default defineAuthConfig({
+  basePath: '/auth',
+  session: {
+    strategy: 'database',
+    maxAge: 30 * 24 * 60 * 60,
+  },
+})
+
+// app/auth/providers/github.ts
+import { defineProvider, github } from '@cloudwerk/auth/convention'
+
+export default defineProvider(
+  github({
+    clientId: process.env.GITHUB_CLIENT_ID!,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+  })
+)
+```
+
+<Aside type="tip">
+See the [Authentication Guide](/guides/authentication/) for complete documentation.
+</Aside>
+
+### app/queues/ - Queue Consumers
+
+Queue consumers are defined as individual files:
+
+<FileTree>
+- app/queues/
+  - email.ts              # email queue
+  - image-processing.ts   # imageProcessing queue
+  - notifications.ts      # notifications queue
+</FileTree>
+
+File names are converted to camelCase queue names.
+
+```typescript
+// app/queues/email.ts
+import { defineQueue } from '@cloudwerk/queue'
+
+interface EmailMessage {
+  to: string
+  subject: string
+  body: string
+}
+
+export default defineQueue<EmailMessage>({
+  async process(message) {
+    await sendEmail(message.body)
+    message.ack()
+  },
+})
+```
+
+<Aside type="tip">
+See the [Queues Guide](/guides/queues/) for complete documentation.
+</Aside>
+
+### app/services/ - Service Definitions
+
+Services are defined in named directories:
+
+<FileTree>
+- app/services/
+  - email/
+    - service.ts      # Required: service definition
+    - utils.ts        # Optional: helper utilities
+  - payments/
+    - service.ts
+  - analytics/
+    - service.ts
+</FileTree>
+
+Directory names are converted to camelCase service names (`email/` → `email`, `user-management/` → `userManagement`).
+
+```typescript
+// app/services/email/service.ts
+import { defineService } from '@cloudwerk/service'
+
+export default defineService({
+  methods: {
+    async send({ to, subject, body }) {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ to, subject, html: body }),
+      })
+      return response.json()
+    },
+  },
+})
+```
+
+<Aside type="tip">
+See the [Services Guide](/guides/services/) for complete documentation.
+</Aside>
+
+### app/objects/ - Durable Objects
+
+Durable Objects are defined as individual files:
+
+<FileTree>
+- app/objects/
+  - counter.ts        # Counter DO
+  - chat-room.ts      # ChatRoom DO
+  - game-session.ts   # GameSession DO
+</FileTree>
+
+File names are converted to PascalCase class names.
+
+```typescript
+// app/objects/counter.ts
+import { defineDurableObject } from '@cloudwerk/durable-object'
+
+interface CounterState {
+  count: number
+}
+
+export default defineDurableObject<CounterState>({
+  init: async (ctx) => ({ count: 0 }),
+
+  methods: {
+    async increment(ctx, amount: number = 1) {
+      ctx.setState({ count: ctx.state.count + amount })
+      await ctx.storage.put('state', ctx.state)
+      return ctx.state.count
+    },
+
+    async getCount(ctx) {
+      return ctx.state.count
+    },
+  },
+})
+```
+
+<Aside type="tip">
+See the [Durable Objects Guide](/guides/durable-objects/) for complete documentation.
+</Aside>
+
+### app/triggers/ - Event Triggers
+
+Event triggers are defined as individual files:
+
+<FileTree>
+- app/triggers/
+  - daily-cleanup.ts      # Scheduled trigger
+  - stripe-webhook.ts     # Webhook trigger
+  - image-uploaded.ts     # R2 trigger
+  - support-email.ts      # Email trigger
+</FileTree>
+
+```typescript
+// app/triggers/daily-cleanup.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'scheduled',
+    cron: '0 0 * * *',  // Daily at midnight
+  },
+  async handle(event, ctx) {
+    await ctx.env.DB.exec('DELETE FROM sessions WHERE expires_at < datetime("now")')
+  },
+})
+
+// app/triggers/stripe-webhook.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+import { stripeVerifier } from '@cloudwerk/trigger/verifiers'
+
+export default defineTrigger({
+  source: {
+    type: 'webhook',
+    path: '/webhooks/stripe',
+    verifier: stripeVerifier({
+      secret: process.env.STRIPE_WEBHOOK_SECRET!,
+    }),
+  },
+  async handle(event, ctx) {
+    const stripeEvent = event.payload
+    if (stripeEvent.type === 'checkout.session.completed') {
+      await fulfillOrder(stripeEvent.data.object)
+    }
+  },
+})
+```
+
+<Aside type="tip">
+See the [Triggers Guide](/guides/triggers/) for complete documentation.
+</Aside>
+
+---
+
 ## Dynamic Routes
 
 ### Single Segment
@@ -277,4 +520,7 @@ Only `page.tsx`, `layout.tsx`, `route.ts`, and `middleware.ts` are treated as ro
 
 - **[Routing Guide](/guides/routing/)** - Deep dive into routing patterns
 - **[Data Loading](/guides/data-loading/)** - Server-side data fetching
-- **[Middleware](/api/context/)** - Request middleware patterns
+- **[Authentication](/guides/authentication/)** - Add auth to your app
+- **[Services](/guides/services/)** - Build reusable services
+- **[Queues](/guides/queues/)** - Background job processing
+- **[Triggers](/guides/triggers/)** - Event-driven architecture

@@ -4,7 +4,15 @@
  * Configuration and internal types for the Cloudwerk Vite plugin.
  */
 
-import type { CloudwerkConfig, RouteManifest, ScanResult } from '@cloudwerk/core/build'
+import type {
+  CloudwerkConfig,
+  RouteManifest,
+  ScanResult,
+  QueueManifest,
+  QueueScanResult,
+  ServiceManifest,
+  ServiceScanResult,
+} from '@cloudwerk/core/build'
 
 /**
  * Options for the Cloudwerk Vite plugin.
@@ -104,6 +112,14 @@ export interface PluginState {
   manifest: RouteManifest
   /** Current scan result */
   scanResult: ScanResult
+  /** Queue manifest (if queues are enabled) */
+  queueManifest: QueueManifest | null
+  /** Queue scan result (if queues are enabled) */
+  queueScanResult: QueueScanResult | null
+  /** Service manifest (if services are enabled) */
+  serviceManifest: ServiceManifest | null
+  /** Service scan result (if services are enabled) */
+  serviceScanResult: ServiceScanResult | null
   /** Map of client component paths to their info */
   clientComponents: Map<string, ClientComponentInfo>
   /** Cached server entry code */

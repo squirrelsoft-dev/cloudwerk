@@ -5,9 +5,19 @@
  * a Hono app with all routes registered from the file-based routing manifest.
  */
 
-import type { RouteManifest, ScanResult } from '@cloudwerk/core/build'
+import type { RouteManifest, ScanResult, QueueManifest, ServiceManifest } from '@cloudwerk/core/build'
 import type { ResolvedCloudwerkOptions } from '../types.js'
 import * as path from 'node:path'
+
+/**
+ * Options for generating server entry.
+ */
+export interface GenerateServerEntryOptions {
+  /** Queue manifest if queues are configured */
+  queueManifest?: QueueManifest | null
+  /** Service manifest if services are configured */
+  serviceManifest?: ServiceManifest | null
+}
 
 /**
  * Generate the server entry module code.
@@ -27,8 +37,11 @@ import * as path from 'node:path'
 export function generateServerEntry(
   manifest: RouteManifest,
   scanResult: ScanResult,
-  options: ResolvedCloudwerkOptions
+  options: ResolvedCloudwerkOptions,
+  entryOptions?: GenerateServerEntryOptions
 ): string {
+  const queueManifest = entryOptions?.queueManifest
+  const serviceManifest = entryOptions?.serviceManifest
   const imports: string[] = []
   const pageRegistrations: string[] = []
   const routeRegistrations: string[] = []
@@ -570,5 +583,166 @@ app.onError(async (err, c) => {
 // ============================================================================
 
 export default app
+${generateQueueExports(queueManifest)}
+${generateServiceRegistration(serviceManifest)}
 `
+}
+
+/**
+ * Generate queue consumer exports for Cloudflare Workers.
+ */
+function generateQueueExports(queueManifest: QueueManifest | null | undefined): string {
+  if (!queueManifest || queueManifest.queues.length === 0) {
+    return ''
+  }
+
+  const lines: string[] = []
+  const imports: string[] = []
+  const queueHandlers: string[] = []
+
+  lines.push('')
+  lines.push('// ============================================================================')
+  lines.push('// Queue Consumer Handlers')
+  lines.push('// ============================================================================')
+  lines.push('')
+
+  // Import each queue definition
+  for (let i = 0; i < queueManifest.queues.length; i++) {
+    const queue = queueManifest.queues[i]
+    const varName = `queueDef_${i}`
+    imports.push(`import ${varName} from '${queue.absolutePath}'`)
+
+    // Generate handler for this queue
+    queueHandlers.push(`
+/**
+ * Queue consumer handler for '${queue.name}'
+ */
+async function handle_${queue.name}_queue(batch, env, ctx) {
+  const definition = ${varName}
+
+  // Create message wrappers
+  const messages = batch.messages.map((msg) => ({
+    id: msg.id,
+    body: msg.body,
+    timestamp: new Date(msg.timestamp),
+    attempts: msg.attempts,
+    ack: () => msg.ack(),
+    retry: (options) => msg.retry(options),
+    deadLetter: (reason) => {
+      // Mark for DLQ if configured
+      if (definition.config?.deadLetterQueue) {
+        msg.retry({ delaySeconds: 0 })
+      }
+    },
+  }))
+
+  // Validate messages if schema is defined
+  if (definition.schema) {
+    for (const message of messages) {
+      const result = definition.schema.safeParse(message.body)
+      if (!result.success) {
+        console.error('Queue message validation failed:', result.error)
+        message.retry({ delaySeconds: 60 })
+        return
+      }
+    }
+  }
+
+  try {
+    // Use batch processor if available
+    if (definition.processBatch) {
+      await definition.processBatch(messages)
+    } else if (definition.process) {
+      // Process messages individually
+      for (const message of messages) {
+        try {
+          await definition.process(message)
+        } catch (error) {
+          if (definition.onError) {
+            await definition.onError(error, message)
+          } else {
+            throw error
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Queue processing error:', error)
+    // Retry all messages
+    batch.retryAll()
+  }
+}`)
+  }
+
+  lines.push(imports.join('\n'))
+  lines.push(queueHandlers.join('\n'))
+
+  // Generate the main queue handler that routes to specific handlers
+  lines.push('')
+  lines.push('/**')
+  lines.push(' * Main queue handler that routes to specific queue handlers.')
+  lines.push(' * Export this as the `queue` handler in your worker.')
+  lines.push(' */')
+  lines.push('export async function queue(batch, env, ctx) {')
+  lines.push('  const queueName = batch.queue')
+  lines.push('')
+
+  for (const queue of queueManifest.queues) {
+    lines.push(`  if (queueName === '${queue.queueName}') {`)
+    lines.push(`    return handle_${queue.name}_queue(batch, env, ctx)`)
+    lines.push('  }')
+    lines.push('')
+  }
+
+  lines.push('  console.warn(\\`Unknown queue: \\${queueName}\\`)')
+  lines.push('}')
+
+  return lines.join('\n')
+}
+
+/**
+ * Generate service registration code for local mode services.
+ * This registers each service with the services proxy so they can be called via services.<name>.<method>
+ */
+function generateServiceRegistration(serviceManifest: ServiceManifest | null | undefined): string {
+  if (!serviceManifest || serviceManifest.services.length === 0) {
+    return ''
+  }
+
+  const lines: string[] = []
+  const imports: string[] = []
+  const registrations: string[] = []
+
+  lines.push('')
+  lines.push('// ============================================================================')
+  lines.push('// Service Registration')
+  lines.push('// ============================================================================')
+  lines.push('')
+
+  // Import registerLocalService from bindings
+  imports.push("import { registerLocalService } from '@cloudwerk/core/bindings'")
+
+  // Import each service definition
+  for (let i = 0; i < serviceManifest.services.length; i++) {
+    const service = serviceManifest.services[i]
+    const varName = `serviceDef_${i}`
+    imports.push(`import ${varName} from '${service.absolutePath}'`)
+
+    // Only register local mode services
+    if (service.mode === 'local') {
+      registrations.push(`registerLocalService('${service.name}', ${varName})`)
+    }
+  }
+
+  lines.push(imports.join('\n'))
+  lines.push('')
+
+  if (registrations.length > 0) {
+    lines.push('// Register local services')
+    for (const reg of registrations) {
+      lines.push(reg)
+    }
+  }
+
+  return lines.join('\n')
 }

@@ -1,377 +1,595 @@
 ---
 title: Queues
-description: Process background jobs with Cloudflare Queues in your Cloudwerk application.
+description: Process background jobs with type-safe queue consumers using @cloudwerk/queue.
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
 
-Cloudflare Queues allow you to process tasks asynchronously in the background. Cloudwerk provides seamless integration for sending and consuming queue messages.
+Cloudwerk provides a convention-based queue system through `@cloudwerk/queue`. Define type-safe consumers with schema validation, dead letter queues, and automatic type generation.
 
-## Getting Started
-
-### Create a Queue
+## Quick Start
 
 <Steps>
-1. Create a queue via Wrangler:
-
-   ```bash
-   wrangler queues create my-queue
-   ```
-
-2. Add the queue binding to `wrangler.toml`:
-
-   ```toml
-   [[queues.producers]]
-   binding = "MY_QUEUE"
-   queue = "my-queue"
-
-   [[queues.consumers]]
-   queue = "my-queue"
-   max_batch_size = 10
-   max_batch_timeout = 30
-   ```
-
-3. Configure Cloudwerk:
+1. Create a queue consumer:
 
    ```typescript
-   // cloudwerk.config.ts
-   import { defineConfig } from '@cloudwerk/core';
+   // app/queues/email.ts
+   import { defineQueue } from '@cloudwerk/queue'
 
-   export default defineConfig({
-     queues: {
-       MY_QUEUE: {
-         handler: './workers/queue-handler.ts',
-       },
+   interface EmailMessage {
+     to: string
+     subject: string
+     body: string
+   }
+
+   export default defineQueue<EmailMessage>({
+     async process(message) {
+       await sendEmail(message.body)
+       message.ack()
      },
-   });
+   })
    ```
+
+2. Send messages from your routes:
+
+   ```typescript
+   // app/api/subscribe/route.ts
+   import { queues } from '@cloudwerk/core/bindings'
+   import { json } from '@cloudwerk/core'
+
+   export async function POST(request: Request) {
+     const { email } = await request.json()
+
+     await queues.email.send({
+       to: email,
+       subject: 'Welcome!',
+       body: 'Thanks for subscribing.',
+     })
+
+     return json({ success: true })
+   }
+   ```
+
+3. Queue consumers are automatically discovered and registered during build.
 </Steps>
+
+## Convention Structure
+
+Queue consumers are defined in the `app/queues/` directory:
+
+<FileTree>
+- app/queues/
+  - email.ts              # Email queue consumer
+  - image-processing.ts   # Image processing queue
+  - notifications.ts      # Notifications queue
+</FileTree>
+
+**Naming Convention:**
+- File names are kebab-case → converted to camelCase queue names
+- `email.ts` → queue name `email`
+- `image-processing.ts` → queue name `imageProcessing`
+
+## Defining Consumers
+
+### Basic Consumer
+
+```typescript
+// app/queues/notifications.ts
+import { defineQueue } from '@cloudwerk/queue'
+
+interface Notification {
+  userId: string
+  type: 'email' | 'push' | 'sms'
+  message: string
+}
+
+export default defineQueue<Notification>({
+  async process(message) {
+    const { userId, type, message: content } = message.body
+
+    switch (type) {
+      case 'email':
+        await sendEmail(userId, content)
+        break
+      case 'push':
+        await sendPush(userId, content)
+        break
+      case 'sms':
+        await sendSMS(userId, content)
+        break
+    }
+
+    message.ack()
+  },
+})
+```
+
+### With Schema Validation
+
+Use Zod for runtime message validation:
+
+```typescript
+// app/queues/email.ts
+import { defineQueue } from '@cloudwerk/queue'
+import { z } from 'zod'
+
+const EmailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1),
+  body: z.string(),
+  priority: z.enum(['low', 'normal', 'high']).default('normal'),
+})
+
+type EmailMessage = z.infer<typeof EmailSchema>
+
+export default defineQueue<EmailMessage>({
+  schema: EmailSchema, // Validates at runtime
+  async process(message) {
+    // message.body is validated and typed
+    await sendEmail(message.body)
+    message.ack()
+  },
+})
+```
+
+### With Configuration
+
+```typescript
+export default defineQueue<OrderMessage>({
+  config: {
+    batchSize: 25,                  // Max messages per batch (default: 10)
+    maxRetries: 5,                  // Max retry attempts (default: 3)
+    retryDelay: '2m',               // Delay between retries (default: '1m')
+    deadLetterQueue: 'orders-dlq',  // DLQ for failed messages
+    batchTimeout: '10s',            // Max wait time to fill batch
+  },
+  async process(message) {
+    await processOrder(message.body)
+    message.ack()
+  },
+})
+```
+
+### With Error Handler
+
+```typescript
+export default defineQueue<TaskMessage>({
+  async process(message) {
+    await processTask(message.body)
+    message.ack()
+  },
+  async onError(error, message) {
+    console.error(`Failed to process task (attempt ${message.attempts}):`, error)
+
+    if (message.attempts >= 3) {
+      // Log for investigation
+      await logFailedMessage(message, error)
+    }
+  },
+})
+```
 
 ## Sending Messages
 
-### Basic Message
+### Typed Producers
+
+Import the `queues` proxy to send type-safe messages:
 
 ```typescript
-// app/api/orders/route.ts
-import { json } from '@cloudwerk/core';
+import { queues } from '@cloudwerk/core/bindings'
 
-export async function POST(request: Request, { context }: CloudwerkHandlerContext) {
-  const order = await request.json();
+// Single message
+await queues.email.send({
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  body: 'Thanks for signing up.',
+})
 
-  // Save order to database
-  const savedOrder = await context.db
-    .insertInto('orders')
-    .values(order)
-    .returning(['id'])
-    .executeTakeFirst();
+// With delay
+await queues.email.send(message, { delaySeconds: 60 })
 
-  // Queue background processing
-  await context.queues.MY_QUEUE.send({
-    type: 'process_order',
-    orderId: savedOrder.id,
-  });
+// Batch send
+await queues.notifications.sendBatch([
+  { userId: '1', type: 'email', message: 'Hello' },
+  { userId: '2', type: 'push', message: 'Hello' },
+])
+```
 
-  return json({ orderId: savedOrder.id }, { status: 201 });
+### Send Options
+
+```typescript
+interface SendOptions {
+  delaySeconds?: number    // Delay before processing
+  contentType?: 'json' | 'text' | 'bytes' | 'v8'  // Default: 'json'
 }
 ```
 
-### Batch Messages
+## Message Handling
+
+### QueueMessage Interface
 
 ```typescript
-// Send multiple messages
-await context.queues.MY_QUEUE.sendBatch([
-  { body: { type: 'email', to: 'user1@example.com', template: 'welcome' } },
-  { body: { type: 'email', to: 'user2@example.com', template: 'welcome' } },
-  { body: { type: 'email', to: 'user3@example.com', template: 'welcome' } },
-]);
-```
+interface QueueMessage<T> {
+  readonly id: string           // Unique message ID
+  readonly body: T              // Message payload
+  readonly timestamp: Date      // When originally sent
+  readonly attempts: number     // Delivery attempt count
 
-### Delayed Messages
-
-```typescript
-// Delay message by 60 seconds
-await context.queues.MY_QUEUE.send(
-  { type: 'reminder', userId: user.id },
-  { delaySeconds: 60 }
-);
-```
-
-## Consuming Messages
-
-### Queue Handler
-
-Create a queue handler to process messages:
-
-```typescript
-// workers/queue-handler.ts
-import type { QueueHandler, Message } from '@cloudwerk/core';
-
-interface QueueMessage {
-  type: string;
-  [key: string]: unknown;
+  ack(): void                   // Mark as processed
+  retry(options?: { delaySeconds?: number }): void  // Request retry
+  deadLetter(reason?: string): void  // Send to DLQ
 }
+```
 
-export default {
-  async queue(batch: Message<QueueMessage>[], env: Env, ctx: ExecutionContext) {
-    for (const message of batch) {
-      try {
-        await processMessage(message.body, env);
-        message.ack();
-      } catch (error) {
-        console.error('Failed to process message:', error);
-        message.retry();
-      }
-    }
-  },
-} satisfies QueueHandler;
+### Processing Patterns
 
-async function processMessage(data: QueueMessage, env: Env) {
-  switch (data.type) {
-    case 'process_order':
-      await processOrder(data.orderId as string, env);
-      break;
-    case 'send_email':
-      await sendEmail(data as EmailMessage, env);
-      break;
-    default:
-      console.warn('Unknown message type:', data.type);
+#### Acknowledge on Success
+
+```typescript
+async process(message) {
+  try {
+    await processWork(message.body)
+    message.ack()  // Remove from queue
+  } catch (error) {
+    message.retry()  // Try again
   }
 }
 ```
 
-### Message Acknowledgment
+#### Retry with Backoff
 
 ```typescript
-export default {
-  async queue(batch: Message[], env: Env) {
-    for (const message of batch) {
-      try {
-        await processMessage(message.body);
-        // Mark message as processed
-        message.ack();
-      } catch (error) {
-        if (isRetryable(error)) {
-          // Retry the message later
-          message.retry({ delaySeconds: 30 });
-        } else {
-          // Don't retry, acknowledge to remove from queue
-          message.ack();
-          // Log to dead letter handling
-          await logFailedMessage(message, error);
-        }
+async process(message) {
+  try {
+    await processWork(message.body)
+    message.ack()
+  } catch (error) {
+    if (isRetryable(error)) {
+      // Exponential backoff: 1m, 2m, 4m, 8m...
+      const delay = Math.pow(2, message.attempts - 1) * 60
+      message.retry({ delaySeconds: delay })
+    } else {
+      message.deadLetter(error.message)
+    }
+  }
+}
+```
+
+#### Dead Letter Handling
+
+```typescript
+async process(message) {
+  try {
+    await processWork(message.body)
+    message.ack()
+  } catch (error) {
+    if (message.attempts >= 5) {
+      // Max retries reached
+      message.deadLetter(`Failed after ${message.attempts} attempts: ${error.message}`)
+    } else {
+      message.retry()
+    }
+  }
+}
+```
+
+## Batch Processing
+
+For high-throughput scenarios, use batch processing:
+
+```typescript
+// app/queues/analytics.ts
+import { defineQueue } from '@cloudwerk/queue'
+
+interface AnalyticsEvent {
+  userId: string
+  event: string
+  properties: Record<string, unknown>
+}
+
+export default defineQueue<AnalyticsEvent>({
+  config: {
+    batchSize: 100,
+    batchTimeout: '30s',
+  },
+  async processBatch(messages) {
+    // Process all messages together
+    const events = messages.map(m => m.body)
+
+    try {
+      await batchInsertEvents(events)
+
+      // Acknowledge all
+      for (const msg of messages) {
+        msg.ack()
+      }
+    } catch (error) {
+      // Retry all on failure
+      for (const msg of messages) {
+        msg.retry()
       }
     }
   },
-};
+})
+```
+
+### Mixed Results
+
+Handle individual successes and failures:
+
+```typescript
+async processBatch(messages) {
+  const results = await Promise.allSettled(
+    messages.map(async (msg) => {
+      await processOne(msg.body)
+      return msg
+    })
+  )
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      result.value.ack()
+    } else {
+      // Find the failed message and retry
+      const failedMsg = messages.find(m => m.id === result.reason.messageId)
+      failedMsg?.retry()
+    }
+  }
+}
+```
+
+## Dead Letter Queues
+
+### DLQ Configuration
+
+```typescript
+export default defineQueue<OrderMessage>({
+  config: {
+    maxRetries: 5,
+    deadLetterQueue: 'orders-dlq',
+  },
+  async process(message) {
+    await processOrder(message.body)
+    message.ack()
+  },
+})
+```
+
+### DLQ Consumer
+
+Create a consumer for the dead letter queue:
+
+```typescript
+// app/queues/orders-dlq.ts
+import { defineQueue } from '@cloudwerk/queue'
+
+interface DeadLetterMessage<T> {
+  originalQueue: string
+  originalMessage: T
+  error: string
+  attempts: number
+  failedAt: string
+}
+
+export default defineQueue<DeadLetterMessage<OrderMessage>>({
+  async process(message) {
+    const { originalQueue, originalMessage, error, attempts } = message.body
+
+    // Log for investigation
+    await db.insert('failed_jobs', {
+      queue: originalQueue,
+      payload: JSON.stringify(originalMessage),
+      error,
+      attempts,
+      failed_at: message.body.failedAt,
+    })
+
+    // Alert if critical
+    if (originalQueue === 'payments') {
+      await alertOps(`Payment processing failed: ${error}`)
+    }
+
+    message.ack()
+  },
+})
+```
+
+### Manual Dead Letter
+
+Send directly to DLQ with custom reason:
+
+```typescript
+async process(message) {
+  try {
+    await processOrder(message.body)
+    message.ack()
+  } catch (error) {
+    if (isUnrecoverable(error)) {
+      message.deadLetter(`Unrecoverable: ${error.message}`)
+    } else {
+      message.retry()
+    }
+  }
+}
 ```
 
 ## Common Patterns
 
-### Email Queue
+### Email Queue with Templates
 
 ```typescript
-// workers/email-queue.ts
-import type { Message } from '@cloudwerk/core';
+// app/queues/email.ts
+import { defineQueue } from '@cloudwerk/queue'
+import { z } from 'zod'
 
-interface EmailMessage {
-  to: string;
-  template: string;
-  data: Record<string, unknown>;
+const EmailSchema = z.discriminatedUnion('template', [
+  z.object({
+    template: z.literal('welcome'),
+    to: z.string().email(),
+    name: z.string(),
+  }),
+  z.object({
+    template: z.literal('password-reset'),
+    to: z.string().email(),
+    resetToken: z.string(),
+  }),
+  z.object({
+    template: z.literal('order-confirmation'),
+    to: z.string().email(),
+    orderId: z.string(),
+    items: z.array(z.object({
+      name: z.string(),
+      quantity: z.number(),
+      price: z.number(),
+    })),
+  }),
+])
+
+type EmailMessage = z.infer<typeof EmailSchema>
+
+export default defineQueue<EmailMessage>({
+  schema: EmailSchema,
+  config: {
+    maxRetries: 3,
+    deadLetterQueue: 'email-dlq',
+  },
+  async process(message) {
+    const { template, to, ...data } = message.body
+
+    await sendTemplateEmail(to, template, data)
+    message.ack()
+  },
+})
+```
+
+### Image Processing Pipeline
+
+```typescript
+// app/queues/image-processing.ts
+interface ImageJob {
+  key: string
+  operations: Array<{
+    type: 'resize' | 'crop' | 'compress'
+    params: Record<string, unknown>
+  }>
+  outputKey: string
 }
 
-export default {
-  async queue(batch: Message<EmailMessage>[], env: Env) {
-    for (const message of batch) {
-      const { to, template, data } = message.body;
+export default defineQueue<ImageJob>({
+  config: {
+    batchSize: 5,  // Process 5 images at a time
+    maxRetries: 3,
+  },
+  async process(message) {
+    const { key, operations, outputKey } = message.body
 
-      try {
-        await sendEmail(to, template, data, env);
-        message.ack();
-      } catch (error) {
-        console.error(`Failed to send email to ${to}:`, error);
-        message.retry({ delaySeconds: 60 });
-      }
+    // Get original from R2
+    const original = await env.R2.get(key)
+    if (!original) {
+      message.ack() // File doesn't exist, skip
+      return
+    }
+
+    let image = await original.arrayBuffer()
+
+    // Apply operations
+    for (const op of operations) {
+      image = await applyOperation(image, op)
+    }
+
+    // Store result
+    await env.R2.put(outputKey, image)
+    message.ack()
+  },
+})
+```
+
+### Webhook Delivery
+
+```typescript
+// app/queues/webhooks.ts
+interface WebhookJob {
+  url: string
+  event: string
+  payload: unknown
+  attempt?: number
+}
+
+export default defineQueue<WebhookJob>({
+  config: {
+    maxRetries: 5,
+    retryDelay: '1m',
+    deadLetterQueue: 'webhooks-dlq',
+  },
+  async process(message) {
+    const { url, event, payload } = message.body
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Webhook-Event': event,
+        'X-Webhook-Signature': await signPayload(payload),
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (response.ok) {
+      message.ack()
+    } else if (response.status >= 500) {
+      // Server error, retry
+      message.retry()
+    } else {
+      // Client error (4xx), don't retry
+      message.deadLetter(`HTTP ${response.status}: ${response.statusText}`)
     }
   },
-};
+})
+```
 
-async function sendEmail(to: string, template: string, data: Record<string, unknown>, env: Env) {
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: 'noreply@example.com' },
-      template_id: template,
-      dynamic_template_data: data,
-    }),
-  });
+## Type Generation
 
-  if (!response.ok) {
-    throw new Error(`SendGrid error: ${response.status}`);
+Run the type generator to enable TypeScript autocomplete for your queues:
+
+```bash
+cloudwerk queues generate-types
+```
+
+This creates `.cloudwerk/types/queues.d.ts` with typed producers for all your queues.
+
+### Generated Types
+
+```typescript
+// .cloudwerk/types/queues.d.ts (auto-generated)
+declare module '@cloudwerk/core/bindings' {
+  interface CloudwerkQueues {
+    email: Queue<EmailMessage>
+    imageProcessing: Queue<ImageJob>
+    webhooks: Queue<WebhookJob>
   }
 }
 ```
 
-### Image Processing Queue
+## Configuration Reference
+
+### QueueConfig
 
 ```typescript
-// workers/image-queue.ts
-interface ImageJob {
-  imageKey: string;
-  sizes: { width: number; height: number; suffix: string }[];
+interface QueueConfig {
+  batchSize?: number      // 1-100, default: 10
+  maxRetries?: number     // 0-100, default: 3
+  retryDelay?: string     // Duration, default: '1m'
+  deadLetterQueue?: string
+  batchTimeout?: string   // Duration, default: '5s'
 }
-
-export default {
-  async queue(batch: Message<ImageJob>[], env: Env) {
-    for (const message of batch) {
-      const { imageKey, sizes } = message.body;
-
-      try {
-        // Get original image from R2
-        const original = await env.R2.get(imageKey);
-        if (!original) {
-          message.ack();
-          continue;
-        }
-
-        // Process each size
-        for (const size of sizes) {
-          const resized = await resizeImage(original, size.width, size.height);
-          const newKey = imageKey.replace(/(\.[^.]+)$/, `_${size.suffix}$1`);
-          await env.R2.put(newKey, resized);
-        }
-
-        message.ack();
-      } catch (error) {
-        console.error('Image processing failed:', error);
-        message.retry();
-      }
-    }
-  },
-};
 ```
 
-### Webhook Delivery Queue
+### Duration Format
 
-```typescript
-// workers/webhook-queue.ts
-interface WebhookJob {
-  url: string;
-  event: string;
-  payload: unknown;
-  retries: number;
-}
-
-export default {
-  async queue(batch: Message<WebhookJob>[], env: Env) {
-    for (const message of batch) {
-      const { url, event, payload, retries = 0 } = message.body;
-
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Webhook-Event': event,
-            'X-Webhook-Signature': await signPayload(payload, env.WEBHOOK_SECRET),
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (response.ok) {
-          message.ack();
-        } else if (retries < 5) {
-          // Exponential backoff
-          const delay = Math.pow(2, retries) * 60;
-          message.retry({ delaySeconds: delay });
-        } else {
-          message.ack();
-          await logWebhookFailure(url, event, payload, env);
-        }
-      } catch (error) {
-        if (retries < 5) {
-          message.retry({ delaySeconds: 60 });
-        } else {
-          message.ack();
-        }
-      }
-    }
-  },
-};
 ```
-
-## Error Handling
-
-### Retry Strategies
-
-```typescript
-export default {
-  async queue(batch: Message[], env: Env) {
-    for (const message of batch) {
-      const attempts = message.attempts ?? 1;
-
-      try {
-        await processMessage(message.body);
-        message.ack();
-      } catch (error) {
-        if (attempts >= 5) {
-          // Max retries reached, dead letter
-          await env.DEAD_LETTER_QUEUE.send({
-            originalMessage: message.body,
-            error: error.message,
-            attempts,
-          });
-          message.ack();
-        } else {
-          // Exponential backoff: 1m, 2m, 4m, 8m, 16m
-          const delaySeconds = Math.pow(2, attempts - 1) * 60;
-          message.retry({ delaySeconds });
-        }
-      }
-    }
-  },
-};
-```
-
-### Dead Letter Queue
-
-```typescript
-// Set up dead letter handling
-// wrangler.toml
-[[queues.producers]]
-binding = "DEAD_LETTER"
-queue = "dead-letter-queue"
-
-[[queues.consumers]]
-queue = "dead-letter-queue"
-max_batch_size = 10
-```
-
-```typescript
-// workers/dead-letter-handler.ts
-export default {
-  async queue(batch: Message[], env: Env) {
-    for (const message of batch) {
-      // Store failed message for investigation
-      await env.DB.prepare(`
-        INSERT INTO failed_jobs (payload, error, created_at)
-        VALUES (?, ?, datetime('now'))
-      `).bind(
-        JSON.stringify(message.body.originalMessage),
-        message.body.error
-      ).run();
-
-      // Alert operations team
-      await sendAlert('Dead letter received', message.body);
-
-      message.ack();
-    }
-  },
-};
+'30s'  → 30 seconds
+'5m'   → 5 minutes
+'1h'   → 1 hour
 ```
 
 ## Best Practices
@@ -380,48 +598,51 @@ export default {
 - Keep messages small (include IDs, not full data)
 - Make message processing idempotent
 - Use dead letter queues for failed messages
-- Monitor queue depth and processing time
+- Monitor queue depth and processing latency
 - Set appropriate batch sizes for your workload
+- Use schema validation for type safety
 </Aside>
 
 ### Idempotent Processing
 
 ```typescript
-export default {
-  async queue(batch: Message[], env: Env) {
-    for (const message of batch) {
-      const { orderId, action } = message.body;
+async process(message) {
+  const { orderId } = message.body
 
-      // Check if already processed
-      const existing = await env.DB.prepare(`
-        SELECT id FROM processed_messages WHERE message_id = ?
-      `).bind(message.id).first();
+  // Check if already processed
+  const existing = await db.query(
+    'SELECT id FROM processed_orders WHERE order_id = ?',
+    [orderId]
+  )
 
-      if (existing) {
-        message.ack();
-        continue;
-      }
+  if (existing.length > 0) {
+    message.ack() // Already processed
+    return
+  }
 
-      try {
-        await processOrder(orderId, action, env);
+  await processOrder(orderId)
 
-        // Mark as processed
-        await env.DB.prepare(`
-          INSERT INTO processed_messages (message_id, processed_at)
-          VALUES (?, datetime('now'))
-        `).bind(message.id).run();
+  // Mark as processed
+  await db.run(
+    'INSERT INTO processed_orders (order_id, processed_at) VALUES (?, ?)',
+    [orderId, new Date().toISOString()]
+  )
 
-        message.ack();
-      } catch (error) {
-        message.retry();
-      }
-    }
-  },
-};
+  message.ack()
+}
 ```
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Max batch size | 100 messages |
+| Max message size | 128 KB |
+| Max delay | 12 hours |
+| Message retention | 4 days |
 
 ## Next Steps
 
+- **[Queues API Reference](/api/queues/)** - Complete API documentation
+- **[Triggers Guide](/guides/triggers/)** - Event-driven processing
 - **[Durable Objects](/guides/durable-objects/)** - Stateful edge computing
-- **[Triggers](/guides/triggers/)** - Scheduled jobs and cron
-- **[API Reference](/api/context/)** - Queue API details

@@ -1,335 +1,772 @@
 ---
 title: Triggers API
-description: API reference for scheduled triggers and cron jobs.
+description: Complete API reference for @cloudwerk/trigger - event-driven handlers for scheduled, queue, R2, webhook, email, D1, and tail events.
 ---
 
-Scheduled triggers allow you to run code on a recurring schedule using cron expressions.
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-## Configuration
+The `@cloudwerk/trigger` package provides a unified API for handling all Cloudflare event types through the `defineTrigger()` factory function.
 
-### wrangler.toml
+## Installation
 
-Define cron triggers in your `wrangler.toml`:
-
-```toml
-[triggers]
-crons = [
-  "0 * * * *",      # Every hour
-  "0 0 * * *",      # Every day at midnight
-  "*/5 * * * *",    # Every 5 minutes
-  "0 9 * * 1-5",    # Weekdays at 9 AM
-]
+```bash
+pnpm add @cloudwerk/trigger
 ```
 
-### cloudwerk.config.ts
+## defineTrigger()
 
-Configure the trigger handler:
+Creates a trigger handler for a specific event source.
 
 ```typescript
-import { defineConfig } from '@cloudwerk/core';
+import { defineTrigger } from '@cloudwerk/trigger'
 
-export default defineConfig({
-  triggers: {
-    handler: './workers/triggers.ts',
+export default defineTrigger({
+  source: TriggerSource,
+  handle: (event: TriggerEvent, ctx: TriggerContext) => Awaitable<void>,
+  config?: TriggerConfig,
+})
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `source` | `TriggerSource` | Event source configuration (see source types below) |
+| `handle` | `Function` | Async handler function receiving event and context |
+| `config` | `TriggerConfig` | Optional configuration (retries, timeout, etc.) |
+
+### Returns
+
+Returns a `TriggerDefinition` object that Cloudwerk registers automatically.
+
+## Trigger Source Types
+
+### ScheduledSource
+
+Cron-based scheduled execution.
+
+```typescript
+interface ScheduledSource {
+  type: 'scheduled'
+  cron: string         // Cron expression
+  timezone?: string    // IANA timezone (default: 'UTC')
+}
+```
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: {
+    type: 'scheduled',
+    cron: '0 9 * * 1-5',     // Weekdays at 9 AM
+    timezone: 'America/New_York',
   },
-});
-```
-
-## Handler
-
-### Basic Handler
-
-```typescript
-// workers/triggers.ts
-import type { ScheduledEvent, Env, ExecutionContext } from '@cloudwerk/core';
-
-export default {
-  async scheduled(
-    event: ScheduledEvent,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
-    console.log(`Cron triggered: ${event.cron}`);
-    // Your logic here
+  async handle(event, ctx) {
+    console.log(`Scheduled at: ${event.scheduledTime}`)
   },
-};
+})
 ```
 
-### Multi-Cron Handler
-
-```typescript
-// workers/triggers.ts
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    switch (event.cron) {
-      case '0 * * * *':
-        await hourlyTasks(env);
-        break;
-      case '0 0 * * *':
-        await dailyTasks(env);
-        break;
-      case '*/5 * * * *':
-        await frequentTasks(env);
-        break;
-      default:
-        console.warn(`Unknown cron: ${event.cron}`);
-    }
-  },
-};
-
-async function hourlyTasks(env: Env) {
-  // Hourly logic
-}
-
-async function dailyTasks(env: Env) {
-  // Daily logic
-}
-
-async function frequentTasks(env: Env) {
-  // Frequent logic
-}
-```
-
-## ScheduledEvent
-
-The event object passed to the handler:
-
-```typescript
-interface ScheduledEvent {
-  /**
-   * The cron pattern that triggered this event
-   */
-  cron: string;
-
-  /**
-   * The scheduled time for this invocation (Unix timestamp in ms)
-   */
-  scheduledTime: number;
-
-  /**
-   * Whether to retry on failure
-   */
-  noRetry(): void;
-}
-```
-
-### Properties
+**Event Properties:**
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `cron` | `string` | The cron pattern that triggered this event |
-| `scheduledTime` | `number` | Unix timestamp (ms) of scheduled time |
+| `cron` | `string` | The cron expression that triggered the event |
+| `scheduledTime` | `Date` | Scheduled execution time |
 
-### Methods
+---
 
-| Method | Description |
-|--------|-------------|
-| `noRetry()` | Prevent automatic retry on failure |
+### QueueSource
 
-## ExecutionContext
-
-The execution context for background operations:
+Queue message consumption.
 
 ```typescript
-interface ExecutionContext {
-  /**
-   * Extend the lifetime of the event handler
-   */
-  waitUntil(promise: Promise<unknown>): void;
-
-  /**
-   * Abort the request (not typically used in scheduled)
-   */
-  passThroughOnException(): void;
+interface QueueSource {
+  type: 'queue'
+  name: string              // Queue name
+  batchSize?: number        // Max messages per batch (1-100, default: 10)
+  batchTimeout?: string     // Max wait time ('5s', '1m', etc.)
+  retryDelay?: string       // Delay between retries (default: '1m')
+  deadLetterQueue?: string  // DLQ for failed messages
 }
 ```
 
-### Using waitUntil
+**Example:**
 
 ```typescript
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    // Main task
-    await processData(env);
-
-    // Background tasks that can run after main task completes
-    ctx.waitUntil(sendMetrics(env));
-    ctx.waitUntil(cleanupTempFiles(env));
+export default defineTrigger({
+  source: {
+    type: 'queue',
+    name: 'notifications',
+    batchSize: 25,
+    deadLetterQueue: 'notifications-dlq',
   },
-};
+  async handle(event, ctx) {
+    for (const message of event.messages) {
+      await processMessage(message.body)
+      message.ack()
+    }
+  },
+})
 ```
 
-## Cron Syntax
+**Event Properties:**
 
-Standard cron syntax with five fields:
+| Property | Type | Description |
+|----------|------|-------------|
+| `queue` | `string` | Queue name |
+| `messages` | `QueueMessage[]` | Array of messages |
 
+**QueueMessage:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique message ID |
+| `body` | `unknown` | Message payload |
+| `timestamp` | `Date` | When message was sent |
+| `attempts` | `number` | Delivery attempt count |
+| `ack()` | `Function` | Acknowledge successful processing |
+| `retry(options?)` | `Function` | Request retry with optional delay |
+| `deadLetter(reason?)` | `Function` | Send to dead letter queue |
+
+---
+
+### R2Source
+
+R2 object storage events.
+
+```typescript
+interface R2Source {
+  type: 'r2'
+  bucket: string                    // R2 bucket name
+  events: R2EventType[]             // Event types to listen for
+  prefix?: string                   // Key prefix filter
+  suffix?: string                   // Key suffix filter
+}
+
+type R2EventType =
+  | 'object:create'
+  | 'object:delete'
+  | 'object:create:put'
+  | 'object:create:copy'
+  | 'object:create:multipart'
 ```
-┌───────────── minute (0 - 59)
-│ ┌───────────── hour (0 - 23)
-│ │ ┌───────────── day of month (1 - 31)
-│ │ │ ┌───────────── month (1 - 12)
-│ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
-│ │ │ │ │
-* * * * *
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: {
+    type: 'r2',
+    bucket: 'uploads',
+    events: ['object:create'],
+    prefix: 'images/',
+    suffix: '.jpg',
+  },
+  async handle(event, ctx) {
+    const { key, size, etag } = event.object
+    await generateThumbnail(key)
+  },
+})
 ```
 
-### Special Characters
+**Event Properties:**
 
-| Character | Description | Example |
-|-----------|-------------|---------|
-| `*` | Any value | `* * * * *` (every minute) |
-| `,` | List separator | `0,30 * * * *` (at 0 and 30 minutes) |
-| `-` | Range | `0 9-17 * * *` (9 AM to 5 PM) |
-| `/` | Step | `*/15 * * * *` (every 15 minutes) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `bucket` | `string` | Bucket name |
+| `action` | `string` | Event action ('create' or 'delete') |
+| `object` | `R2EventObject` | Object metadata |
 
-### Common Patterns
+**R2EventObject:**
 
-| Pattern | Description |
-|---------|-------------|
-| `* * * * *` | Every minute |
-| `*/5 * * * *` | Every 5 minutes |
-| `0 * * * *` | Every hour (at minute 0) |
-| `0 */2 * * *` | Every 2 hours |
-| `0 0 * * *` | Daily at midnight |
-| `0 0 * * 0` | Weekly on Sunday |
-| `0 0 1 * *` | Monthly on the 1st |
-| `0 9 * * 1-5` | Weekdays at 9 AM |
-| `0 0 1 1 *` | Yearly on Jan 1st |
+| Property | Type | Description |
+|----------|------|-------------|
+| `key` | `string` | Object key |
+| `size` | `number` | Object size in bytes |
+| `etag` | `string` | Object ETag |
+| `uploadedAt` | `Date` | Upload timestamp |
+
+---
+
+### WebhookSource
+
+HTTP webhook events with signature verification.
+
+```typescript
+interface WebhookSource {
+  type: 'webhook'
+  path: string                      // Webhook endpoint path
+  methods?: HttpMethod[]            // Allowed HTTP methods (default: ['POST'])
+  verifier?: WebhookVerifier        // Built-in or custom verifier
+}
+
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+```
+
+**Example with Built-in Verifier:**
+
+```typescript
+import { stripeVerifier } from '@cloudwerk/trigger/verifiers'
+
+export default defineTrigger({
+  source: {
+    type: 'webhook',
+    path: '/webhooks/stripe',
+    verifier: stripeVerifier({
+      secret: process.env.STRIPE_WEBHOOK_SECRET,
+    }),
+  },
+  async handle(event, ctx) {
+    const stripeEvent = event.payload
+    if (stripeEvent.type === 'checkout.session.completed') {
+      await fulfillOrder(stripeEvent.data.object)
+    }
+  },
+})
+```
+
+**Event Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `request` | `Request` | Original HTTP request |
+| `payload` | `unknown` | Parsed and verified payload |
+| `headers` | `Headers` | Request headers |
+| `verified` | `boolean` | Whether signature was verified |
+
+---
+
+### EmailSource
+
+Incoming email events.
+
+```typescript
+interface EmailSource {
+  type: 'email'
+  address?: string    // Filter by recipient address
+  domain?: string     // Filter by recipient domain
+}
+```
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: {
+    type: 'email',
+    domain: 'support.myapp.com',
+  },
+  async handle(event, ctx) {
+    const { from, to, subject, text, html } = event
+    await createSupportTicket({ from, subject, body: text || html })
+  },
+})
+```
+
+**Event Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `from` | `string` | Sender email address |
+| `to` | `string` | Recipient email address |
+| `subject` | `string` | Email subject |
+| `text` | `string \| null` | Plain text body |
+| `html` | `string \| null` | HTML body |
+| `attachments` | `EmailAttachment[]` | File attachments |
+| `headers` | `Map<string, string>` | Email headers |
+| `raw` | `ReadableStream` | Raw email stream |
+
+---
+
+### D1Source
+
+Database change events.
+
+```typescript
+interface D1Source {
+  type: 'd1'
+  database: string              // D1 database binding name
+  tables?: string[]             // Tables to watch (all if omitted)
+  operations?: D1Operation[]    // Operations to watch (all if omitted)
+}
+
+type D1Operation = 'INSERT' | 'UPDATE' | 'DELETE'
+```
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: {
+    type: 'd1',
+    database: 'DB',
+    tables: ['users', 'orders'],
+    operations: ['INSERT', 'UPDATE'],
+  },
+  async handle(event, ctx) {
+    const { table, operation, newRow, oldRow } = event
+    await syncToAnalytics(table, operation, newRow)
+  },
+})
+```
+
+**Event Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `database` | `string` | Database binding name |
+| `table` | `string` | Affected table name |
+| `operation` | `D1Operation` | INSERT, UPDATE, or DELETE |
+| `newRow` | `Record<string, unknown> \| null` | New row data (INSERT/UPDATE) |
+| `oldRow` | `Record<string, unknown> \| null` | Previous row data (UPDATE/DELETE) |
+| `primaryKey` | `unknown` | Primary key value |
+
+---
+
+### TailSource
+
+Log consumption from other Workers.
+
+```typescript
+interface TailSource {
+  type: 'tail'
+  workers: string[]             // Worker names to consume logs from
+  filters?: TailFilter[]        // Optional log filters
+}
+
+interface TailFilter {
+  field: 'outcome' | 'status' | 'method' | 'samplingRate'
+  value: string | number
+  operator?: 'equals' | 'contains' | 'startsWith'
+}
+```
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: {
+    type: 'tail',
+    workers: ['api-worker', 'auth-worker'],
+    filters: [
+      { field: 'outcome', value: 'exception' },
+    ],
+  },
+  async handle(event, ctx) {
+    for (const log of event.logs) {
+      if (log.outcome === 'exception') {
+        await alertOnCall(log)
+      }
+    }
+  },
+})
+```
+
+**Event Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `logs` | `TailLog[]` | Array of log entries |
+| `worker` | `string` | Source worker name |
+
+---
+
+## TriggerContext
+
+The context object passed to all trigger handlers.
+
+```typescript
+interface TriggerContext {
+  env: Env                           // Environment bindings
+  traceId: string                    // Unique trace ID
+  attempt: number                    // Current retry attempt (1-based)
+
+  waitUntil(promise: Promise<unknown>): void  // Extend execution lifetime
+  emit(triggerName: string, payload: unknown): Promise<void>  // Chain triggers
+  noRetry(): void                    // Prevent automatic retry
+}
+```
+
+### Context Methods
+
+#### waitUntil()
+
+Extend the handler's lifetime for background work.
+
+```typescript
+async handle(event, ctx) {
+  await criticalWork()
+
+  // Non-critical work runs after handler completes
+  ctx.waitUntil(sendAnalytics(event))
+  ctx.waitUntil(updateMetrics())
+}
+```
+
+#### emit()
+
+Chain to another trigger, preserving trace ID.
+
+```typescript
+async handle(event, ctx) {
+  await processOrder(event.payload)
+
+  // Trigger downstream processing
+  await ctx.emit('send-confirmation', {
+    orderId: event.payload.orderId,
+  })
+}
+```
+
+#### noRetry()
+
+Prevent automatic retry on failure.
+
+```typescript
+async handle(event, ctx) {
+  try {
+    await processEvent(event)
+  } catch (error) {
+    if (isPermanentError(error)) {
+      ctx.noRetry()  // Don't retry permanent failures
+      await logPermanentFailure(error)
+    }
+    throw error
+  }
+}
+```
+
+---
+
+## TriggerConfig
+
+Optional configuration for trigger behavior.
+
+```typescript
+interface TriggerConfig {
+  retries?: number              // Max retry attempts (default: 3)
+  retryDelay?: string           // Delay between retries (default: '1m')
+  timeout?: string              // Handler timeout (default: '30s')
+  observability?: {
+    metrics?: boolean           // Enable metrics (default: true)
+    tracing?: boolean           // Enable tracing (default: true)
+  }
+}
+```
+
+**Example:**
+
+```typescript
+export default defineTrigger({
+  source: { type: 'scheduled', cron: '0 * * * *' },
+  config: {
+    retries: 5,
+    retryDelay: '2m',
+    timeout: '5m',
+    observability: {
+      metrics: true,
+      tracing: true,
+    },
+  },
+  async handle(event, ctx) {
+    // Handler with custom retry behavior
+  },
+})
+```
+
+---
+
+## Webhook Verifiers
+
+Built-in signature verifiers for popular services.
+
+### stripeVerifier
+
+```typescript
+import { stripeVerifier } from '@cloudwerk/trigger/verifiers'
+
+stripeVerifier({
+  secret: string,               // Webhook signing secret
+  tolerance?: number,           // Timestamp tolerance in seconds (default: 300)
+})
+```
+
+### githubVerifier
+
+```typescript
+import { githubVerifier } from '@cloudwerk/trigger/verifiers'
+
+githubVerifier({
+  secret: string,               // Webhook secret
+  events?: string[],            // Allowed event types (optional)
+})
+```
+
+### slackVerifier
+
+```typescript
+import { slackVerifier } from '@cloudwerk/trigger/verifiers'
+
+slackVerifier({
+  signingSecret: string,        // Slack signing secret
+  tolerance?: number,           // Timestamp tolerance (default: 300)
+})
+```
+
+### shopifyVerifier
+
+```typescript
+import { shopifyVerifier } from '@cloudwerk/trigger/verifiers'
+
+shopifyVerifier({
+  secret: string,               // Webhook secret
+})
+```
+
+### linearVerifier
+
+```typescript
+import { linearVerifier } from '@cloudwerk/trigger/verifiers'
+
+linearVerifier({
+  secret: string,               // Webhook signing secret
+})
+```
+
+### customHmacVerifier
+
+Create a custom HMAC verifier for any service.
+
+```typescript
+import { customHmacVerifier } from '@cloudwerk/trigger/verifiers'
+
+customHmacVerifier({
+  secret: string,
+  algorithm: 'sha256' | 'sha1' | 'sha512',
+  header: string,               // Header containing signature
+  prefix?: string,              // Signature prefix (e.g., 'sha256=')
+  encoding?: 'hex' | 'base64',  // Signature encoding (default: 'hex')
+  getPayload?: (request: Request) => Promise<string>,  // Custom payload extraction
+})
+```
+
+**Example:**
+
+```typescript
+const myVerifier = customHmacVerifier({
+  secret: process.env.WEBHOOK_SECRET,
+  algorithm: 'sha256',
+  header: 'X-Custom-Signature',
+  prefix: 'sha256=',
+})
+```
+
+---
+
+## Testing Utilities
+
+Mock event factories for testing triggers.
+
+```typescript
+import {
+  mockScheduledEvent,
+  mockQueueEvent,
+  mockR2Event,
+  mockWebhookEvent,
+  mockEmailEvent,
+  mockD1Event,
+  mockTailEvent,
+  mockTriggerContext,
+} from '@cloudwerk/trigger/testing'
+```
+
+### mockScheduledEvent
+
+```typescript
+const event = mockScheduledEvent({
+  cron: '0 * * * *',
+  scheduledTime: new Date('2024-01-15T10:00:00Z'),
+})
+```
+
+### mockQueueEvent
+
+```typescript
+const event = mockQueueEvent({
+  queue: 'notifications',
+  messages: [
+    { id: '1', body: { userId: 'user_123' }, attempts: 1 },
+    { id: '2', body: { userId: 'user_456' }, attempts: 1 },
+  ],
+})
+```
+
+### mockTriggerContext
+
+```typescript
+const ctx = mockTriggerContext({
+  env: mockEnv,
+  traceId: 'test-trace-123',
+})
+```
+
+### Testing Example
+
+```typescript
+import { describe, it, expect, vi } from 'vitest'
+import { mockScheduledEvent, mockTriggerContext } from '@cloudwerk/trigger/testing'
+import trigger from './daily-cleanup'
+
+describe('daily-cleanup trigger', () => {
+  it('should clean up expired records', async () => {
+    const event = mockScheduledEvent({ cron: '0 0 * * *' })
+    const ctx = mockTriggerContext({
+      env: { DB: mockD1Database() },
+    })
+
+    await trigger.handle(event, ctx)
+
+    expect(ctx.env.DB.prepare).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM')
+    )
+  })
+})
+```
+
+---
 
 ## Error Handling
 
-### Basic Error Handling
+### TriggerError
+
+Base error class for trigger failures.
 
 ```typescript
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    try {
-      await processData(env);
-    } catch (error) {
-      console.error('Scheduled task failed:', error);
-      // The task will be retried automatically
-      throw error;
-    }
-  },
-};
+import { TriggerError } from '@cloudwerk/trigger'
+
+class TriggerError extends Error {
+  readonly code: string
+  readonly retryable: boolean
+  readonly context?: Record<string, unknown>
+}
 ```
 
-### Prevent Retry
+### WebhookVerificationError
+
+Thrown when webhook signature verification fails.
 
 ```typescript
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    try {
-      await processData(env);
-    } catch (error) {
-      if (isPermanentError(error)) {
-        // Don't retry for permanent errors
-        event.noRetry();
-        await logPermanentFailure(error, env);
-      }
-      throw error;
-    }
-  },
-};
+import { WebhookVerificationError } from '@cloudwerk/trigger'
+
+try {
+  await verifySignature(request)
+} catch (error) {
+  if (error instanceof WebhookVerificationError) {
+    console.error('Invalid signature:', error.message)
+    return new Response('Unauthorized', { status: 401 })
+  }
+}
 ```
 
-### Logging
+### TriggerTimeoutError
+
+Thrown when handler exceeds configured timeout.
 
 ```typescript
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    const startTime = Date.now();
-    const taskName = getTaskName(event.cron);
-
-    console.log(`[${taskName}] Starting...`);
-
-    try {
-      await runTask(event.cron, env);
-
-      const duration = Date.now() - startTime;
-      console.log(`[${taskName}] Completed in ${duration}ms`);
-
-      // Log to database
-      ctx.waitUntil(
-        env.DB.prepare(`
-          INSERT INTO cron_logs (task, status, duration, run_at)
-          VALUES (?, 'success', ?, datetime('now'))
-        `).bind(taskName, duration).run()
-      );
-
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`[${taskName}] Failed after ${duration}ms:`, error);
-
-      ctx.waitUntil(
-        env.DB.prepare(`
-          INSERT INTO cron_logs (task, status, error, duration, run_at)
-          VALUES (?, 'error', ?, ?, datetime('now'))
-        `).bind(taskName, error.message, duration).run()
-      );
-
-      throw error;
-    }
-  },
-};
+import { TriggerTimeoutError } from '@cloudwerk/trigger'
 ```
 
-## Testing
+---
 
-### Local Testing
+## CLI Commands
 
-Test scheduled triggers locally:
+### List Triggers
 
 ```bash
-wrangler dev --test-scheduled
+cloudwerk triggers list
 ```
 
-Trigger manually:
+### Show Trigger Details
+
 ```bash
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
+cloudwerk triggers info <name>
 ```
 
-### Unit Testing
+### Test Trigger Locally
+
+```bash
+cloudwerk triggers test <name> --event '{"key": "value"}'
+```
+
+### Generate Types
+
+```bash
+cloudwerk triggers generate-types
+```
+
+---
+
+## Type Definitions
+
+### Full Type Reference
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
-import handler from './triggers';
+// Trigger definition
+interface TriggerDefinition {
+  source: TriggerSource
+  handle: TriggerHandler
+  config?: TriggerConfig
+}
 
-describe('Scheduled Triggers', () => {
-  it('should run hourly task', async () => {
-    const env = createMockEnv();
-    const ctx = createMockContext();
+// Handler signature
+type TriggerHandler<E = unknown> = (
+  event: E,
+  ctx: TriggerContext
+) => Awaitable<void>
 
-    await handler.scheduled(
-      { cron: '0 * * * *', scheduledTime: Date.now(), noRetry: vi.fn() },
-      env,
-      ctx
-    );
+// Awaitable helper
+type Awaitable<T> = T | Promise<T>
 
-    // Assert expected behavior
-    expect(env.DB.prepare).toHaveBeenCalled();
-  });
-});
+// Union of all source types
+type TriggerSource =
+  | ScheduledSource
+  | QueueSource
+  | R2Source
+  | WebhookSource
+  | EmailSource
+  | D1Source
+  | TailSource
+
+// Union of all event types
+type TriggerEvent =
+  | ScheduledEvent
+  | QueueEvent
+  | R2Event
+  | WebhookEvent
+  | EmailEvent
+  | D1Event
+  | TailEvent
 ```
 
-## Best Practices
-
-1. **Keep tasks idempotent** - Safe to run multiple times
-2. **Use appropriate intervals** - Don't over-schedule
-3. **Handle errors gracefully** - Log and alert on failures
-4. **Use waitUntil for non-critical work** - Don't block completion
-5. **Monitor execution time** - Stay within limits
+---
 
 ## Limits
 
 | Limit | Value |
 |-------|-------|
 | Maximum cron triggers per Worker | 3 |
-| Minimum interval | 1 minute |
-| Maximum execution time | 30 seconds (free), 15 minutes (paid) |
+| Minimum cron interval | 1 minute |
+| Maximum handler timeout (free) | 30 seconds |
+| Maximum handler timeout (paid) | 15 minutes |
+| Maximum queue batch size | 100 messages |
+| Maximum webhook payload | 100 MB |
+
+---
 
 ## Next Steps
 
-- **[Triggers Guide](/guides/triggers/)** - Common patterns
-- **[Queues Guide](/guides/queues/)** - For longer tasks
-- **[Configuration](/api/configuration/)** - Config options
+- **[Triggers Guide](/guides/triggers/)** - Patterns and best practices
+- **[Queues Guide](/guides/queues/)** - Queue consumer patterns
+- **[Services API](/api/services/)** - Service extraction

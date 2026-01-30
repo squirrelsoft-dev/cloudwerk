@@ -16,6 +16,14 @@ import {
   resolveMiddleware,
   loadConfig,
   resolveRoutesPath,
+  // Queue scanning
+  scanQueues,
+  buildQueueManifest,
+  QUEUES_DIR,
+  // Service scanning
+  scanServices,
+  buildServiceManifest,
+  SERVICES_DIR,
 } from '@cloudwerk/core/build'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
@@ -124,6 +132,34 @@ export async function build(
 
     logger.debug(`Found ${manifest.routes.length} routes`)
 
+    // Scan queues if queues directory exists
+    const queuesPath = path.resolve(cwd, appDir, QUEUES_DIR)
+    let queueManifest = null
+    if (fs.existsSync(queuesPath)) {
+      const queueScanResult = await scanQueues(
+        path.resolve(cwd, appDir),
+        { extensions: cloudwerkConfig.extensions }
+      )
+      queueManifest = buildQueueManifest(queueScanResult, cwd, { appName: 'cloudwerk' })
+      if (queueManifest.queues.length > 0) {
+        logger.debug(`Found ${queueManifest.queues.length} queue(s)`)
+      }
+    }
+
+    // Scan services if services directory exists
+    const servicesPath = path.resolve(cwd, appDir, SERVICES_DIR)
+    let serviceManifest = null
+    if (fs.existsSync(servicesPath)) {
+      const serviceScanResult = await scanServices(
+        path.resolve(cwd, appDir),
+        { extensions: cloudwerkConfig.extensions }
+      )
+      serviceManifest = buildServiceManifest(serviceScanResult, cwd)
+      if (serviceManifest.services.length > 0) {
+        logger.debug(`Found ${serviceManifest.services.length} service(s)`)
+      }
+    }
+
     // Generate the server entry code
     const renderer = (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx'
     const serverEntryCode = generateServerEntry(manifest, scanResult, {
@@ -138,6 +174,9 @@ export async function build(
       publicDir: cloudwerkConfig.publicDir ?? 'public',
       root: cwd,
       isProduction: true,
+    }, {
+      queueManifest,
+      serviceManifest,
     })
 
     const tempEntryPath = path.join(tempDir, '_server-entry.ts')

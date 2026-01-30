@@ -1,95 +1,83 @@
 ---
 title: Triggers
-description: Schedule recurring tasks with cron triggers in your Cloudwerk application.
+description: Build event-driven applications with scheduled, queue, R2, webhook, email, D1, and tail triggers.
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
 
-Cloudwerk supports Cloudflare's cron triggers for running scheduled tasks. Use triggers for periodic data sync, cleanup jobs, report generation, and more.
+Cloudwerk provides a powerful event-driven trigger system through `@cloudwerk/trigger`. Define handlers for 7 different event sources with automatic configuration, type safety, built-in webhook verification, and observability.
 
-## Getting Started
-
-### Define a Cron Trigger
+## Quick Start
 
 <Steps>
-1. Add cron triggers to `wrangler.toml`:
-
-   ```toml
-   [triggers]
-   crons = [
-     "0 * * * *",    # Every hour
-     "0 0 * * *",    # Every day at midnight
-     "*/5 * * * *",  # Every 5 minutes
-   ]
-   ```
-
-2. Create a trigger handler:
+1. Create a trigger file:
 
    ```typescript
-   // workers/triggers.ts
-   import type { ScheduledEvent } from '@cloudwerk/core';
+   // app/triggers/daily-cleanup.ts
+   import { defineTrigger } from '@cloudwerk/trigger'
 
-   export default {
-     async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-       switch (event.cron) {
-         case '0 * * * *':
-           await hourlyTask(env);
-           break;
-         case '0 0 * * *':
-           await dailyTask(env);
-           break;
-         case '*/5 * * * *':
-           await frequentTask(env);
-           break;
-       }
+   export default defineTrigger({
+     source: { type: 'scheduled', cron: '0 0 * * *' },
+     async handle(event, ctx) {
+       console.log(`[${ctx.traceId}] Running cleanup...`)
+       await cleanupExpiredSessions(ctx.env.DB)
      },
-   };
-
-   async function hourlyTask(env: Env) {
-     console.log('Running hourly task...');
-     // Your logic here
-   }
-
-   async function dailyTask(env: Env) {
-     console.log('Running daily task...');
-     // Your logic here
-   }
-
-   async function frequentTask(env: Env) {
-     console.log('Running frequent task...');
-     // Your logic here
-   }
+   })
    ```
 
-3. Configure in Cloudwerk:
+2. Triggers are automatically discovered from `app/triggers/` and registered during build.
 
-   ```typescript
-   // cloudwerk.config.ts
-   import { defineConfig } from '@cloudwerk/core';
-
-   export default defineConfig({
-     triggers: {
-       handler: './workers/triggers.ts',
-     },
-   });
-   ```
+3. Deploy and your trigger runs on schedule.
 </Steps>
 
-## Cron Syntax
+## Convention Structure
 
-Cloudflare uses standard cron syntax:
+Triggers are defined in the `app/triggers/` directory:
+
+<FileTree>
+- app/triggers/
+  - daily-cleanup.ts      # Scheduled trigger
+  - process-uploads.ts    # R2 trigger
+  - stripe-webhook.ts     # Webhook trigger
+  - email-handler.ts      # Email trigger
+  - sync-search.ts        # D1 trigger
+</FileTree>
+
+**Naming Convention:**
+- File names are kebab-case → converted to camelCase trigger names
+- `daily-cleanup.ts` → trigger name `dailyCleanup`
+- `process-uploads.ts` → trigger name `processUploads`
+
+## Trigger Types
+
+### Scheduled (Cron)
+
+Run tasks on a schedule using cron expressions:
+
+```typescript
+// app/triggers/daily-report.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: { type: 'scheduled', cron: '0 9 * * 1-5' }, // Weekdays at 9 AM UTC
+  async handle(event, ctx) {
+    console.log(`Scheduled time: ${event.scheduledTime}`)
+    await generateDailyReport(ctx.env.DB)
+  },
+})
+```
+
+#### Cron Syntax
 
 ```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6, Sunday = 0)
+│ │ │ │ │
 * * * * *
-| | | | |
-| | | | +---- Day of week (0-6, Sun=0)
-| | | +------ Month (1-12)
-| | +-------- Day of month (1-31)
-| +---------- Hour (0-23)
-+------------ Minute (0-59)
 ```
-
-### Common Patterns
 
 | Pattern | Description |
 |---------|-------------|
@@ -97,317 +85,656 @@ Cloudflare uses standard cron syntax:
 | `*/5 * * * *` | Every 5 minutes |
 | `0 * * * *` | Every hour |
 | `0 0 * * *` | Daily at midnight UTC |
-| `0 0 * * 0` | Weekly on Sunday |
+| `0 9 * * 1-5` | Weekdays at 9 AM UTC |
 | `0 0 1 * *` | Monthly on the 1st |
-| `0 9 * * 1-5` | Weekdays at 9 AM |
 
 <Aside type="note">
 Cron times are in UTC. Plan your schedules accordingly.
 </Aside>
 
-## Common Use Cases
+### Queue
+
+Process messages from Cloudflare Queues:
+
+```typescript
+// app/triggers/process-orders.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'queue',
+    queue: 'orders',
+    batch: { size: 20, timeout: '10s' },
+  },
+  async handle(batch, ctx) {
+    for (const message of batch.messages) {
+      try {
+        await processOrder(message.body, ctx.env)
+        message.ack()
+      } catch (error) {
+        message.retry({ delaySeconds: 60 })
+      }
+    }
+  },
+})
+```
+
+#### Batch Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `size` | 10 | Max messages per batch (1-100) |
+| `timeout` | '5s' | Max wait time to fill batch |
+
+#### Message Operations
+
+```typescript
+message.ack()                          // Mark as processed
+message.retry()                        // Retry with default delay
+message.retry({ delaySeconds: 60 })    // Retry with custom delay
+```
+
+### R2 (Object Storage)
+
+React to object creation and deletion in R2 buckets:
+
+```typescript
+// app/triggers/process-uploads.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'r2',
+    bucket: 'uploads',
+    events: ['object-create'],
+    prefix: 'images/',
+    suffix: '.jpg',
+  },
+  async handle(event, ctx) {
+    console.log(`New image: ${event.key} (${event.size} bytes)`)
+    await generateThumbnail(event.key, ctx.env.R2)
+  },
+})
+```
+
+#### R2 Event Types
+
+| Event | Description |
+|-------|-------------|
+| `object-create` | Object created or updated |
+| `object-delete` | Object deleted |
+
+#### R2 Event Properties
+
+```typescript
+interface R2Event {
+  type: 'object-create' | 'object-delete'
+  bucket: string
+  key: string
+  etag?: string          // Create events only
+  size?: number          // Create events only
+  uploadedAt?: Date      // Create events only
+}
+```
+
+### Webhook
+
+Receive and verify incoming webhooks:
+
+```typescript
+// app/triggers/stripe-webhook.ts
+import { defineTrigger, verifiers } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'webhook',
+    path: '/webhooks/stripe',
+    verify: verifiers.stripe(process.env.STRIPE_WEBHOOK_SECRET!),
+  },
+  async handle(event, ctx) {
+    if (!event.verified) {
+      throw new Error('Signature verification failed')
+    }
+
+    switch (event.payload.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutComplete(event.payload.data)
+        break
+      case 'invoice.paid':
+        await handleInvoicePaid(event.payload.data)
+        break
+    }
+  },
+})
+```
+
+#### Built-in Verifiers
+
+Cloudwerk includes signature verifiers for popular services:
+
+<Tabs>
+  <TabItem label="Stripe">
+```typescript
+import { verifiers } from '@cloudwerk/trigger'
+
+verifiers.stripe(secret, {
+  tolerance: 300, // Timestamp tolerance in seconds
+})
+```
+  </TabItem>
+  <TabItem label="GitHub">
+```typescript
+import { verifiers } from '@cloudwerk/trigger'
+
+verifiers.github(secret)
+// Supports both x-hub-signature-256 (SHA-256) and x-hub-signature (SHA-1)
+```
+  </TabItem>
+  <TabItem label="Slack">
+```typescript
+import { verifiers } from '@cloudwerk/trigger'
+
+verifiers.slack(signingSecret, {
+  tolerance: 300,
+})
+```
+  </TabItem>
+  <TabItem label="Shopify">
+```typescript
+import { verifiers } from '@cloudwerk/trigger'
+
+verifiers.shopify(secret)
+```
+  </TabItem>
+</Tabs>
+
+Additional verifiers: `verifiers.twilio()`, `verifiers.linear()`
+
+#### Custom Verifier
+
+Create a custom HMAC signature verifier:
+
+```typescript
+import { verifiers } from '@cloudwerk/trigger'
+
+verifiers.custom(secret, {
+  header: 'x-webhook-signature',
+  algorithm: 'SHA-256',    // 'SHA-256' | 'SHA-1' | 'SHA-512'
+  encoding: 'hex',         // 'hex' | 'base64'
+  prefix: 'sha256=',       // Optional prefix to strip
+  timestampHeader: 'x-timestamp',
+  timestampTolerance: 300,
+  buildSignatureBase: (body, timestamp) => `${timestamp}.${body}`,
+})
+```
+
+#### Webhook Event Properties
+
+```typescript
+interface WebhookEvent<T = unknown> {
+  payload: T              // Parsed JSON payload
+  headers: Headers
+  signature: string | null
+  rawBody: ArrayBuffer
+  verified: boolean
+  method: string
+  path: string
+}
+```
+
+### Email
+
+Process incoming emails:
+
+```typescript
+// app/triggers/support-inbox.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'email',
+    address: 'support@myapp.com',
+  },
+  async handle(event, ctx) {
+    const text = await event.text()
+    console.log(`Email from ${event.from}: ${event.subject}`)
+
+    await createSupportTicket({
+      from: event.from,
+      subject: event.subject,
+      body: text,
+    }, ctx.env.DB)
+  },
+})
+```
+
+#### Email Event Properties
+
+```typescript
+interface EmailEvent {
+  from: string
+  to: string
+  subject: string
+  rawEmail: ReadableStream
+  text(): Promise<string>
+  html(): Promise<string | null>
+}
+```
+
+### D1 (Database)
+
+React to database changes:
+
+```typescript
+// app/triggers/sync-search.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'd1',
+    database: 'main',
+    table: 'products',
+    events: ['insert', 'update'],
+  },
+  async handle(event, ctx) {
+    console.log(`${event.type} on ${event.table}`, event.primaryKey)
+
+    if (event.newValues) {
+      await updateSearchIndex(event.primaryKey, event.newValues, ctx.env)
+    }
+  },
+})
+```
+
+#### D1 Event Types
+
+| Event | Description |
+|-------|-------------|
+| `insert` | Row inserted |
+| `update` | Row updated |
+| `delete` | Row deleted |
+
+#### D1 Event Properties
+
+```typescript
+interface D1Event {
+  type: 'insert' | 'update' | 'delete'
+  database: string
+  table: string
+  primaryKey: Record<string, unknown>
+  newValues?: Record<string, unknown>  // Insert/update
+  oldValues?: Record<string, unknown>  // Update/delete
+}
+```
+
+### Tail
+
+Consume logs from other Workers:
+
+```typescript
+// app/triggers/error-alerter.ts
+import { defineTrigger } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: {
+    type: 'tail',
+    consumers: ['api-worker', 'background-worker'],
+  },
+  async handle(event, ctx) {
+    for (const log of event.logs) {
+      if (log.level === 'error') {
+        await notifyOncall({
+          worker: event.worker,
+          message: log.message,
+          timestamp: log.timestamp,
+        })
+      }
+    }
+  },
+})
+```
+
+## Error Handling & Retry
+
+### Retry Configuration
+
+Configure retry behavior for failed triggers:
+
+```typescript
+export default defineTrigger({
+  source: { type: 'scheduled', cron: '0 * * * *' },
+  retry: {
+    maxAttempts: 5,        // 0-100, default: 3
+    delay: '30s',          // Default: '1m'
+    backoff: 'exponential', // 'linear' | 'exponential'
+  },
+  async handle(event, ctx) {
+    await unreliableOperation()
+  },
+})
+```
+
+### Error Handler
+
+Define custom error handling:
+
+```typescript
+export default defineTrigger({
+  source: { type: 'r2', bucket: 'uploads', events: ['object-create'] },
+  async handle(event, ctx) {
+    await processFile(event.key)
+  },
+  async onError(error, event, ctx) {
+    console.error(`Failed to process ${event.key}:`, error.message)
+    await logToMonitoring({
+      trigger: 'processUploads',
+      error: error.message,
+      traceId: ctx.traceId,
+    })
+  },
+})
+```
+
+### Prevent Retry
+
+For non-retryable errors in scheduled triggers:
+
+```typescript
+export default defineTrigger({
+  source: { type: 'scheduled', cron: '0 0 * * *' },
+  async handle(event, ctx) {
+    try {
+      await processData()
+    } catch (error) {
+      if (isPermanentError(error)) {
+        event.noRetry() // Don't retry
+      }
+      throw error
+    }
+  },
+})
+```
+
+## Trigger Chaining
+
+Chain triggers together using `emit()`:
+
+```typescript
+// app/triggers/process-upload.ts
+import { defineTrigger, emit } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: { type: 'r2', bucket: 'uploads', events: ['object-create'] },
+  async handle(event, ctx) {
+    const metadata = await extractMetadata(event.key)
+
+    // Chain to other triggers
+    await emit('indexForSearch', { key: event.key, metadata })
+    await emit('generateThumbnail', { key: event.key })
+    await emit('notifyUser', { key: event.key }, { delay: 5000 })
+
+    // Trace ID is automatically propagated
+    console.log(`All emissions use traceId: ${ctx.traceId}`)
+  },
+})
+```
+
+### Emit Multiple
+
+```typescript
+import { emitMany } from '@cloudwerk/trigger'
+
+await emitMany([
+  ['processImage', { key: 'image.jpg' }],
+  ['updateIndex', { key: 'image.jpg' }],
+  ['notifyUser', { userId: 123 }],
+])
+```
+
+## Trigger Context
+
+Every trigger handler receives a context object:
+
+```typescript
+interface TriggerContext {
+  traceId: string                              // Unique trace ID for distributed tracing
+  waitUntil(promise: Promise<unknown>): void   // Extend execution lifetime
+  passThroughOnException(): void               // Allow pass-through on error
+  env: Record<string, unknown>                 // Cloudflare bindings
+}
+```
+
+### Using Context
+
+```typescript
+export default defineTrigger({
+  source: { type: 'queue', queue: 'tasks' },
+  async handle(batch, ctx) {
+    const db = ctx.env.DB as D1Database
+
+    for (const msg of batch.messages) {
+      // Background logging (doesn't block response)
+      ctx.waitUntil(
+        db.prepare('INSERT INTO logs (trace_id, event) VALUES (?, ?)')
+          .bind(ctx.traceId, JSON.stringify(msg.body))
+          .run()
+      )
+      msg.ack()
+    }
+  },
+})
+```
+
+## Observability
+
+### Trace IDs
+
+Every trigger execution has a unique trace ID that propagates through chained triggers:
+
+```typescript
+ctx.traceId  // e.g., 'tr_a1b2c3d4e5f6g7h8'
+
+// Child triggers get derived IDs:
+// 'tr_a1b2c3d4e5f6g7h8.12345678'
+```
+
+### Execution Metrics
+
+```typescript
+import { ExecutionTimer } from '@cloudwerk/trigger'
+
+export default defineTrigger({
+  source: { type: 'queue', queue: 'tasks' },
+  async handle(batch, ctx) {
+    const timer = new ExecutionTimer()
+
+    timer.mark('processing-start')
+    for (const msg of batch.messages) {
+      await processMessage(msg)
+    }
+    timer.mark('processing-end')
+
+    const duration = timer.stop()
+    console.log(`Processed batch in ${duration}ms`, timer.getMarks())
+  },
+})
+```
+
+## Testing
+
+### Test Utilities
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { testTrigger, mockEvent } from '@cloudwerk/trigger/testing'
+import processUploads from '../app/triggers/process-uploads'
+
+describe('process-uploads', () => {
+  it('processes R2 uploads', async () => {
+    const result = await testTrigger(processUploads, {
+      event: mockEvent.r2({
+        type: 'object-create',
+        bucket: 'uploads',
+        key: 'test.pdf',
+        size: 1024,
+      }),
+      bindings: {
+        DB: mockD1(),
+        R2: mockR2(),
+      },
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('handles errors gracefully', async () => {
+    const result = await testTrigger(processUploads, {
+      event: mockEvent.r2({
+        type: 'object-create',
+        bucket: 'uploads',
+        key: 'test.pdf',
+      }),
+      bindings: { DB: failingMock() },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.errorHandlerCalled).toBe(true)
+  })
+})
+```
+
+### Mock Event Factories
+
+```typescript
+import { mockEvent } from '@cloudwerk/trigger/testing'
+
+mockEvent.scheduled({ cron: '0 0 * * *' })
+mockEvent.queue({ messages: [{ body: { type: 'email' } }] })
+mockEvent.r2({ type: 'object-create', bucket: 'uploads', key: 'file.pdf' })
+mockEvent.webhook({ payload: { event: 'created' } })
+mockEvent.email({ from: 'user@example.com', subject: 'Hello' })
+```
+
+### Test Harness
+
+For testing trigger chains:
+
+```typescript
+import { TriggerTestHarness } from '@cloudwerk/trigger/testing'
+
+describe('Upload workflow', () => {
+  it('chains triggers correctly', async () => {
+    const harness = new TriggerTestHarness({
+      bindings: { DB: mockD1() },
+    })
+
+    harness.register('processUploads', processUploads)
+    harness.register('generateThumbnail', generateThumbnail)
+
+    await harness.emit('processUploads', mockEvent.r2({ key: 'photo.jpg' }))
+
+    expect(harness.completed).toHaveLength(1)
+  })
+})
+```
+
+## Common Patterns
 
 ### Database Cleanup
 
 ```typescript
-async function cleanupExpiredSessions(env: Env) {
-  const db = env.DB;
+export default defineTrigger({
+  source: { type: 'scheduled', cron: '0 3 * * *' }, // Daily at 3 AM
+  async handle(event, ctx) {
+    const db = ctx.env.DB
 
-  // Delete expired sessions
-  const result = await db.prepare(`
-    DELETE FROM sessions
-    WHERE expires_at < datetime('now')
-  `).run();
-
-  console.log(`Cleaned up ${result.changes} expired sessions`);
-}
-
-async function cleanupOldLogs(env: Env) {
-  const db = env.DB;
-
-  // Keep only last 30 days of logs
-  const result = await db.prepare(`
-    DELETE FROM audit_logs
-    WHERE created_at < datetime('now', '-30 days')
-  `).run();
-
-  console.log(`Cleaned up ${result.changes} old log entries`);
-}
-```
-
-### Report Generation
-
-```typescript
-async function generateDailyReport(env: Env) {
-  const db = env.DB;
-
-  // Gather statistics
-  const stats = await db.prepare(`
-    SELECT
-      COUNT(*) as total_orders,
-      SUM(total) as revenue,
-      AVG(total) as avg_order_value
-    FROM orders
-    WHERE created_at >= datetime('now', '-1 day')
-  `).first();
-
-  // Store report
-  await db.prepare(`
-    INSERT INTO daily_reports (date, total_orders, revenue, avg_order_value)
-    VALUES (date('now', '-1 day'), ?, ?, ?)
-  `).bind(stats.total_orders, stats.revenue, stats.avg_order_value).run();
-
-  // Send notification
-  await sendSlackMessage(env.SLACK_WEBHOOK, {
-    text: `Daily Report: ${stats.total_orders} orders, $${stats.revenue} revenue`,
-  });
-}
-```
-
-### Data Synchronization
-
-```typescript
-async function syncExternalData(env: Env) {
-  // Fetch from external API
-  const response = await fetch('https://api.example.com/products', {
-    headers: { 'Authorization': `Bearer ${env.API_KEY}` },
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-
-  const products = await response.json();
-
-  // Update local database
-  const db = env.DB;
-
-  for (const product of products) {
+    // Delete expired sessions
     await db.prepare(`
-      INSERT INTO products (id, name, price, updated_at)
-      VALUES (?, ?, ?, datetime('now'))
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        price = excluded.price,
-        updated_at = datetime('now')
-    `).bind(product.id, product.name, product.price).run();
-  }
+      DELETE FROM sessions WHERE expires_at < datetime('now')
+    `).run()
 
-  console.log(`Synced ${products.length} products`);
-}
+    // Clean old logs
+    await db.prepare(`
+      DELETE FROM audit_logs WHERE created_at < datetime('now', '-30 days')
+    `).run()
+  },
+})
 ```
 
-### Cache Warming
+### Image Processing Pipeline
 
 ```typescript
-async function warmCache(env: Env) {
-  const db = env.DB;
-  const kv = env.KV;
+// app/triggers/process-image.ts
+export default defineTrigger({
+  source: {
+    type: 'r2',
+    bucket: 'uploads',
+    events: ['object-create'],
+    prefix: 'images/',
+  },
+  async handle(event, ctx) {
+    if (!event.key.match(/\.(jpg|png|webp)$/)) {
+      return // Not an image
+    }
 
-  // Fetch popular items
-  const popularItems = await db.prepare(`
-    SELECT id, data
-    FROM items
-    ORDER BY view_count DESC
-    LIMIT 100
-  `).all();
-
-  // Pre-cache in KV
-  for (const item of popularItems.results) {
-    await kv.put(`item:${item.id}`, JSON.stringify(item), {
-      expirationTtl: 3600, // 1 hour
-    });
-  }
-
-  console.log(`Warmed cache for ${popularItems.results.length} items`);
-}
+    // Chain to specialized triggers
+    await emit('generateThumbnail', { key: event.key, sizes: ['sm', 'md', 'lg'] })
+    await emit('extractMetadata', { key: event.key })
+    await emit('updateDatabase', { key: event.key, size: event.size })
+  },
+})
 ```
 
-### Health Checks
+### Multi-Provider Webhook Handler
 
 ```typescript
-async function healthCheck(env: Env) {
-  const checks = {
-    database: false,
-    external_api: false,
-    storage: false,
-  };
+// app/triggers/payment-webhook.ts
+export default defineTrigger({
+  source: {
+    type: 'webhook',
+    path: '/webhooks/payments',
+    methods: ['POST'],
+  },
+  async handle(event, ctx) {
+    const provider = event.headers.get('x-payment-provider')
 
-  // Check database
-  try {
-    await env.DB.prepare('SELECT 1').first();
-    checks.database = true;
-  } catch (e) {
-    console.error('Database check failed:', e);
-  }
-
-  // Check external API
-  try {
-    const response = await fetch('https://api.example.com/health');
-    checks.external_api = response.ok;
-  } catch (e) {
-    console.error('External API check failed:', e);
-  }
-
-  // Check R2 storage
-  try {
-    await env.R2.head('health-check');
-    checks.storage = true;
-  } catch (e) {
-    // File might not exist, but connection works
-    checks.storage = true;
-  }
-
-  // Store health status
-  await env.KV.put('health:status', JSON.stringify({
-    checks,
-    timestamp: Date.now(),
-  }));
-
-  // Alert if any check failed
-  if (!Object.values(checks).every(Boolean)) {
-    await sendAlert(env, 'Health check failed', checks);
-  }
-}
-```
-
-## Error Handling
-
-```typescript
-export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    const taskName = getTaskName(event.cron);
-
-    try {
-      console.log(`Starting ${taskName}...`);
-      const start = Date.now();
-
-      await runTask(event.cron, env);
-
-      const duration = Date.now() - start;
-      console.log(`${taskName} completed in ${duration}ms`);
-
-      // Log success
-      await env.DB.prepare(`
-        INSERT INTO cron_logs (task, status, duration, run_at)
-        VALUES (?, 'success', ?, datetime('now'))
-      `).bind(taskName, duration).run();
-
-    } catch (error) {
-      console.error(`${taskName} failed:`, error);
-
-      // Log failure
-      await env.DB.prepare(`
-        INSERT INTO cron_logs (task, status, error, run_at)
-        VALUES (?, 'error', ?, datetime('now'))
-      `).bind(taskName, error.message).run();
-
-      // Alert on failure
-      await sendAlert(env, `Cron job "${taskName}" failed`, {
-        error: error.message,
-        cron: event.cron,
-        scheduledTime: event.scheduledTime,
-      });
+    switch (provider) {
+      case 'stripe':
+        await handleStripeEvent(event.payload)
+        break
+      case 'paypal':
+        await handlePayPalEvent(event.payload)
+        break
+      default:
+        console.warn('Unknown payment provider:', provider)
     }
   },
-};
-
-function getTaskName(cron: string): string {
-  const names: Record<string, string> = {
-    '0 * * * *': 'hourly-cleanup',
-    '0 0 * * *': 'daily-report',
-    '*/5 * * * *': 'health-check',
-  };
-  return names[cron] ?? 'unknown-task';
-}
-```
-
-## Testing Triggers
-
-### Local Testing
-
-```bash
-# Trigger a specific cron manually
-wrangler dev --test-scheduled
-```
-
-Then call:
-```bash
-curl "http://localhost:8787/__scheduled?cron=0+*+*+*+*"
-```
-
-### Integration Tests
-
-```typescript
-// tests/triggers.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { env } from 'cloudflare:test';
-
-describe('Cron Triggers', () => {
-  it('should clean up expired sessions', async () => {
-    // Setup: create expired session
-    await env.DB.prepare(`
-      INSERT INTO sessions (id, user_id, expires_at)
-      VALUES ('test-session', 'user-1', datetime('now', '-1 hour'))
-    `).run();
-
-    // Run the task
-    await cleanupExpiredSessions(env);
-
-    // Verify cleanup
-    const session = await env.DB.prepare(`
-      SELECT * FROM sessions WHERE id = 'test-session'
-    `).first();
-
-    expect(session).toBeNull();
-  });
-});
+})
 ```
 
 ## Best Practices
 
 <Aside type="tip" title="Trigger Best Practices">
-- Keep tasks idempotent (safe to run multiple times)
-- Use appropriate intervals (don't over-schedule)
-- Implement proper error handling and alerting
-- Log task execution for debugging
-- Consider using Queues for long-running tasks
+- Keep handlers idempotent (safe to run multiple times)
+- Use `waitUntil()` for non-critical background work
+- Set appropriate retry configuration for your use case
+- Use meaningful trigger names for easier debugging
+- Propagate trace IDs through your entire pipeline
+- Test error paths with the test harness
 </Aside>
 
-### Idempotent Tasks
+## Limits
 
-```typescript
-async function processUnsentEmails(env: Env) {
-  // Mark emails as processing to prevent duplicate sends
-  const emails = await env.DB.prepare(`
-    UPDATE emails
-    SET status = 'processing', updated_at = datetime('now')
-    WHERE status = 'pending'
-    AND scheduled_at <= datetime('now')
-    RETURNING *
-  `).all();
-
-  for (const email of emails.results) {
-    try {
-      await sendEmail(email, env);
-
-      await env.DB.prepare(`
-        UPDATE emails SET status = 'sent', sent_at = datetime('now')
-        WHERE id = ?
-      `).bind(email.id).run();
-
-    } catch (error) {
-      await env.DB.prepare(`
-        UPDATE emails SET status = 'failed', error = ?
-        WHERE id = ?
-      `).bind(error.message, email.id).run();
-    }
-  }
-}
-```
+| Limit | Value |
+|-------|-------|
+| Max cron triggers | 3 per Worker |
+| Min cron interval | 1 minute |
+| Max execution time | 30s (free), 15m (paid) |
+| Default timeout | 30 seconds |
+| Max timeout | 10 minutes |
 
 ## Next Steps
 
-- **[Deployment Guide](/guides/deployment/)** - Deploy your scheduled tasks
-- **[Queues Guide](/guides/queues/)** - For longer-running jobs
-- **[API Reference](/api/triggers/)** - Trigger API details
+- **[Triggers API Reference](/api/triggers/)** - Complete API documentation
+- **[Queues Guide](/guides/queues/)** - Background job processing
+- **[Durable Objects](/guides/durable-objects/)** - Stateful edge computing

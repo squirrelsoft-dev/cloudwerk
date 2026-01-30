@@ -3,7 +3,7 @@ title: Cloudwerk
 description: A full-stack framework for Cloudflare Workers with file-based routing that compiles to Hono.
 template: splash
 hero:
-  tagline: Build fast, deploy faster. A full-stack framework for Cloudflare Workers with file-based routing, integrated D1, KV, R2, authentication, and queues.
+  tagline: Build fast, deploy faster. A full-stack framework for Cloudflare Workers with file-based routing, integrated D1, KV, R2, authentication, services, queues, and triggers.
   image:
     file: ../../assets/logo.svg
   actions:
@@ -73,10 +73,13 @@ export default function UserPage({ user }: PageProps & { user: User }) {
 - **Server-side rendering** - Built-in SSR with streaming support
 - **Data loading** - `loader()` functions for server-side data fetching
 - **Middleware** - Request middleware at any route level
-- **Authentication** - Built-in auth patterns with sessions and JWT
+- **Authentication** - Full auth system with providers, sessions, RBAC, and multi-tenancy
+- **Services** - Reusable services with local or extracted Worker modes
+- **Queues** - Type-safe queue consumers with schema validation and DLQ
+- **Triggers** - Event-driven handlers for cron, webhooks, R2, email, D1, and more
+- **Durable Objects** - Convention-based DOs with native RPC and WebSockets
 - **Database** - First-class D1 integration with query builder
 - **Storage** - KV and R2 bindings made simple
-- **Queues** - Background job processing with Cloudflare Queues
 - **Type-safe** - Full TypeScript support throughout
 
 ## Getting Started
@@ -101,5 +104,30 @@ export default function UserPage({ user }: PageProps & { user: User }) {
     Explore full example applications.
 
     [View Examples](/examples/blog/)
+  </Card>
+</CardGrid>
+
+## Core Packages
+
+<CardGrid>
+  <Card title="@cloudwerk/auth" icon="star">
+    Authentication with OAuth providers, credentials, sessions, RBAC, and multi-tenancy.
+
+    [Authentication Guide](/guides/authentication/)
+  </Card>
+  <Card title="@cloudwerk/service" icon="setting">
+    Reusable services that run locally or extract to separate Workers.
+
+    [Services Guide](/guides/services/)
+  </Card>
+  <Card title="@cloudwerk/queue" icon="list-format">
+    Type-safe queue consumers with Zod validation and dead letter queues.
+
+    [Queues Guide](/guides/queues/)
+  </Card>
+  <Card title="@cloudwerk/trigger" icon="rocket">
+    Event-driven handlers for cron, webhooks, R2, email, D1, and tail events.
+
+    [Triggers Guide](/guides/triggers/)
   </Card>
 </CardGrid>
