@@ -1,5 +1,12 @@
 # @cloudwerk/ui
 
+## 0.12.0
+
+### Patch Changes
+
+- Updated dependencies [[`afbcd2d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/afbcd2d31f6177fff01601537dbe27eaaa065892)]:
+  - @cloudwerk/core@0.12.0
+
 ## 0.11.0
 
 ### Minor Changes
