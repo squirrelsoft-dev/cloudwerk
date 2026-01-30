@@ -17,6 +17,12 @@ import {
   bindingsUpdate,
   bindingsGenerateTypes,
 } from './commands/bindings/index.js'
+import { triggers } from './commands/triggers.js'
+import {
+  triggersList,
+  triggersValidate,
+  triggersGenerate,
+} from './commands/triggers/index.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -133,6 +139,44 @@ bindingsCmd
   .description('Regenerate TypeScript type definitions')
   .option('--verbose', 'Enable verbose logging')
   .action(bindingsGenerateTypes)
+
+// ============================================================================
+// Triggers Command
+// ============================================================================
+
+const triggersCmd = program
+  .command('triggers')
+  .description('Manage Cloudwerk triggers (scheduled, queue, R2, webhook, etc.)')
+  .enablePositionalOptions()
+  .passThroughOptions()
+  .option('--verbose', 'Enable verbose logging')
+  .action(triggers)
+
+triggersCmd
+  .command('list')
+  .description('List all triggers with details')
+  .option('-t, --type <type>', 'Filter by source type (scheduled, queue, r2, webhook, email)')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(triggersList)
+
+triggersCmd
+  .command('validate')
+  .description('Validate trigger configurations')
+  .option('-s, --strict', 'Exit with error code if warnings are present')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(triggersValidate)
+
+triggersCmd
+  .command('generate')
+  .description('Regenerate wrangler.toml and TypeScript types')
+  .option('--wrangler', 'Only generate wrangler.toml config')
+  .option('--types', 'Only generate TypeScript types')
+  .option('--dry-run', 'Show what would be generated without writing')
+  .option('--json', 'Output as JSON')
+  .option('--verbose', 'Enable verbose logging')
+  .action(triggersGenerate)
 
 // ============================================================================
 // Parse Arguments

@@ -385,3 +385,68 @@ export type {
   DurableObjectManifest,
   BuildDurableObjectManifestOptions,
 } from './durable-object-compiler.js'
+
+// ============================================================================
+// Trigger Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isTriggerFile,
+
+  // Name Conversion
+  fileNameToTriggerName,
+  triggerNameToBindingName,
+  bindingNameToTriggerName,
+  directoryNameToFanOutGroup,
+
+  // Trigger Scanning
+  scanTriggers,
+  scanTriggersSync,
+
+  // Constants
+  TRIGGERS_DIR,
+} from './trigger-scanner.js'
+
+export type { ScannedTrigger, TriggerScanResult } from './trigger-scanner.js'
+
+// ============================================================================
+// Trigger Compiler Exports
+// ============================================================================
+
+export {
+  // Trigger Compilation
+  compileTrigger,
+  buildTriggerManifest,
+  updateTriggerEntryFromDefinition,
+  addTriggerWarnings,
+  populateTriggerGroups,
+
+  // Formatting
+  formatTriggerErrors,
+  formatTriggerWarnings,
+
+  // Utilities
+  hasTriggerErrors,
+  hasTriggerWarnings,
+  getTriggerSummary,
+} from './trigger-compiler.js'
+
+export type {
+  TriggerRetryConfig,
+  QueueTriggerSource,
+  ScheduledTriggerSource,
+  R2TriggerSource,
+  WebhookTriggerSource,
+  EmailTriggerSource,
+  D1TriggerSource,
+  TailTriggerSource,
+  TriggerSource,
+  TriggerEntry,
+  TriggerErrorCode,
+  TriggerWarningCode,
+  TriggerValidationError,
+  TriggerValidationWarning,
+  TriggerManifest,
+  BuildTriggerManifestOptions,
+} from './trigger-compiler.js'
