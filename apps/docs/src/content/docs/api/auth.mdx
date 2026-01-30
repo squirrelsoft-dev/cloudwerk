@@ -1,0 +1,984 @@
+---
+title: Auth API
+description: Complete API reference for @cloudwerk/auth - authentication, sessions, RBAC, multi-tenancy, and rate limiting.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `@cloudwerk/auth` package provides a comprehensive authentication system with providers, sessions, RBAC, multi-tenancy, and rate limiting.
+
+## Installation
+
+```bash
+pnpm add @cloudwerk/auth
+```
+
+## Configuration API
+
+### defineAuthConfig()
+
+Main configuration function for the auth system.
+
+```typescript
+import { defineAuthConfig } from '@cloudwerk/auth/convention'
+
+export default defineAuthConfig({
+  basePath?: string,
+  session?: SessionConfig,
+  cookies?: CookieConfig,
+  pages?: PagesConfig,
+  csrf?: CsrfConfig,
+  secret?: string,
+})
+```
+
+#### AuthConfig
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `basePath` | `string` | `'/auth'` | Base path for auth endpoints |
+| `session` | `SessionConfig` | See below | Session configuration |
+| `cookies` | `CookieConfig` | See below | Cookie configuration |
+| `pages` | `PagesConfig` | See below | Custom page paths |
+| `csrf` | `CsrfConfig` | See below | CSRF protection config |
+| `secret` | `string` | Required for JWT | Secret for signing tokens |
+
+#### SessionConfig
+
+```typescript
+interface SessionConfig {
+  strategy: 'database' | 'jwt'  // Session storage strategy
+  maxAge?: number               // Session lifetime in seconds (default: 30 days)
+  updateAge?: number            // Refresh interval in seconds (default: 24 hours)
+}
+```
+
+#### CookieConfig
+
+```typescript
+interface CookieConfig {
+  sessionToken?: {
+    name?: string               // Cookie name (default: 'cloudwerk.session-token')
+    options?: CookieOptions     // Cookie options
+  }
+  csrfToken?: {
+    name?: string               // CSRF cookie name
+    options?: CookieOptions
+  }
+}
+
+interface CookieOptions {
+  secure?: boolean              // HTTPS only (default: true in production)
+  httpOnly?: boolean            // No JavaScript access (default: true)
+  sameSite?: 'lax' | 'strict' | 'none'  // (default: 'lax')
+  path?: string                 // Cookie path (default: '/')
+  domain?: string               // Cookie domain
+}
+```
+
+#### PagesConfig
+
+```typescript
+interface PagesConfig {
+  signIn?: string               // Sign-in page (default: '/auth/signin')
+  signOut?: string              // Sign-out page (default: '/auth/signout')
+  error?: string                // Error page (default: '/auth/error')
+  verifyRequest?: string        // Email verification page
+  newUser?: string              // New user redirect
+}
+```
+
+#### CsrfConfig
+
+```typescript
+interface CsrfConfig {
+  enabled?: boolean             // Enable CSRF protection (default: true)
+  cookieName?: string           // CSRF cookie name
+  methods?: HttpMethod[]        // Methods requiring CSRF (default: ['POST', 'PUT', 'PATCH', 'DELETE'])
+}
+```
+
+---
+
+## Provider API
+
+### defineProvider()
+
+Wraps a provider configuration for use in Cloudwerk.
+
+```typescript
+import { defineProvider } from '@cloudwerk/auth/convention'
+
+export default defineProvider(providerConfig)
+```
+
+### OAuth Providers
+
+#### github()
+
+```typescript
+import { github } from '@cloudwerk/auth/convention'
+
+github({
+  clientId: string,
+  clientSecret: string,
+  scope?: string,               // Default: 'read:user user:email'
+})
+```
+
+#### google()
+
+```typescript
+import { google } from '@cloudwerk/auth/convention'
+
+google({
+  clientId: string,
+  clientSecret: string,
+  scope?: string,               // Default: 'openid email profile'
+})
+```
+
+#### discord()
+
+```typescript
+import { discord } from '@cloudwerk/auth/convention'
+
+discord({
+  clientId: string,
+  clientSecret: string,
+  scope?: string,               // Default: 'identify email'
+})
+```
+
+#### apple()
+
+```typescript
+import { apple } from '@cloudwerk/auth/convention'
+
+apple({
+  clientId: string,
+  clientSecret: string,         // Generated from Apple private key
+  scope?: string,
+})
+```
+
+### createOAuth2Provider()
+
+Create a custom OAuth 2.0 provider.
+
+```typescript
+import { createOAuth2Provider } from '@cloudwerk/auth'
+
+createOAuth2Provider({
+  id: string,                   // Unique provider ID
+  name: string,                 // Display name
+  clientId: string,
+  clientSecret: string,
+  authorization: string,        // Authorization endpoint URL
+  token: string,                // Token endpoint URL
+  userinfo: string,             // Userinfo endpoint URL
+  scope?: string,               // OAuth scopes
+  profile: (profile: unknown) => UserProfile,  // Profile mapping
+})
+```
+
+**UserProfile Interface:**
+
+```typescript
+interface UserProfile {
+  id: string
+  email?: string
+  name?: string
+  image?: string
+  emailVerified?: Date | null
+}
+```
+
+### credentials()
+
+Email/password authentication.
+
+```typescript
+import { credentials } from '@cloudwerk/auth'
+
+credentials({
+  credentials: {
+    [fieldName: string]: {
+      label: string,
+      type: 'text' | 'email' | 'password',
+      placeholder?: string,
+      required?: boolean,
+    }
+  },
+  authorize: (credentials: Record<string, string>, ctx: AuthContext) => Promise<User | null>,
+})
+```
+
+**Example:**
+
+```typescript
+credentials({
+  credentials: {
+    email: { label: 'Email', type: 'email', required: true },
+    password: { label: 'Password', type: 'password', required: true },
+  },
+  async authorize(creds, ctx) {
+    const user = await ctx.env.DB
+      .prepare('SELECT * FROM users WHERE email = ?')
+      .bind(creds.email)
+      .first()
+
+    if (!user) return null
+
+    const valid = await verifyPassword(creds.password, user.password_hash)
+    if (!valid) return null
+
+    return { id: user.id, email: user.email, name: user.name }
+  },
+})
+```
+
+### email()
+
+Magic link / passwordless authentication.
+
+```typescript
+import { email } from '@cloudwerk/auth'
+
+email({
+  from: string,                 // Sender email address
+  maxAge?: number,              // Link validity in seconds (default: 86400)
+  sendVerificationRequest: (params: EmailParams) => Promise<void>,
+})
+
+interface EmailParams {
+  identifier: string            // Recipient email
+  url: string                   // Magic link URL
+  token: string                 // Verification token
+  expires: Date                 // Expiration time
+}
+```
+
+### passkey()
+
+WebAuthn / passkey authentication.
+
+```typescript
+import { passkey } from '@cloudwerk/auth'
+
+passkey({
+  rpName: string,                         // Relying party name
+  rpId: string,                           // Relying party ID (domain)
+  origin: string,                         // Expected origin
+  authenticatorAttachment?: 'platform' | 'cross-platform',
+  userVerification?: 'required' | 'preferred' | 'discouraged',
+  residentKey?: 'required' | 'preferred' | 'discouraged',
+})
+```
+
+---
+
+## Callbacks API
+
+### defineAuthCallbacks()
+
+Define lifecycle callbacks for the auth flow.
+
+```typescript
+import { defineAuthCallbacks } from '@cloudwerk/auth/convention'
+
+export default defineAuthCallbacks({
+  signIn?: SignInCallback,
+  redirect?: RedirectCallback,
+  session?: SessionCallback,
+  jwt?: JwtCallback,
+})
+```
+
+#### SignInCallback
+
+Called when a user signs in.
+
+```typescript
+type SignInCallback = (params: {
+  user: User,
+  account: Account | null,
+  profile?: Profile,
+  email?: { verificationRequest?: boolean },
+  credentials?: Record<string, string>,
+}) => Awaitable<boolean | string>  // Return false to deny, string to redirect
+```
+
+#### RedirectCallback
+
+Customize redirect URLs.
+
+```typescript
+type RedirectCallback = (params: {
+  url: string,
+  baseUrl: string,
+}) => Awaitable<string>
+```
+
+#### SessionCallback
+
+Customize session data.
+
+```typescript
+type SessionCallback = (params: {
+  session: Session,
+  user: User,
+  token?: JWT,
+}) => Awaitable<Session>
+```
+
+**Example:**
+
+```typescript
+defineAuthCallbacks({
+  async session({ session, user }) {
+    session.user.id = user.id
+    session.user.role = user.role
+    return session
+  },
+})
+```
+
+#### JwtCallback
+
+Customize JWT token (jwt strategy only).
+
+```typescript
+type JwtCallback = (params: {
+  token: JWT,
+  user?: User,
+  account?: Account,
+  profile?: Profile,
+  trigger?: 'signIn' | 'signUp' | 'update',
+}) => Awaitable<JWT>
+```
+
+---
+
+## RBAC API
+
+### defineRBAC()
+
+Define roles and permissions.
+
+```typescript
+import { defineRBAC } from '@cloudwerk/auth/convention'
+
+export default defineRBAC({
+  roles: Role[],
+  defaultRole?: string,
+  hierarchy?: Record<string, string[]>,
+})
+```
+
+#### Role
+
+```typescript
+interface Role {
+  id: string                    // Unique role identifier
+  name: string                  // Display name
+  permissions: string[]         // Permission strings
+  description?: string          // Optional description
+}
+```
+
+#### Permission Syntax
+
+| Pattern | Description |
+|---------|-------------|
+| `resource:action` | Standard permission |
+| `resource:*` | All actions on resource |
+| `*` | Full access (admin) |
+| `resource:action:own` | Only own resources |
+
+**Example:**
+
+```typescript
+defineRBAC({
+  roles: [
+    {
+      id: 'admin',
+      name: 'Administrator',
+      permissions: ['*'],
+    },
+    {
+      id: 'editor',
+      name: 'Editor',
+      permissions: [
+        'posts:create',
+        'posts:read',
+        'posts:update',
+        'posts:delete:own',
+        'media:*',
+      ],
+    },
+    {
+      id: 'viewer',
+      name: 'Viewer',
+      permissions: ['posts:read', 'media:read'],
+    },
+  ],
+  defaultRole: 'viewer',
+  hierarchy: {
+    editor: ['viewer'],  // Editor inherits viewer permissions
+  },
+})
+```
+
+---
+
+## Context Helpers
+
+### getUser()
+
+Get the current authenticated user (returns null if not authenticated).
+
+```typescript
+import { getUser } from '@cloudwerk/auth'
+
+const user = getUser()
+// Returns: User | null
+```
+
+### getSession()
+
+Get the current session.
+
+```typescript
+import { getSession } from '@cloudwerk/auth'
+
+const session = getSession()
+// Returns: Session | null
+```
+
+### isAuthenticated()
+
+Check if the current request is authenticated.
+
+```typescript
+import { isAuthenticated } from '@cloudwerk/auth'
+
+if (isAuthenticated()) {
+  // User is logged in
+}
+```
+
+### requireAuth()
+
+Require authentication; redirects or throws if not authenticated.
+
+```typescript
+import { requireAuth } from '@cloudwerk/auth'
+
+// Redirects to sign-in page if not authenticated
+const user = requireAuth()
+
+// Throws UnauthenticatedError instead of redirecting
+const user = requireAuth({ throwError: true })
+
+// Custom redirect URL
+const user = requireAuth({ redirectTo: '/custom-login' })
+```
+
+### hasRole()
+
+Check if the user has a specific role.
+
+```typescript
+import { hasRole } from '@cloudwerk/auth'
+
+if (hasRole('admin')) {
+  // User is admin
+}
+
+// Check for any of multiple roles
+if (hasRole(['admin', 'moderator'])) {
+  // User has admin OR moderator role
+}
+```
+
+### hasPermission()
+
+Check if the user has a specific permission.
+
+```typescript
+import { hasPermission } from '@cloudwerk/auth'
+
+if (hasPermission('posts:delete')) {
+  // User can delete posts
+}
+```
+
+### requireRole()
+
+Require a specific role; throws ForbiddenError if lacking.
+
+```typescript
+import { requireRole } from '@cloudwerk/auth'
+
+requireRole('admin')  // Throws if not admin
+requireRole(['admin', 'moderator'])  // Any of these roles
+```
+
+### requirePermission()
+
+Require a specific permission; throws ForbiddenError if lacking.
+
+```typescript
+import { requirePermission } from '@cloudwerk/auth'
+
+requirePermission('posts:create')
+```
+
+---
+
+## Middleware API
+
+### authMiddleware()
+
+Create authentication middleware for route protection.
+
+```typescript
+import { authMiddleware } from '@cloudwerk/auth/middleware'
+
+export const middleware = authMiddleware(options)
+```
+
+#### AuthMiddlewareOptions
+
+```typescript
+interface AuthMiddlewareOptions {
+  // Authentication requirements
+  required?: boolean            // Require authentication (default: true)
+  unauthenticatedRedirect?: string  // Redirect URL for unauthenticated
+
+  // Role requirements
+  role?: string                 // Required role
+  roles?: string[]              // Any of these roles
+
+  // Permission requirements
+  permission?: string           // Required permission
+  permissions?: string[]        // Any of these permissions
+
+  // Custom authorization
+  authorize?: (user: User, request: Request) => Awaitable<boolean>
+
+  // Forbidden handling
+  unauthorizedRedirect?: string // Redirect for unauthorized (403)
+}
+```
+
+**Examples:**
+
+```typescript
+// Require authentication
+authMiddleware({
+  unauthenticatedRedirect: '/login',
+})
+
+// Require specific role
+authMiddleware({
+  role: 'admin',
+  unauthorizedRedirect: '/forbidden',
+})
+
+// Custom authorization logic
+authMiddleware({
+  async authorize(user, request) {
+    const url = new URL(request.url)
+    const resourceId = url.pathname.split('/').pop()
+    const resource = await getResource(resourceId)
+    return resource.ownerId === user.id
+  },
+})
+```
+
+---
+
+## Multi-Tenancy API
+
+### createTenantResolver()
+
+Create a tenant resolver for multi-tenant applications.
+
+```typescript
+import { createTenantResolver, createD1TenantStorage } from '@cloudwerk/auth/tenant'
+
+const storage = createD1TenantStorage(env.DB)
+const resolver = createTenantResolver(storage, options)
+```
+
+#### TenantResolverOptions
+
+```typescript
+interface TenantResolverOptions {
+  strategy: 'subdomain' | 'path' | 'header' | 'cookie'
+  baseDomain?: string           // For subdomain strategy
+  pathPrefix?: string           // For path strategy (default: '/t/')
+  headerName?: string           // For header strategy (default: 'X-Tenant-ID')
+  cookieName?: string           // For cookie strategy (default: 'tenant')
+}
+```
+
+#### TenantResolver Methods
+
+```typescript
+interface TenantResolver {
+  resolve(request: Request): Promise<Tenant | null>
+  require(request: Request): Promise<{ tenant: Tenant }>  // Throws if not found
+}
+```
+
+### Storage Adapters
+
+```typescript
+import {
+  createD1TenantStorage,
+  createKVTenantStorage,
+  createMemoryTenantStorage,
+} from '@cloudwerk/auth/tenant'
+
+// D1 storage
+const storage = createD1TenantStorage(env.DB, {
+  tableName: 'tenants',  // Default
+})
+
+// KV storage
+const storage = createKVTenantStorage(env.TENANTS_KV, {
+  prefix: 'tenant:',  // Default
+})
+
+// In-memory (for testing)
+const storage = createMemoryTenantStorage()
+```
+
+---
+
+## Rate Limiting API
+
+### createLoginRateLimiter()
+
+Rate limiter for login attempts.
+
+```typescript
+import { createLoginRateLimiter, createFixedWindowStorage } from '@cloudwerk/auth/rate-limit'
+
+const storage = createFixedWindowStorage(env.RATE_LIMIT_KV)
+const limiter = createLoginRateLimiter(storage, {
+  limit: 5,        // Max attempts
+  window: 900,     // Per 15 minutes (in seconds)
+})
+```
+
+### createPasswordResetRateLimiter()
+
+Rate limiter for password reset requests.
+
+```typescript
+import { createPasswordResetRateLimiter } from '@cloudwerk/auth/rate-limit'
+
+const limiter = createPasswordResetRateLimiter(storage, {
+  limit: 3,        // Max attempts
+  window: 3600,    // Per hour
+})
+```
+
+### createEmailVerificationRateLimiter()
+
+Rate limiter for email verification requests.
+
+```typescript
+import { createEmailVerificationRateLimiter } from '@cloudwerk/auth/rate-limit'
+
+const limiter = createEmailVerificationRateLimiter(storage, {
+  limit: 5,        // Max attempts
+  window: 3600,    // Per hour
+})
+```
+
+### Rate Limiter Methods
+
+```typescript
+interface RateLimiter {
+  check(request: Request): Promise<RateLimitResult>
+}
+
+interface RateLimitResult {
+  success: boolean              // Whether request is allowed
+  limit: number                 // Configured limit
+  remaining: number             // Remaining requests
+  reset: number                 // Seconds until reset
+  response?: Response           // 429 response if rate limited
+}
+```
+
+### Storage Implementations
+
+```typescript
+import {
+  createFixedWindowStorage,
+  createSlidingWindowStorage,
+} from '@cloudwerk/auth/rate-limit'
+
+// Fixed window (simpler, less accurate)
+const storage = createFixedWindowStorage(env.KV)
+
+// Sliding window (more accurate, higher storage)
+const storage = createSlidingWindowStorage(env.KV)
+```
+
+---
+
+## Client API
+
+### signIn()
+
+Initiate sign-in flow.
+
+```typescript
+import { signIn } from '@cloudwerk/auth/client'
+
+// OAuth provider
+await signIn('github')
+await signIn('google', { callbackUrl: '/dashboard' })
+
+// Credentials
+await signIn('credentials', {
+  email: 'user@example.com',
+  password: 'password',
+  redirectTo: '/dashboard',
+})
+
+// Email/magic link
+await signIn('email', { email: 'user@example.com' })
+```
+
+### signOut()
+
+Sign out the current user.
+
+```typescript
+import { signOut } from '@cloudwerk/auth/client'
+
+await signOut()
+await signOut({ redirectTo: '/' })
+await signOut({ redirect: false })  // Returns session data
+```
+
+### getSession() (Client)
+
+Get the current session on the client.
+
+```typescript
+import { getSession } from '@cloudwerk/auth/client'
+
+const session = await getSession()
+if (session) {
+  console.log('Logged in as', session.user.email)
+}
+```
+
+### getCsrfToken()
+
+Get the CSRF token for forms.
+
+```typescript
+import { getCsrfToken } from '@cloudwerk/auth/client'
+
+const token = getCsrfToken()
+// Use in form: <input type="hidden" name="csrf_token" value={token} />
+```
+
+### createAuthStore()
+
+Create a reactive auth store for frameworks.
+
+```typescript
+import { createAuthStore } from '@cloudwerk/auth/client'
+
+const store = createAuthStore()
+
+// Subscribe to changes
+store.subscribe((state) => {
+  console.log('Auth state:', state.status, state.user)
+})
+
+// Get current state
+const { user, status } = store.getState()
+
+// Status: 'loading' | 'authenticated' | 'unauthenticated'
+```
+
+---
+
+## Password Utilities
+
+### hashPassword()
+
+Hash a password for storage.
+
+```typescript
+import { hashPassword } from '@cloudwerk/auth'
+
+const hash = await hashPassword('user_password')
+// Store hash in database
+```
+
+### verifyPassword()
+
+Verify a password against a hash.
+
+```typescript
+import { verifyPassword } from '@cloudwerk/auth'
+
+const isValid = await verifyPassword('user_password', storedHash)
+```
+
+### generateToken()
+
+Generate a secure random token.
+
+```typescript
+import { generateToken } from '@cloudwerk/auth'
+
+const token = await generateToken()        // 32 bytes, hex encoded
+const token = await generateToken(64)      // Custom length
+```
+
+---
+
+## Error Classes
+
+### UnauthenticatedError
+
+Thrown when authentication is required but missing.
+
+```typescript
+import { UnauthenticatedError } from '@cloudwerk/auth'
+
+class UnauthenticatedError extends Error {
+  readonly code: 'UNAUTHENTICATED'
+  readonly status: 401
+}
+```
+
+### ForbiddenError
+
+Thrown when user lacks required role/permission.
+
+```typescript
+import { ForbiddenError } from '@cloudwerk/auth'
+
+class ForbiddenError extends Error {
+  readonly code: 'FORBIDDEN'
+  readonly status: 403
+  readonly requiredRole?: string
+  readonly requiredPermission?: string
+}
+```
+
+### InvalidCredentialsError
+
+Thrown when credentials are invalid.
+
+```typescript
+import { InvalidCredentialsError } from '@cloudwerk/auth'
+
+class InvalidCredentialsError extends Error {
+  readonly code: 'INVALID_CREDENTIALS'
+  readonly status: 401
+}
+```
+
+### SessionExpiredError
+
+Thrown when session has expired.
+
+```typescript
+import { SessionExpiredError } from '@cloudwerk/auth'
+
+class SessionExpiredError extends Error {
+  readonly code: 'SESSION_EXPIRED'
+  readonly status: 401
+}
+```
+
+---
+
+## Type Definitions
+
+### User
+
+```typescript
+interface User {
+  id: string
+  email?: string | null
+  name?: string | null
+  image?: string | null
+  emailVerified?: Date | null
+  role?: string
+  roles?: string[]
+}
+```
+
+### Session
+
+```typescript
+interface Session {
+  user: User
+  expires: Date
+}
+```
+
+### Account
+
+```typescript
+interface Account {
+  provider: string
+  providerAccountId: string
+  type: 'oauth' | 'oidc' | 'email' | 'credentials' | 'webauthn'
+  access_token?: string
+  refresh_token?: string
+  expires_at?: number
+  token_type?: string
+  scope?: string
+}
+```
+
+### JWT
+
+```typescript
+interface JWT {
+  sub: string                   // Subject (user ID)
+  iat: number                   // Issued at
+  exp: number                   // Expires at
+  jti: string                   // JWT ID
+  [key: string]: unknown        // Custom claims
+}
+```
+
+### Tenant
+
+```typescript
+interface Tenant {
+  id: string
+  slug: string
+  name: string
+  settings?: Record<string, unknown>
+  createdAt: Date
+  updatedAt: Date
+}
+```
+
+---
+
+## Next Steps
+
+- **[Authentication Guide](/guides/authentication/)** - Patterns and best practices
+- **[Middleware API](/api/context/)** - Advanced middleware patterns
+- **[Database Guide](/guides/database/)** - User storage with D1

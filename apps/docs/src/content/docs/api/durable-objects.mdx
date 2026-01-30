@@ -1,0 +1,715 @@
+---
+title: Durable Objects API
+description: Complete API reference for @cloudwerk/durable-object - stateful edge computing with native RPC, storage, and WebSockets.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `@cloudwerk/durable-object` package provides a convention-based system for creating Durable Objects with native RPC methods, SQLite/KV storage, WebSocket support, and alarms.
+
+## Installation
+
+```bash
+pnpm add @cloudwerk/durable-object
+```
+
+## defineDurableObject()
+
+Creates a Durable Object definition with typed state and methods.
+
+```typescript
+import { defineDurableObject } from '@cloudwerk/durable-object'
+
+export default defineDurableObject<TState>({
+  init?: (ctx: DurableObjectContext) => Awaitable<TState>,
+  methods?: Record<string, DurableObjectMethod>,
+  fetch?: (request: Request, ctx: DurableObjectContext) => Awaitable<Response>,
+  webSocketMessage?: (ws: WebSocket, message: string | ArrayBuffer, ctx: DurableObjectContext) => Awaitable<void>,
+  webSocketClose?: (ws: WebSocket, code: number, reason: string, ctx: DurableObjectContext) => Awaitable<void>,
+  webSocketError?: (ws: WebSocket, error: Error, ctx: DurableObjectContext) => Awaitable<void>,
+  alarm?: (ctx: DurableObjectContext) => Awaitable<void>,
+})
+```
+
+### Type Parameter
+
+The generic type `TState` defines the shape of your Durable Object's state.
+
+```typescript
+interface CounterState {
+  count: number
+  lastUpdated: Date
+}
+
+export default defineDurableObject<CounterState>({
+  // ...
+})
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `init` | `Function` | Initialize state when DO is created |
+| `methods` | `Record<string, Function>` | RPC methods exposed to callers |
+| `fetch` | `Function` | Handle HTTP requests |
+| `webSocketMessage` | `Function` | Handle WebSocket messages |
+| `webSocketClose` | `Function` | Handle WebSocket close events |
+| `webSocketError` | `Function` | Handle WebSocket errors |
+| `alarm` | `Function` | Handle scheduled alarms |
+
+---
+
+## DurableObjectContext
+
+The context object passed to all handlers.
+
+```typescript
+interface DurableObjectContext<TState = unknown> {
+  // State management
+  state: TState
+  setState(updates: Partial<TState>): void
+  getState(): TState
+
+  // Storage
+  storage: DurableObjectStorage
+  sql: SqlStorage
+
+  // WebSocket
+  acceptWebSocket(ws: WebSocket, tags?: string[]): void
+  getWebSockets(tag?: string): WebSocket[]
+
+  // Alarms
+  setAlarm(time: Date | number): Promise<void>
+  deleteAlarm(): Promise<void>
+  getAlarm(): Promise<number | null>
+
+  // Environment
+  env: Env
+
+  // Execution
+  waitUntil(promise: Promise<unknown>): void
+  blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T>
+}
+```
+
+---
+
+## Init Handler
+
+Initialize state when the Durable Object is first created.
+
+```typescript
+export default defineDurableObject<CounterState>({
+  async init(ctx) {
+    // Load from storage or return defaults
+    const stored = await ctx.storage.get<CounterState>('state')
+    return stored ?? { count: 0, lastUpdated: new Date() }
+  },
+})
+```
+
+<Aside type="tip">
+The `init` handler runs when the DO is first accessed. Use it to load persisted state from storage.
+</Aside>
+
+---
+
+## RPC Methods
+
+Methods are exposed as native Cloudflare RPC methods.
+
+```typescript
+export default defineDurableObject<CounterState>({
+  init: async (ctx) => ({ count: 0, lastUpdated: new Date() }),
+
+  methods: {
+    async increment(ctx, amount: number = 1) {
+      ctx.setState({
+        count: ctx.state.count + amount,
+        lastUpdated: new Date(),
+      })
+      await ctx.storage.put('state', ctx.state)
+      return ctx.state.count
+    },
+
+    async decrement(ctx, amount: number = 1) {
+      ctx.setState({
+        count: ctx.state.count - amount,
+        lastUpdated: new Date(),
+      })
+      await ctx.storage.put('state', ctx.state)
+      return ctx.state.count
+    },
+
+    async getCount(ctx) {
+      return ctx.state.count
+    },
+
+    async reset(ctx) {
+      ctx.setState({ count: 0, lastUpdated: new Date() })
+      await ctx.storage.put('state', ctx.state)
+      return 0
+    },
+  },
+})
+```
+
+### Calling RPC Methods
+
+```typescript
+import { durableObjects } from '@cloudwerk/core/bindings'
+
+// Get stub by name
+const counter = durableObjects.counter.get('user-123')
+
+// Call methods directly (native RPC)
+const count = await counter.increment(5)
+const current = await counter.getCount()
+await counter.reset()
+```
+
+---
+
+## Storage API
+
+### Key-Value Storage
+
+```typescript
+interface DurableObjectStorage {
+  // Single operations
+  get<T>(key: string): Promise<T | undefined>
+  put<T>(key: string, value: T): Promise<void>
+  delete(key: string): Promise<boolean>
+
+  // Batch operations
+  get<T>(keys: string[]): Promise<Map<string, T>>
+  put(entries: Record<string, unknown>): Promise<void>
+  delete(keys: string[]): Promise<number>
+
+  // List
+  list<T>(options?: StorageListOptions): Promise<Map<string, T>>
+
+  // Transactions
+  transaction<T>(fn: () => Promise<T>): Promise<T>
+
+  // Sync
+  sync(): Promise<void>
+}
+
+interface StorageListOptions {
+  prefix?: string
+  start?: string
+  end?: string
+  limit?: number
+  reverse?: boolean
+}
+```
+
+### Storage Examples
+
+```typescript
+methods: {
+  async saveUser(ctx, user: User) {
+    await ctx.storage.put(`user:${user.id}`, user)
+  },
+
+  async getUser(ctx, id: string) {
+    return ctx.storage.get<User>(`user:${id}`)
+  },
+
+  async getAllUsers(ctx) {
+    const users = await ctx.storage.list<User>({ prefix: 'user:' })
+    return Array.from(users.values())
+  },
+
+  async deleteUser(ctx, id: string) {
+    return ctx.storage.delete(`user:${id}`)
+  },
+
+  async batchSave(ctx, users: User[]) {
+    const entries = Object.fromEntries(
+      users.map(u => [`user:${u.id}`, u])
+    )
+    await ctx.storage.put(entries)
+  },
+}
+```
+
+---
+
+## SQL Storage
+
+Durable Objects support SQLite for relational data.
+
+```typescript
+interface SqlStorage {
+  exec(query: string, ...bindings: unknown[]): SqlStorageResult
+  prepare(query: string): SqlStatement
+}
+
+interface SqlStatement {
+  bind(...values: unknown[]): SqlStatement
+  first<T>(): T | null
+  all<T>(): T[]
+  run(): SqlRunResult
+}
+
+interface SqlRunResult {
+  changes: number
+  lastRowId: number
+}
+```
+
+### SQL Examples
+
+```typescript
+export default defineDurableObject({
+  async init(ctx) {
+    // Create tables on init
+    ctx.sql.exec(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    return { initialized: true }
+  },
+
+  methods: {
+    async addMessage(ctx, userId: string, content: string) {
+      const result = ctx.sql.exec(
+        'INSERT INTO messages (user_id, content) VALUES (?, ?)',
+        userId, content
+      )
+      return result.lastRowId
+    },
+
+    async getMessages(ctx, userId: string, limit: number = 50) {
+      return ctx.sql
+        .prepare('SELECT * FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?')
+        .bind(userId, limit)
+        .all()
+    },
+
+    async deleteMessage(ctx, id: number) {
+      const result = ctx.sql.exec('DELETE FROM messages WHERE id = ?', id)
+      return result.changes > 0
+    },
+  },
+})
+```
+
+---
+
+## Transactions
+
+Ensure atomicity for multiple operations.
+
+```typescript
+methods: {
+  async transfer(ctx, fromId: string, toId: string, amount: number) {
+    await ctx.storage.transaction(async () => {
+      const from = await ctx.storage.get<Account>(`account:${fromId}`)
+      const to = await ctx.storage.get<Account>(`account:${toId}`)
+
+      if (!from || !to) throw new Error('Account not found')
+      if (from.balance < amount) throw new Error('Insufficient funds')
+
+      from.balance -= amount
+      to.balance += amount
+
+      await ctx.storage.put({
+        [`account:${fromId}`]: from,
+        [`account:${toId}`]: to,
+      })
+    })
+  },
+}
+```
+
+---
+
+## Fetch Handler
+
+Handle raw HTTP requests to the Durable Object.
+
+```typescript
+export default defineDurableObject({
+  async fetch(request, ctx) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/ws') {
+      // Upgrade to WebSocket
+      const pair = new WebSocketPair()
+      ctx.acceptWebSocket(pair[1])
+      return new Response(null, { status: 101, webSocket: pair[0] })
+    }
+
+    if (url.pathname === '/state') {
+      return Response.json(ctx.state)
+    }
+
+    return new Response('Not found', { status: 404 })
+  },
+})
+```
+
+---
+
+## WebSocket Handlers
+
+Handle WebSocket connections for real-time features.
+
+```typescript
+interface ChatState {
+  messages: Message[]
+}
+
+export default defineDurableObject<ChatState>({
+  init: async () => ({ messages: [] }),
+
+  async fetch(request, ctx) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/ws') {
+      const pair = new WebSocketPair()
+      const userId = url.searchParams.get('userId')
+
+      // Accept with tags for filtering
+      ctx.acceptWebSocket(pair[1], [userId, 'all'])
+
+      return new Response(null, { status: 101, webSocket: pair[0] })
+    }
+
+    return new Response('Not found', { status: 404 })
+  },
+
+  async webSocketMessage(ws, message, ctx) {
+    const data = JSON.parse(message as string)
+
+    if (data.type === 'chat') {
+      const msg = {
+        id: crypto.randomUUID(),
+        userId: data.userId,
+        content: data.content,
+        timestamp: new Date(),
+      }
+
+      ctx.state.messages.push(msg)
+      await ctx.storage.put('messages', ctx.state.messages)
+
+      // Broadcast to all connected clients
+      for (const client of ctx.getWebSockets('all')) {
+        client.send(JSON.stringify({ type: 'message', data: msg }))
+      }
+    }
+  },
+
+  async webSocketClose(ws, code, reason, ctx) {
+    console.log(`WebSocket closed: ${code} ${reason}`)
+  },
+
+  async webSocketError(ws, error, ctx) {
+    console.error('WebSocket error:', error)
+  },
+})
+```
+
+### WebSocket Methods
+
+| Method | Description |
+|--------|-------------|
+| `ctx.acceptWebSocket(ws, tags?)` | Accept WebSocket with optional tags |
+| `ctx.getWebSockets(tag?)` | Get connected WebSockets, optionally filtered by tag |
+
+---
+
+## Alarms
+
+Schedule periodic tasks within the Durable Object.
+
+```typescript
+export default defineDurableObject({
+  async init(ctx) {
+    // Schedule first alarm
+    await ctx.setAlarm(Date.now() + 60_000)  // 1 minute
+    return { processedCount: 0 }
+  },
+
+  async alarm(ctx) {
+    // Process pending work
+    await processPendingTasks(ctx)
+
+    ctx.setState({
+      processedCount: ctx.state.processedCount + 1,
+    })
+
+    // Schedule next alarm
+    await ctx.setAlarm(Date.now() + 60_000)
+  },
+})
+```
+
+### Alarm Methods
+
+| Method | Description |
+|--------|-------------|
+| `ctx.setAlarm(time)` | Schedule alarm (Date or timestamp) |
+| `ctx.deleteAlarm()` | Cancel scheduled alarm |
+| `ctx.getAlarm()` | Get scheduled alarm time (null if none) |
+
+---
+
+## Accessing Durable Objects
+
+### durableObjects Proxy
+
+```typescript
+import { durableObjects } from '@cloudwerk/core/bindings'
+
+// Get by name (deterministic ID)
+const counter = durableObjects.counter.get('user-123')
+
+// Get by unique ID
+const uniqueId = durableObjects.counter.newUniqueId()
+const counter = durableObjects.counter.getById(uniqueId)
+
+// Call RPC methods
+const count = await counter.increment(5)
+```
+
+### getDurableObject()
+
+Get a typed Durable Object namespace.
+
+```typescript
+import { getDurableObject } from '@cloudwerk/core/bindings'
+
+interface CounterDO {
+  increment(amount?: number): Promise<number>
+  getCount(): Promise<number>
+}
+
+const counterNs = getDurableObject<CounterDO>('counter')
+const counter = counterNs.get('user-123')
+const count = await counter.increment(5)
+```
+
+### hasDurableObject()
+
+Check if a Durable Object namespace exists.
+
+```typescript
+import { hasDurableObject } from '@cloudwerk/core/bindings'
+
+if (hasDurableObject('counter')) {
+  const counter = durableObjects.counter.get('user-123')
+}
+```
+
+---
+
+## Error Handling
+
+### DurableObjectError
+
+Base error class for Durable Object failures.
+
+```typescript
+import { DurableObjectError } from '@cloudwerk/durable-object'
+
+class DurableObjectError extends Error {
+  readonly code: string
+  readonly objectName: string
+  readonly objectId?: string
+}
+```
+
+### DurableObjectNotFoundError
+
+Thrown when accessing a non-existent Durable Object.
+
+```typescript
+import { DurableObjectNotFoundError } from '@cloudwerk/durable-object'
+```
+
+### DurableObjectMethodError
+
+Thrown when an RPC method fails.
+
+```typescript
+import { DurableObjectMethodError } from '@cloudwerk/durable-object'
+
+try {
+  await counter.increment(-1)
+} catch (error) {
+  if (error instanceof DurableObjectMethodError) {
+    console.error('Method failed:', error.methodName, error.cause)
+  }
+}
+```
+
+---
+
+## CLI Commands
+
+### List Durable Objects
+
+```bash
+cloudwerk objects list
+```
+
+### Show Object Details
+
+```bash
+cloudwerk objects info <name>
+```
+
+### Generate Types
+
+```bash
+cloudwerk objects generate-types
+```
+
+---
+
+## Type Definitions
+
+### DurableObjectDefinition
+
+```typescript
+interface DurableObjectDefinition<TState = unknown> {
+  init?: (ctx: DurableObjectContext) => Awaitable<TState>
+  methods?: Record<string, DurableObjectMethod<TState>>
+  fetch?: (request: Request, ctx: DurableObjectContext<TState>) => Awaitable<Response>
+  webSocketMessage?: WebSocketMessageHandler<TState>
+  webSocketClose?: WebSocketCloseHandler<TState>
+  webSocketError?: WebSocketErrorHandler<TState>
+  alarm?: (ctx: DurableObjectContext<TState>) => Awaitable<void>
+}
+
+type DurableObjectMethod<TState> = (
+  ctx: DurableObjectContext<TState>,
+  ...args: any[]
+) => Awaitable<any>
+```
+
+### Generated Class
+
+Cloudwerk generates a DurableObject class from your definition:
+
+```typescript
+// Auto-generated
+export class Counter extends DurableObject {
+  async increment(amount?: number): Promise<number> { /* ... */ }
+  async getCount(): Promise<number> { /* ... */ }
+  async reset(): Promise<number> { /* ... */ }
+}
+```
+
+---
+
+## Wrangler Configuration
+
+Cloudwerk auto-generates wrangler configuration:
+
+```toml
+# wrangler.toml (auto-generated)
+[durable_objects]
+bindings = [
+  { name = "COUNTER", class_name = "Counter" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Counter"]
+```
+
+---
+
+## Best Practices
+
+### State Design
+
+```typescript
+// Good: Minimal state, load on demand
+interface GameState {
+  id: string
+  status: 'waiting' | 'playing' | 'finished'
+}
+
+export default defineDurableObject<GameState>({
+  async init(ctx) {
+    return await ctx.storage.get('state') ?? { id: '', status: 'waiting' }
+  },
+
+  methods: {
+    async getFullState(ctx) {
+      // Load additional data on demand
+      const players = await ctx.storage.list({ prefix: 'player:' })
+      return { ...ctx.state, players: Array.from(players.values()) }
+    },
+  },
+})
+```
+
+### Use Transactions for Consistency
+
+```typescript
+methods: {
+  async atomicUpdate(ctx, updates: Partial<State>) {
+    await ctx.storage.transaction(async () => {
+      const current = await ctx.storage.get('state')
+      await ctx.storage.put('state', { ...current, ...updates })
+      await ctx.storage.put('lastUpdate', new Date().toISOString())
+    })
+  },
+}
+```
+
+### Cleanup with Alarms
+
+```typescript
+async alarm(ctx) {
+  // Clean up stale data
+  const messages = await ctx.storage.list<Message>({ prefix: 'msg:' })
+  const staleThreshold = Date.now() - 24 * 60 * 60 * 1000  // 24 hours
+
+  const staleKeys = []
+  for (const [key, msg] of messages) {
+    if (new Date(msg.timestamp).getTime() < staleThreshold) {
+      staleKeys.push(key)
+    }
+  }
+
+  if (staleKeys.length > 0) {
+    await ctx.storage.delete(staleKeys)
+  }
+
+  // Schedule next cleanup
+  await ctx.setAlarm(Date.now() + 60 * 60 * 1000)  // 1 hour
+}
+```
+
+---
+
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Storage per object | 10 GB |
+| KV operations per request | 1000 |
+| SQL rows per table | Unlimited |
+| WebSocket connections | 32,768 per object |
+| Alarm precision | 1 second |
+
+---
+
+## Next Steps
+
+- **[Durable Objects Guide](/guides/durable-objects/)** - Patterns and best practices
+- **[Services API](/api/services/)** - Service extraction
+- **[WebSockets Guide](/guides/websockets/)** - Real-time features

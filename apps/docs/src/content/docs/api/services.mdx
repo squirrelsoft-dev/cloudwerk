@@ -1,0 +1,621 @@
+---
+title: Services API
+description: Complete API reference for @cloudwerk/service - reusable services with local execution or extraction to separate Workers.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `@cloudwerk/service` package provides a service extraction system for building reusable services that can run locally or be extracted to separate Workers with RPC communication.
+
+## Installation
+
+```bash
+pnpm add @cloudwerk/service
+```
+
+## defineService()
+
+Creates a service definition with methods and optional lifecycle hooks.
+
+```typescript
+import { defineService } from '@cloudwerk/service'
+
+export default defineService({
+  methods: Record<string, ServiceMethod>,
+  name?: string,
+  hooks?: ServiceHooks,
+  config?: ServiceExtractionConfig,
+})
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `methods` | `Record<string, Function>` | Service methods |
+| `name` | `string` | Override service name (default: directory name) |
+| `hooks` | `ServiceHooks` | Lifecycle hooks |
+| `config` | `ServiceExtractionConfig` | Extraction configuration |
+
+### Returns
+
+Returns a `ServiceDefinition` object that Cloudwerk registers automatically.
+
+---
+
+## Service Methods
+
+Methods are async functions with access to `this.env` for bindings.
+
+```typescript
+export default defineService({
+  methods: {
+    async send(params: SendParams): Promise<SendResult> {
+      // Access bindings via this.env
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      })
+
+      return response.json()
+    },
+
+    // Methods can call other methods
+    async sendBatch(emails: SendParams[]): Promise<{ sent: number }> {
+      const results = await Promise.all(
+        emails.map(e => this.send(e))
+      )
+      return { sent: results.filter(r => r.success).length }
+    },
+  },
+})
+```
+
+### Method Context (`this`)
+
+Inside service methods, `this` provides:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `this.env` | `Env` | Environment bindings (D1, KV, R2, secrets) |
+
+---
+
+## ServiceHooks
+
+Lifecycle hooks for cross-cutting concerns.
+
+```typescript
+interface ServiceHooks {
+  onInit?: () => Awaitable<void>
+  onBefore?: (method: string, args: unknown[]) => Awaitable<void>
+  onAfter?: (method: string, result: unknown) => Awaitable<void>
+  onError?: (method: string, error: Error) => Awaitable<void>
+}
+```
+
+### Hook Execution Order
+
+1. **onInit** - Once when service initializes
+2. **onBefore** - Before each method call
+3. Method execution
+4. **onAfter** - On successful completion
+5. **onError** - On failure (replaces onAfter)
+
+### onInit()
+
+Called once when the service is first initialized.
+
+```typescript
+hooks: {
+  onInit: async () => {
+    console.log('Service initialized')
+    // Initialize connections, load config, etc.
+  },
+}
+```
+
+### onBefore()
+
+Called before every method invocation.
+
+```typescript
+hooks: {
+  onBefore: async (method, args) => {
+    console.log(`[${method}] called with`, args)
+    // Logging, validation, rate limiting, etc.
+  },
+}
+```
+
+### onAfter()
+
+Called after successful method completion.
+
+```typescript
+hooks: {
+  onAfter: async (method, result) => {
+    console.log(`[${method}] returned`, result)
+    // Analytics, metrics, caching, etc.
+  },
+}
+```
+
+### onError()
+
+Called when a method throws an error.
+
+```typescript
+hooks: {
+  onError: async (method, error) => {
+    console.error(`[${method}] failed:`, error.message)
+    // Error tracking, alerting, etc.
+    await reportError('service-name', method, error)
+  },
+}
+```
+
+### Complete Hooks Example
+
+```typescript
+export default defineService({
+  methods: {
+    async processPayment(orderId: string, amount: number) {
+      // Process payment logic
+      return { success: true, transactionId: 'txn_123' }
+    },
+  },
+
+  hooks: {
+    onInit: async () => {
+      console.log('Payment service ready')
+    },
+
+    onBefore: async (method, args) => {
+      console.log(JSON.stringify({
+        service: 'payments',
+        method,
+        args,
+        timestamp: Date.now(),
+      }))
+    },
+
+    onAfter: async (method, result) => {
+      await trackMetric('payment_processed', 1)
+    },
+
+    onError: async (method, error) => {
+      await alertOps(`Payment ${method} failed: ${error.message}`)
+    },
+  },
+})
+```
+
+---
+
+## Extraction Configuration
+
+Configure how the service runs when extracted to a separate Worker.
+
+```typescript
+interface ServiceExtractionConfig {
+  extraction?: {
+    workerName?: string         // Name of extracted Worker (default: {name}-service)
+    bindings?: string[]         // Required bindings to forward
+  }
+}
+```
+
+### Example
+
+```typescript
+export default defineService({
+  methods: {
+    async send(params) {
+      // ...
+    },
+  },
+
+  config: {
+    extraction: {
+      workerName: 'email-service',
+      bindings: ['RESEND_API_KEY', 'DB'],
+    },
+  },
+})
+```
+
+---
+
+## Service Modes
+
+Services can run in three modes configured in `cloudwerk.config.ts`.
+
+### Local Mode
+
+Services run as direct function calls in the main Worker.
+
+```typescript
+// cloudwerk.config.ts
+export default defineConfig({
+  services: {
+    mode: 'local',  // All services run locally
+  },
+})
+```
+
+**Characteristics:**
+- No network latency
+- No serialization overhead
+- Full access to Worker context
+- Best for: utilities, low-latency operations
+
+### Extracted Mode
+
+Services run as separate Workers using Cloudflare service bindings.
+
+```typescript
+// cloudwerk.config.ts
+export default defineConfig({
+  services: {
+    mode: 'extracted',  // All services as separate Workers
+  },
+})
+```
+
+**Characteristics:**
+- Isolated resource usage
+- Independent scaling
+- Separate deployment
+- Best for: resource-intensive operations, microservices
+
+### Hybrid Mode
+
+Mix local and extracted services.
+
+```typescript
+// cloudwerk.config.ts
+export default defineConfig({
+  services: {
+    mode: 'hybrid',
+    email: { mode: 'extracted' },
+    analytics: { mode: 'extracted' },
+    cache: { mode: 'local' },
+    utils: { mode: 'local' },
+  },
+})
+```
+
+---
+
+## Using Services
+
+### services Proxy
+
+Import and use services with type safety.
+
+```typescript
+import { services } from '@cloudwerk/core/bindings'
+
+export async function POST(request: Request) {
+  // Type-safe method calls
+  const result = await services.email.send({
+    to: 'user@example.com',
+    subject: 'Hello',
+    body: '<h1>Welcome!</h1>',
+  })
+
+  return json({ success: true, messageId: result.messageId })
+}
+```
+
+### getService()
+
+Get a typed service by name.
+
+```typescript
+import { getService } from '@cloudwerk/core/bindings'
+
+interface EmailService {
+  send(params: { to: string; subject: string; body: string }): Promise<{ success: boolean }>
+}
+
+const email = getService<EmailService>('email')
+const result = await email.send({ to: '...', subject: '...', body: '...' })
+```
+
+### hasService()
+
+Check if a service exists.
+
+```typescript
+import { hasService } from '@cloudwerk/core/bindings'
+
+if (hasService('email')) {
+  await services.email.send({ ... })
+}
+```
+
+### getServiceNames()
+
+List all available service names.
+
+```typescript
+import { getServiceNames } from '@cloudwerk/core/bindings'
+
+const available = getServiceNames()
+// ['email', 'payments', 'cache']
+```
+
+---
+
+## RPC Communication
+
+When a service is extracted, Cloudwerk generates a WorkerEntrypoint class.
+
+### Generated Worker
+
+```typescript
+// Auto-generated: .cloudwerk/extracted/email-service/worker.ts
+import { WorkerEntrypoint } from 'cloudflare:workers'
+import service from '../../../app/services/email/service'
+
+export class EmailService extends WorkerEntrypoint<Env> {
+  async send(...args: unknown[]): Promise<unknown> {
+    return service.methods.send.apply({ env: this.env }, args)
+  }
+}
+```
+
+### Service Binding
+
+For extracted services, bindings are auto-configured:
+
+```toml
+# wrangler.toml (auto-generated)
+[[services]]
+binding = "EMAIL_SERVICE"
+service = "email-service"
+entrypoint = "EmailService"
+```
+
+### Transparent Routing
+
+The `services` proxy routes calls automatically:
+
+```typescript
+// Your code (identical for both modes)
+await services.email.send({ to: '...' })
+
+// Local mode: Direct function call
+// Extracted mode: RPC via service binding
+```
+
+---
+
+## Error Handling
+
+### ServiceNotFoundError
+
+Thrown when accessing a non-existent service.
+
+```typescript
+import { ServiceNotFoundError } from '@cloudwerk/service'
+
+try {
+  await services.nonexistent.method()
+} catch (error) {
+  if (error instanceof ServiceNotFoundError) {
+    console.error('Service not found:', error.serviceName)
+  }
+}
+```
+
+### ServiceMethodError
+
+Thrown when a service method fails.
+
+```typescript
+import { ServiceMethodError } from '@cloudwerk/service'
+
+try {
+  await services.email.send({ to: '...' })
+} catch (error) {
+  if (error instanceof ServiceMethodError) {
+    console.error('Method failed:', error.serviceName, error.methodName)
+    console.error('Original error:', error.cause)
+  }
+}
+```
+
+### ServiceConnectionError
+
+Thrown when extracted service is unreachable.
+
+```typescript
+import { ServiceConnectionError } from '@cloudwerk/service'
+
+try {
+  await services.email.send({ to: '...' })
+} catch (error) {
+  if (error instanceof ServiceConnectionError) {
+    console.error('Cannot reach service:', error.serviceName)
+  }
+}
+```
+
+---
+
+## CLI Commands
+
+### List Services
+
+```bash
+cloudwerk services list
+```
+
+### Show Service Details
+
+```bash
+cloudwerk services info <name>
+```
+
+### Extract Service
+
+Extract a service to a separate Worker.
+
+```bash
+cloudwerk services extract <name>
+```
+
+### Inline Service
+
+Convert an extracted service back to local mode.
+
+```bash
+cloudwerk services inline <name>
+```
+
+### Deploy Service
+
+Deploy an extracted service.
+
+```bash
+cloudwerk services deploy <name>
+```
+
+### Show All Status
+
+```bash
+cloudwerk services status
+```
+
+### Generate Types
+
+```bash
+cloudwerk services generate-types
+```
+
+---
+
+## Type Definitions
+
+### ServiceDefinition
+
+```typescript
+interface ServiceDefinition {
+  methods: Record<string, ServiceMethod>
+  name?: string
+  hooks?: ServiceHooks
+  config?: ServiceConfig
+}
+
+type ServiceMethod = (...args: any[]) => Awaitable<any>
+```
+
+### ServiceConfig
+
+```typescript
+interface ServiceConfig {
+  extraction?: {
+    workerName?: string
+    bindings?: string[]
+  }
+}
+```
+
+### ServiceHooks
+
+```typescript
+interface ServiceHooks {
+  onInit?: () => Awaitable<void>
+  onBefore?: (method: string, args: unknown[]) => Awaitable<void>
+  onAfter?: (method: string, result: unknown) => Awaitable<void>
+  onError?: (method: string, error: Error) => Awaitable<void>
+}
+```
+
+### App Config
+
+```typescript
+interface CloudwerkConfig {
+  services?: {
+    mode: 'local' | 'extracted' | 'hybrid'
+    [serviceName: string]: { mode: 'local' | 'extracted' }
+  }
+}
+```
+
+---
+
+## Best Practices
+
+### When to Extract
+
+**Extract to separate Worker when:**
+- Service makes many external API calls
+- Service is CPU or memory intensive
+- Service needs independent scaling
+- Service should be deployable separately
+
+**Keep local when:**
+- Service is a thin wrapper or utility
+- Low latency is critical
+- Service has minimal resource usage
+- Service is tightly coupled to main app
+
+### Service Design
+
+```typescript
+// Good: Focused, single-domain service
+export default defineService({
+  methods: {
+    async sendEmail(params) { /* ... */ },
+    async sendBatch(emails) { /* ... */ },
+    async getDeliveryStatus(id) { /* ... */ },
+  },
+})
+
+// Avoid: Mixed concerns
+export default defineService({
+  methods: {
+    async sendEmail(params) { /* ... */ },
+    async processPayment(params) { /* ... */ },  // Different domain
+    async generateReport(params) { /* ... */ },  // Different domain
+  },
+})
+```
+
+### Use Hooks for Cross-Cutting Concerns
+
+```typescript
+// Good: Logging/metrics in hooks
+export default defineService({
+  methods: {
+    async processPayment(orderId, amount) {
+      // Pure business logic only
+      return await stripe.charges.create({ amount })
+    },
+  },
+  hooks: {
+    onBefore: async (method, args) => {
+      await trackMetric(`${method}_started`)
+    },
+    onAfter: async (method, result) => {
+      await trackMetric(`${method}_completed`)
+    },
+  },
+})
+```
+
+---
+
+## Next Steps
+
+- **[Services Guide](/guides/services/)** - Patterns and best practices
+- **[Durable Objects API](/api/durable-objects/)** - Stateful services
+- **[Queues API](/api/queues/)** - Background job processing

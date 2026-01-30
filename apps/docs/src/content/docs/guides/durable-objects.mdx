@@ -1,443 +1,741 @@
 ---
 title: Durable Objects
-description: Build stateful applications at the edge with Cloudflare Durable Objects.
+description: Build stateful edge applications with type-safe Durable Objects using @cloudwerk/durable-object.
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
 
-Durable Objects provide a way to maintain state at the edge with strong consistency guarantees. They're perfect for real-time collaboration, rate limiting, game state, and more.
+Cloudwerk provides a convention-based Durable Objects system through `@cloudwerk/durable-object`. Define type-safe, stateful objects with native Cloudflare RPC, storage options (KV and SQLite), WebSocket support, and alarms.
 
-## Overview
-
-Durable Objects are:
-- **Strongly consistent** - Single-threaded execution per object
-- **Globally unique** - Each object has a unique ID
-- **Persistent** - State survives between requests
-- **Edge-native** - Run close to users
-
-## Getting Started
-
-### Define a Durable Object
+## Quick Start
 
 <Steps>
-1. Create a Durable Object class:
+1. Create a Durable Object:
 
    ```typescript
-   // workers/counter.ts
-   import { DurableObject } from 'cloudflare:workers';
+   // app/objects/counter.ts
+   import { defineDurableObject } from '@cloudwerk/durable-object'
 
-   export class Counter extends DurableObject {
-     private count: number = 0;
+   interface CounterState {
+     value: number
+   }
 
-     constructor(state: DurableObjectState, env: Env) {
-       super(state, env);
-     }
+   export default defineDurableObject<CounterState>({
+     init: () => ({ value: 0 }),
+     methods: {
+       async increment(amount = 1) {
+         this.state.value += amount
+         return this.state.value
+       },
+       async getValue() {
+         return this.state.value
+       },
+     },
+   })
+   ```
 
-     async fetch(request: Request): Promise<Response> {
-       const url = new URL(request.url);
+2. Use it from your routes:
 
-       switch (url.pathname) {
-         case '/increment':
-           this.count++;
-           await this.ctx.storage.put('count', this.count);
-           return new Response(String(this.count));
+   ```typescript
+   // app/api/counter/[id]/route.ts
+   import { durableObjects } from '@cloudwerk/core/bindings'
+   import { json } from '@cloudwerk/core'
 
-         case '/decrement':
-           this.count--;
-           await this.ctx.storage.put('count', this.count);
-           return new Response(String(this.count));
+   export async function POST(request: Request, { params }) {
+     const id = durableObjects.Counter.idFromName(params.id)
+     const stub = durableObjects.Counter.get(id)
 
-         case '/':
-           return new Response(String(this.count));
+     // Direct RPC call - no HTTP overhead
+     const newValue = await stub.increment(5)
 
-         default:
-           return new Response('Not found', { status: 404 });
-       }
-     }
+     return json({ value: newValue })
    }
    ```
 
-2. Add the binding to `wrangler.toml`:
-
-   ```toml
-   [durable_objects]
-   bindings = [
-     { name = "COUNTER", class_name = "Counter" }
-   ]
-
-   [[migrations]]
-   tag = "v1"
-   new_classes = ["Counter"]
-   ```
-
-3. Configure in Cloudwerk:
-
-   ```typescript
-   // cloudwerk.config.ts
-   import { defineConfig } from '@cloudwerk/core';
-
-   export default defineConfig({
-     durableObjects: {
-       COUNTER: {
-         class: './workers/counter.ts',
-         className: 'Counter',
-       },
-     },
-   });
-   ```
+3. Durable Objects are automatically discovered and registered during build.
 </Steps>
 
-### Using Durable Objects
+## Convention Structure
+
+Durable Objects are defined in the `app/objects/` directory:
+
+<FileTree>
+- app/objects/
+  - counter.ts        # Counter object
+  - chat-room.ts      # Chat room with WebSockets
+  - user-session.ts   # User session object
+  - rate-limiter.ts   # Rate limiter
+</FileTree>
+
+**Naming Convention:**
+- File names are kebab-case to PascalCase class names
+- `counter.ts` becomes class `Counter`, binding `COUNTER`
+- `chat-room.ts` becomes class `ChatRoom`, binding `CHAT_ROOM`
+
+## Defining Objects
+
+### Basic Object with State
 
 ```typescript
-// app/api/counter/[id]/route.ts
-import { json } from '@cloudwerk/core';
+// app/objects/counter.ts
+import { defineDurableObject } from '@cloudwerk/durable-object'
 
-export async function GET(request: Request, { params, context }: CloudwerkHandlerContext) {
-  const id = context.env.COUNTER.idFromName(params.id);
-  const stub = context.env.COUNTER.get(id);
-
-  const response = await stub.fetch(new Request('http://counter/'));
-  const count = await response.text();
-
-  return json({ count: parseInt(count) });
+interface CounterState {
+  value: number
+  lastUpdated: number
 }
 
-export async function POST(request: Request, { params, context }: CloudwerkHandlerContext) {
-  const id = context.env.COUNTER.idFromName(params.id);
-  const stub = context.env.COUNTER.get(id);
+export default defineDurableObject<CounterState>({
+  init(ctx) {
+    return {
+      value: 0,
+      lastUpdated: Date.now(),
+    }
+  },
+  methods: {
+    async increment(amount = 1) {
+      this.state.value += amount
+      this.state.lastUpdated = Date.now()
+      return this.state.value
+    },
+    async decrement(amount = 1) {
+      this.state.value = Math.max(0, this.state.value - amount)
+      this.state.lastUpdated = Date.now()
+      return this.state.value
+    },
+    async getValue() {
+      return this.state.value
+    },
+    async reset() {
+      this.state.value = 0
+      this.state.lastUpdated = Date.now()
+      return 0
+    },
+  },
+})
+```
 
-  const response = await stub.fetch(new Request('http://counter/increment'));
-  const count = await response.text();
+### With Schema Validation
 
-  return json({ count: parseInt(count) });
+Use Zod for runtime state validation:
+
+```typescript
+import { defineDurableObject } from '@cloudwerk/durable-object'
+import { z } from 'zod'
+
+const SessionSchema = z.object({
+  userId: z.string(),
+  expiresAt: z.number(),
+  data: z.record(z.unknown()),
+})
+
+type SessionState = z.infer<typeof SessionSchema>
+
+export default defineDurableObject<SessionState>({
+  schema: SessionSchema,
+  init: () => ({
+    userId: '',
+    expiresAt: 0,
+    data: {},
+  }),
+  methods: {
+    async setUser(userId: string, ttl = 3600) {
+      this.state.userId = userId
+      this.state.expiresAt = Date.now() + ttl * 1000
+    },
+    async getData() {
+      if (Date.now() > this.state.expiresAt) {
+        throw new Error('Session expired')
+      }
+      return this.state
+    },
+  },
+})
+```
+
+## RPC Methods
+
+Methods defined in the `methods` object become native Cloudflare RPC methods:
+
+```typescript
+export default defineDurableObject<CartState>({
+  methods: {
+    // Simple method
+    async getItems() {
+      return this.state.items
+    },
+
+    // Method with parameters
+    async addItem(productId: string, quantity: number) {
+      const existing = this.state.items.find(i => i.productId === productId)
+      if (existing) {
+        existing.quantity += quantity
+      } else {
+        this.state.items.push({ productId, quantity })
+      }
+      return this.state.items
+    },
+
+    // Method accessing environment
+    async checkout() {
+      const db = this.ctx.env.DB
+      await db.prepare('INSERT INTO orders...').run()
+      this.state.items = []
+      return { success: true }
+    },
+  },
+})
+```
+
+### Calling RPC Methods
+
+```typescript
+// From route handlers
+import { durableObjects } from '@cloudwerk/core/bindings'
+
+export async function POST(request: Request, { params }) {
+  const id = durableObjects.Cart.idFromName(params.userId)
+  const stub = durableObjects.Cart.get(id)
+
+  // Direct RPC calls - type-safe and fast
+  await stub.addItem('prod_123', 2)
+  const items = await stub.getItems()
+  const result = await stub.checkout()
+
+  return json({ items, result })
 }
 ```
 
-## Storage API
+## Storage Options
 
-Durable Objects have built-in transactional storage:
+### Key-Value Storage
 
-### Key-Value Operations
+Access the built-in KV storage via `this.ctx.storage`:
 
 ```typescript
-export class MyObject extends DurableObject {
-  async fetch(request: Request): Promise<Response> {
-    // Get a value
-    const value = await this.ctx.storage.get('key');
+export default defineDurableObject<UserState>({
+  methods: {
+    async setPreference(key: string, value: unknown) {
+      await this.ctx.storage.put(`pref:${key}`, value)
+    },
 
-    // Set a value
-    await this.ctx.storage.put('key', { data: 'value' });
+    async getPreference(key: string) {
+      return this.ctx.storage.get(`pref:${key}`)
+    },
 
-    // Delete a value
-    await this.ctx.storage.delete('key');
+    async getAllPreferences() {
+      const prefs = await this.ctx.storage.list({ prefix: 'pref:' })
+      return Object.fromEntries(prefs)
+    },
 
-    // Get multiple values
-    const values = await this.ctx.storage.get(['key1', 'key2', 'key3']);
+    async clearPreferences() {
+      const prefs = await this.ctx.storage.list({ prefix: 'pref:' })
+      for (const key of prefs.keys()) {
+        await this.ctx.storage.delete(key)
+      }
+    },
+  },
+})
+```
 
-    // Set multiple values
-    await this.ctx.storage.put({
-      key1: 'value1',
-      key2: 'value2',
-    });
+### Storage API
 
-    // List keys with prefix
-    const keys = await this.ctx.storage.list({ prefix: 'user:' });
+```typescript
+// Get single value
+const value = await this.ctx.storage.get<MyType>('key')
 
-    return new Response('OK');
-  }
-}
+// Get multiple values
+const map = await this.ctx.storage.get(['key1', 'key2'])
+
+// List keys with prefix
+const entries = await this.ctx.storage.list({
+  prefix: 'user:',
+  limit: 100,
+  reverse: false,
+})
+
+// Put single value
+await this.ctx.storage.put('key', value)
+
+// Put multiple values
+await this.ctx.storage.put({
+  key1: value1,
+  key2: value2,
+})
+
+// Delete
+await this.ctx.storage.delete('key')
+await this.ctx.storage.deleteAll()
 ```
 
 ### Transactions
 
+For atomic operations:
+
 ```typescript
-export class BankAccount extends DurableObject {
+methods: {
   async transfer(fromKey: string, toKey: string, amount: number) {
-    // Transactions ensure atomicity
     await this.ctx.storage.transaction(async (txn) => {
-      const from = await txn.get<number>(fromKey) ?? 0;
-      const to = await txn.get<number>(toKey) ?? 0;
+      const from = await txn.get<number>(fromKey) ?? 0
+      const to = await txn.get<number>(toKey) ?? 0
 
       if (from < amount) {
-        throw new Error('Insufficient funds');
+        txn.rollback()
+        throw new Error('Insufficient funds')
       }
 
-      await txn.put(fromKey, from - amount);
-      await txn.put(toKey, to + amount);
-    });
-  }
+      await txn.put(fromKey, from - amount)
+      await txn.put(toKey, to + amount)
+    })
+  },
 }
 ```
 
-## Real-Time Collaboration
+### SQLite Storage
 
-### WebSocket Chat Room
+Enable SQLite for relational data:
 
 ```typescript
-// workers/chat-room.ts
-export class ChatRoom extends DurableObject {
-  private sessions: Map<WebSocket, { username: string }> = new Map();
+// app/objects/analytics.ts
+export default defineDurableObject<AnalyticsState>({
+  sqlite: true,  // Enable SQLite
 
-  async fetch(request: Request): Promise<Response> {
+  init(ctx) {
+    // Create tables on initialization
+    ctx.sql.run(`
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        properties TEXT,
+        timestamp INTEGER NOT NULL
+      )
+    `)
+    ctx.sql.run(`
+      CREATE INDEX IF NOT EXISTS idx_events_timestamp
+      ON events (timestamp)
+    `)
+
+    return { initialized: true }
+  },
+
+  methods: {
+    async trackEvent(name: string, properties?: Record<string, unknown>) {
+      this.ctx.sql.run(
+        'INSERT INTO events (name, properties, timestamp) VALUES (?, ?, ?)',
+        [name, JSON.stringify(properties), Date.now()]
+      )
+    },
+
+    async getRecentEvents(limit = 100) {
+      const cursor = this.ctx.sql.exec(
+        'SELECT * FROM events ORDER BY timestamp DESC LIMIT ?',
+        [limit]
+      )
+      return cursor.toArray()
+    },
+
+    async getEventCounts(since: number) {
+      const cursor = this.ctx.sql.exec(
+        'SELECT name, COUNT(*) as count FROM events WHERE timestamp > ? GROUP BY name',
+        [since]
+      )
+      return cursor.toArray()
+    },
+  },
+})
+```
+
+## WebSocket Support
+
+Build real-time applications with WebSocket support:
+
+```typescript
+// app/objects/chat-room.ts
+import { defineDurableObject } from '@cloudwerk/durable-object'
+
+interface ChatState {
+  messages: Array<{ user: string; text: string; timestamp: number }>
+}
+
+export default defineDurableObject<ChatState>({
+  init: () => ({ messages: [] }),
+
+  async fetch(request) {
     if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 400 });
+      return new Response('Expected WebSocket', { status: 426 })
     }
 
-    const url = new URL(request.url);
-    const username = url.searchParams.get('username') ?? 'Anonymous';
+    const url = new URL(request.url)
+    const username = url.searchParams.get('username') ?? 'Anonymous'
 
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
+    // Create WebSocket pair
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
 
-    this.ctx.acceptWebSocket(server);
-    this.sessions.set(server, { username });
+    // Accept with tags for filtering
+    this.ctx.acceptWebSocket(server, [username])
+
+    // Send recent messages
+    server.send(JSON.stringify({
+      type: 'history',
+      messages: this.state.messages.slice(-50),
+    }))
 
     // Notify others
-    this.broadcast(JSON.stringify({
+    this.broadcast({
       type: 'join',
-      username,
+      user: username,
       timestamp: Date.now(),
-    }), server);
+    }, server)
 
-    return new Response(null, { status: 101, webSocket: client });
-  }
+    return new Response(null, { status: 101, webSocket: client })
+  },
 
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-    const session = this.sessions.get(ws);
-    if (!session) return;
+  async webSocketMessage(ws, message) {
+    const data = JSON.parse(message as string)
+    const [username] = this.ctx.getTags(ws)
 
-    const data = JSON.parse(message as string);
-
-    this.broadcast(JSON.stringify({
-      type: 'message',
-      username: session.username,
-      content: data.content,
-      timestamp: Date.now(),
-    }));
-  }
-
-  async webSocketClose(ws: WebSocket) {
-    const session = this.sessions.get(ws);
-    if (session) {
-      this.sessions.delete(ws);
-      this.broadcast(JSON.stringify({
-        type: 'leave',
-        username: session.username,
+    if (data.type === 'message') {
+      const msg = {
+        user: username,
+        text: data.text,
         timestamp: Date.now(),
-      }));
-    }
-  }
-
-  private broadcast(message: string, exclude?: WebSocket) {
-    for (const ws of this.sessions.keys()) {
-      if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
       }
+
+      this.state.messages.push(msg)
+
+      // Keep last 1000 messages
+      if (this.state.messages.length > 1000) {
+        this.state.messages = this.state.messages.slice(-1000)
+      }
+
+      this.broadcast({ type: 'message', ...msg })
     }
-  }
+  },
+
+  async webSocketClose(ws, code, reason) {
+    const [username] = this.ctx.getTags(ws)
+    this.broadcast({
+      type: 'leave',
+      user: username,
+      timestamp: Date.now(),
+    })
+  },
+
+  methods: {
+    async getOnlineUsers() {
+      const sockets = this.ctx.getWebSockets()
+      return sockets.map(ws => this.ctx.getTags(ws)[0])
+    },
+
+    async getRecentMessages(limit = 50) {
+      return this.state.messages.slice(-limit)
+    },
+  },
+})
+```
+
+### WebSocket Context API
+
+```typescript
+// Accept a WebSocket connection
+this.ctx.acceptWebSocket(ws, ['tag1', 'tag2'])
+
+// Get all connected WebSockets
+const all = this.ctx.getWebSockets()
+
+// Get WebSockets by tag
+const admins = this.ctx.getWebSockets('admin')
+
+// Get tags for a WebSocket
+const tags = this.ctx.getTags(ws)
+```
+
+## Alarms
+
+Schedule periodic tasks with alarms:
+
+```typescript
+// app/objects/session.ts
+export default defineDurableObject<SessionState>({
+  init(ctx) {
+    // Schedule cleanup alarm
+    ctx.storage.setAlarm(Date.now() + 30 * 60 * 1000) // 30 minutes
+    return { data: {}, lastActivity: Date.now() }
+  },
+
+  async alarm() {
+    const idleTime = Date.now() - this.state.lastActivity
+
+    if (idleTime > 30 * 60 * 1000) {
+      // Inactive for 30 minutes, clean up
+      await this.ctx.storage.deleteAll()
+    } else {
+      // Reschedule alarm
+      await this.ctx.storage.setAlarm(Date.now() + 30 * 60 * 1000)
+    }
+  },
+
+  methods: {
+    async touch() {
+      this.state.lastActivity = Date.now()
+    },
+
+    async getData() {
+      await this.touch()
+      return this.state.data
+    },
+  },
+})
+```
+
+### Alarm API
+
+```typescript
+// Set alarm (replaces existing)
+await this.ctx.storage.setAlarm(Date.now() + 60000) // 1 minute from now
+await this.ctx.storage.setAlarm(new Date('2024-12-31'))
+
+// Get current alarm
+const alarmTime = await this.ctx.storage.getAlarm()
+
+// Cancel alarm
+await this.ctx.storage.deleteAlarm()
+```
+
+## HTTP Fetch Handler
+
+Handle HTTP requests in addition to RPC:
+
+```typescript
+export default defineDurableObject<CounterState>({
+  init: () => ({ value: 0 }),
+
+  async fetch(request) {
+    const url = new URL(request.url)
+
+    if (request.method === 'GET' && url.pathname === '/') {
+      return Response.json({
+        value: this.state.value,
+        timestamp: Date.now(),
+      })
+    }
+
+    if (request.method === 'POST' && url.pathname === '/increment') {
+      const body = await request.json()
+      this.state.value += body.amount ?? 1
+      return Response.json({ value: this.state.value })
+    }
+
+    return new Response('Not Found', { status: 404 })
+  },
+
+  methods: {
+    // RPC methods are preferred over fetch
+    async increment(amount = 1) {
+      this.state.value += amount
+      return this.state.value
+    },
+  },
+})
+```
+
+### Calling via Fetch
+
+```typescript
+const id = durableObjects.Counter.idFromName('my-counter')
+const stub = durableObjects.Counter.get(id)
+
+// HTTP fetch (less efficient than RPC)
+const response = await stub.fetch(new Request('http://counter/increment', {
+  method: 'POST',
+  body: JSON.stringify({ amount: 5 }),
+}))
+const data = await response.json()
+```
+
+## Accessing Durable Objects
+
+### ID Creation
+
+```typescript
+import { durableObjects } from '@cloudwerk/core/bindings'
+
+// From a name (deterministic)
+const id = durableObjects.Counter.idFromName('user-123-cart')
+
+// From a string ID
+const id = durableObjects.Counter.idFromString('some-id-string')
+
+// Generate unique ID
+const id = durableObjects.Counter.newUniqueId()
+
+// Get stub
+const stub = durableObjects.Counter.get(id)
+```
+
+### ID Properties
+
+```typescript
+const id = durableObjects.Counter.idFromName('my-counter')
+
+id.toString()  // String representation
+id.name        // 'my-counter' (if created with idFromName)
+id.equals(otherId)  // Compare IDs
+```
+
+## Common Patterns
+
+### Rate Limiter
+
+```typescript
+// app/objects/rate-limiter.ts
+interface RateLimitState {
+  requests: number[]
 }
+
+export default defineDurableObject<RateLimitState>({
+  init: () => ({ requests: [] }),
+
+  methods: {
+    async check(limit: number, windowMs: number) {
+      const now = Date.now()
+      const windowStart = now - windowMs
+
+      // Filter to requests in window
+      this.state.requests = this.state.requests.filter(t => t > windowStart)
+
+      if (this.state.requests.length >= limit) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt: this.state.requests[0] + windowMs,
+        }
+      }
+
+      this.state.requests.push(now)
+
+      return {
+        allowed: true,
+        remaining: limit - this.state.requests.length,
+        resetAt: this.state.requests[0] + windowMs,
+      }
+    },
+
+    async reset() {
+      this.state.requests = []
+    },
+  },
+})
 ```
 
 ### Collaborative Document
 
 ```typescript
-// workers/document.ts
+// app/objects/document.ts
 interface DocumentState {
-  content: string;
-  version: number;
-  cursors: Map<string, { position: number; color: string }>;
+  content: string
+  version: number
 }
 
-export class Document extends DurableObject {
-  private state: DocumentState = {
-    content: '',
-    version: 0,
-    cursors: new Map(),
-  };
-  private sessions: Map<WebSocket, string> = new Map();
+export default defineDurableObject<DocumentState>({
+  sqlite: true,
 
-  async fetch(request: Request): Promise<Response> {
+  init(ctx) {
+    ctx.sql.run(`
+      CREATE TABLE IF NOT EXISTS history (
+        version INTEGER PRIMARY KEY,
+        content TEXT,
+        author TEXT,
+        timestamp INTEGER
+      )
+    `)
+    return { content: '', version: 0 }
+  },
+
+  async fetch(request) {
     if (request.headers.get('Upgrade') === 'websocket') {
-      return this.handleWebSocket(request);
+      return this.handleWebSocket(request)
     }
 
-    // REST API for initial load
-    const url = new URL(request.url);
-
-    if (request.method === 'GET' && url.pathname === '/content') {
-      return new Response(JSON.stringify({
+    if (request.method === 'GET') {
+      return Response.json({
         content: this.state.content,
         version: this.state.version,
-      }));
+      })
     }
 
-    return new Response('Not found', { status: 404 });
-  }
+    return new Response('Not Found', { status: 404 })
+  },
 
-  private async handleWebSocket(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const userId = url.searchParams.get('userId') ?? crypto.randomUUID();
+  async webSocketMessage(ws, message) {
+    const data = JSON.parse(message as string)
 
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-
-    this.ctx.acceptWebSocket(server);
-    this.sessions.set(server, userId);
-
-    // Send current state
-    server.send(JSON.stringify({
-      type: 'init',
-      content: this.state.content,
-      version: this.state.version,
-    }));
-
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
-  async webSocketMessage(ws: WebSocket, message: string) {
-    const data = JSON.parse(message);
-    const userId = this.sessions.get(ws);
-
-    switch (data.type) {
-      case 'edit':
-        this.applyEdit(data.operations, data.baseVersion);
-        this.broadcastState();
-        break;
-
-      case 'cursor':
-        this.state.cursors.set(userId!, {
-          position: data.position,
-          color: data.color,
-        });
-        this.broadcastCursors();
-        break;
+    if (data.type === 'edit') {
+      this.applyEdit(data.operations, data.author)
+      this.broadcastState()
     }
-  }
+  },
 
-  private applyEdit(operations: Operation[], baseVersion: number) {
-    // Apply operational transformation
-    for (const op of operations) {
-      if (op.type === 'insert') {
-        this.state.content =
-          this.state.content.slice(0, op.position) +
-          op.text +
-          this.state.content.slice(op.position);
-      } else if (op.type === 'delete') {
-        this.state.content =
-          this.state.content.slice(0, op.position) +
-          this.state.content.slice(op.position + op.length);
+  methods: {
+    async getContent() {
+      return {
+        content: this.state.content,
+        version: this.state.version,
       }
-    }
-    this.state.version++;
-    this.ctx.storage.put('state', this.state);
-  }
+    },
 
-  private broadcastState() {
-    const message = JSON.stringify({
-      type: 'update',
-      content: this.state.content,
-      version: this.state.version,
-    });
-
-    for (const ws of this.sessions.keys()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
-      }
-    }
-  }
-
-  private broadcastCursors() {
-    const message = JSON.stringify({
-      type: 'cursors',
-      cursors: Object.fromEntries(this.state.cursors),
-    });
-
-    for (const ws of this.sessions.keys()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
-      }
-    }
-  }
-}
-```
-
-## Rate Limiting
-
-```typescript
-// workers/rate-limiter.ts
-export class RateLimiter extends DurableObject {
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const key = url.searchParams.get('key') ?? 'default';
-    const limit = parseInt(url.searchParams.get('limit') ?? '100');
-    const window = parseInt(url.searchParams.get('window') ?? '60');
-
-    const now = Date.now();
-    const windowStart = now - (window * 1000);
-
-    // Get current requests in window
-    const requests = await this.ctx.storage.get<number[]>(`requests:${key}`) ?? [];
-
-    // Filter to only requests in current window
-    const recentRequests = requests.filter(timestamp => timestamp > windowStart);
-
-    if (recentRequests.length >= limit) {
-      return new Response(JSON.stringify({
-        allowed: false,
-        remaining: 0,
-        resetAt: Math.min(...recentRequests) + (window * 1000),
-      }), {
-        status: 429,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Add this request
-    recentRequests.push(now);
-    await this.ctx.storage.put(`requests:${key}`, recentRequests);
-
-    return new Response(JSON.stringify({
-      allowed: true,
-      remaining: limit - recentRequests.length,
-      resetAt: recentRequests[0] + (window * 1000),
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
+    async getHistory(limit = 10) {
+      const cursor = this.ctx.sql.exec(
+        'SELECT * FROM history ORDER BY version DESC LIMIT ?',
+        [limit]
+      )
+      return cursor.toArray()
+    },
+  },
+})
 ```
 
 ## Best Practices
 
 <Aside type="tip" title="Durable Object Tips">
-- Use meaningful IDs (user ID, room name) not random UUIDs
+- Use meaningful IDs (`user-123-cart`) instead of random UUIDs when possible
 - Keep objects focused on a single concern
-- Use alarms for periodic cleanup
-- Consider hibernation for idle objects
+- Use alarms for periodic cleanup and maintenance
+- Prefer RPC methods over HTTP fetch for better performance
+- Use transactions for atomic multi-key operations
+- Enable SQLite for relational data patterns
 </Aside>
 
-### Alarms for Cleanup
+## Error Handling
 
 ```typescript
-export class Session extends DurableObject {
-  async fetch(request: Request): Promise<Response> {
-    // Reset alarm on activity
-    await this.ctx.storage.setAlarm(Date.now() + 30 * 60 * 1000); // 30 minutes
+import {
+  DurableObjectNotFoundError,
+  DurableObjectRPCError,
+} from '@cloudwerk/durable-object'
 
-    // Handle request...
-    return new Response('OK');
-  }
-
-  async alarm() {
-    // Clean up inactive session
-    await this.ctx.storage.deleteAll();
+try {
+  const stub = durableObjects.Counter.get(id)
+  await stub.increment(5)
+} catch (error) {
+  if (error instanceof DurableObjectRPCError) {
+    console.error('RPC failed:', error.methodName, error.message)
   }
 }
 ```
 
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Storage per object | 128 KB (KV), 1 GB (SQLite) |
+| Concurrent requests | Unlimited (single-threaded) |
+| WebSocket connections | 32,768 per object |
+| Alarm precision | ~1 second |
+
 ## Next Steps
 
-- **[Triggers Guide](/guides/triggers/)** - Scheduled tasks
+- **[Durable Objects API Reference](/api/durable-objects/)** - Complete API documentation
 - **[Real-time Chat Example](/examples/realtime-chat/)** - Full WebSocket example
-- **[API Reference](/api/bindings/)** - Durable Object bindings
+- **[Services Guide](/guides/services/)** - Service extraction patterns

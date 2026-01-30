@@ -1,6 +1,6 @@
 ---
 title: Bindings Reference
-description: Reference for Cloudflare bindings available in Cloudwerk.
+description: Reference for Cloudflare bindings available in Cloudwerk, including typed proxies for queues, services, and durable objects.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -47,6 +47,9 @@ The `@cloudwerk/core/bindings` module provides:
 | `getBinding<T>(name)` | Type-safe binding retrieval |
 | `hasBinding(name)` | Check if a binding exists |
 | `getBindingNames()` | List all available binding names |
+| `queues` | Typed queue producers (see below) |
+| `services` | Typed service RPC proxy (see below) |
+| `durableObjects` | Typed Durable Object namespaces (see below) |
 
 ```typescript
 import { bindings, getBinding, hasBinding, getBindingNames } from '@cloudwerk/core/bindings'
@@ -87,6 +90,191 @@ export async function loader({ context }: LoaderArgs) {
 <Aside>
 In loaders, you receive the context as a parameter. In route handlers, use importable bindings or `getContext()` to access bindings.
 </Aside>
+
+---
+
+## Typed Queue Producers
+
+Cloudwerk provides a typed `queues` proxy for sending messages to queue consumers defined in `app/queues/`.
+
+```typescript
+import { queues } from '@cloudwerk/core/bindings'
+
+// Send to email queue (defined in app/queues/email.ts)
+await queues.email.send({
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  body: 'Thanks for signing up.',
+})
+
+// Send with delay
+await queues.email.send(message, { delaySeconds: 60 })
+
+// Batch send
+await queues.notifications.sendBatch([
+  { userId: '1', type: 'email', message: 'Hello' },
+  { userId: '2', type: 'push', message: 'Hello' },
+])
+```
+
+### Queue Utilities
+
+```typescript
+import { queues, getQueue, hasQueue, getQueueNames } from '@cloudwerk/core/bindings'
+
+// Type-safe queue retrieval
+interface EmailMessage {
+  to: string
+  subject: string
+  body: string
+}
+const emailQueue = getQueue<EmailMessage>('email')
+
+// Check if queue exists
+if (hasQueue('analytics')) {
+  await queues.analytics.send({ event: 'pageview' })
+}
+
+// List all queues
+const available = getQueueNames()  // ['email', 'notifications', 'analytics']
+```
+
+### Queue Interface
+
+```typescript
+interface Queue<T = unknown> {
+  send(message: T, options?: SendOptions): Promise<void>
+  sendBatch(messages: T[], options?: SendOptions): Promise<void>
+}
+
+interface SendOptions {
+  delaySeconds?: number           // 0-43200 (max 12 hours)
+  contentType?: 'json' | 'text' | 'bytes' | 'v8'
+}
+```
+
+<Aside type="tip">
+Run `cloudwerk queues generate-types` to generate TypeScript definitions for your queue message types.
+</Aside>
+
+---
+
+## Typed Services Proxy
+
+Cloudwerk provides a typed `services` proxy for calling service methods defined in `app/services/`.
+
+```typescript
+import { services } from '@cloudwerk/core/bindings'
+
+// Call email service (defined in app/services/email/service.ts)
+const result = await services.email.send({
+  to: 'user@example.com',
+  subject: 'Hello',
+  body: '<h1>Welcome!</h1>',
+})
+
+// Call payment service
+const checkout = await services.payments.createCheckout({
+  customerId: 'cus_123',
+  items: [{ priceId: 'price_123', quantity: 1 }],
+  successUrl: '/success',
+  cancelUrl: '/cancel',
+})
+```
+
+### Service Utilities
+
+```typescript
+import { services, getService, hasService, getServiceNames } from '@cloudwerk/core/bindings'
+
+// Type-safe service retrieval
+interface EmailService {
+  send(params: { to: string; subject: string; body: string }): Promise<{ success: boolean }>
+}
+const email = getService<EmailService>('email')
+
+// Check if service exists
+if (hasService('analytics')) {
+  await services.analytics.track({ event: 'signup' })
+}
+
+// List all services
+const available = getServiceNames()  // ['email', 'payments', 'cache']
+```
+
+### Transparent Routing
+
+The services proxy automatically routes calls based on the configured mode:
+
+```typescript
+// Your code (identical for both modes)
+await services.email.send({ to: '...' })
+
+// Local mode: Direct function call (no latency)
+// Extracted mode: RPC via Cloudflare service binding
+```
+
+<Aside type="tip">
+Run `cloudwerk services generate-types` to generate TypeScript definitions for your service methods.
+</Aside>
+
+---
+
+## Typed Durable Objects Proxy
+
+Cloudwerk provides a typed `durableObjects` proxy for accessing Durable Objects defined in `app/objects/`.
+
+```typescript
+import { durableObjects } from '@cloudwerk/core/bindings'
+
+// Get a counter DO by name
+const counter = durableObjects.counter.get('user-123')
+
+// Call RPC methods directly
+const count = await counter.increment(5)
+const current = await counter.getCount()
+await counter.reset()
+
+// Get by unique ID
+const uniqueId = durableObjects.counter.newUniqueId()
+const newCounter = durableObjects.counter.getById(uniqueId)
+```
+
+### Durable Object Utilities
+
+```typescript
+import { durableObjects, getDurableObject, hasDurableObject } from '@cloudwerk/core/bindings'
+
+// Type-safe DO retrieval
+interface CounterDO {
+  increment(amount?: number): Promise<number>
+  getCount(): Promise<number>
+}
+const counterNs = getDurableObject<CounterDO>('counter')
+
+// Check if DO exists
+if (hasDurableObject('game')) {
+  const game = durableObjects.game.get('room-abc')
+}
+```
+
+### Namespace Interface
+
+```typescript
+interface DurableObjectNamespaceProxy<T> {
+  get(name: string): T                    // Get by name (deterministic)
+  getById(id: DurableObjectId): T         // Get by unique ID
+  newUniqueId(): DurableObjectId          // Generate unique ID
+  idFromName(name: string): DurableObjectId
+  idFromString(hexId: string): DurableObjectId
+}
+```
+
+<Aside type="tip">
+Run `cloudwerk objects generate-types` to generate TypeScript definitions for your Durable Object methods.
+</Aside>
+
+---
 
 ## D1 Database
 
@@ -259,94 +447,6 @@ interface R2Bucket {
 }
 ```
 
-## Queues
-
-Cloudflare Queues for async message processing.
-
-### Configuration
-
-```toml
-# wrangler.toml
-[[queues.producers]]
-binding = "MY_QUEUE"
-queue = "my-queue"
-```
-
-### Usage
-
-```typescript
-// Send message
-await context.queues.MY_QUEUE.send({
-  type: 'email',
-  to: 'user@example.com',
-});
-
-// Send batch
-await context.queues.MY_QUEUE.sendBatch([
-  { body: { type: 'email', to: 'user1@example.com' } },
-  { body: { type: 'email', to: 'user2@example.com' } },
-]);
-
-// With delay
-await context.queues.MY_QUEUE.send(
-  { type: 'reminder' },
-  { delaySeconds: 300 }
-);
-```
-
-### Types
-
-```typescript
-interface Queue<T = unknown> {
-  send(message: T, options?: QueueSendOptions): Promise<void>;
-  sendBatch(messages: MessageBatch<T>[], options?: QueueSendBatchOptions): Promise<void>;
-}
-```
-
-## Durable Objects
-
-Durable Objects for stateful edge computing.
-
-### Configuration
-
-```toml
-# wrangler.toml
-[durable_objects]
-bindings = [
-  { name = "COUNTER", class_name = "Counter" }
-]
-```
-
-### Usage
-
-```typescript
-// Get stub by name
-const id = context.env.COUNTER.idFromName('my-counter');
-const stub = context.env.COUNTER.get(id);
-
-// Get stub by unique ID
-const uniqueId = context.env.COUNTER.newUniqueId();
-const stub = context.env.COUNTER.get(uniqueId);
-
-// Call the Durable Object
-const response = await stub.fetch('http://counter/increment');
-const count = await response.text();
-```
-
-### Types
-
-```typescript
-interface DurableObjectNamespace {
-  idFromName(name: string): DurableObjectId;
-  newUniqueId(): DurableObjectId;
-  get(id: DurableObjectId): DurableObjectStub;
-}
-
-interface DurableObjectStub {
-  fetch(input: RequestInfo, init?: RequestInit): Promise<Response>;
-}
-```
-
 ## Environment Variables
 
 Access environment variables and secrets.
@@ -377,33 +477,6 @@ const apiKey = context.env.API_KEY; // Secret
 <Aside type="caution">
 Never log or expose secrets. Use `wrangler secret` for sensitive values.
 </Aside>
-
-## Service Bindings
-
-Call other Workers directly.
-
-### Configuration
-
-```toml
-# wrangler.toml
-[[services]]
-binding = "AUTH_SERVICE"
-service = "auth-worker"
-```
-
-### Usage
-
-```typescript
-// Call another Worker
-const response = await context.env.AUTH_SERVICE.fetch(
-  new Request('https://auth/validate', {
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  })
-);
-
-const result = await response.json();
-```
 
 ## Vectorize
 
@@ -466,6 +539,8 @@ const result = await context.env.AI.run('@cf/microsoft/resnet-50', {
 
 ## Next Steps
 
+- **[Queues API](/api/queues/)** - Queue consumer reference
+- **[Services API](/api/services/)** - Service extraction reference
+- **[Durable Objects API](/api/durable-objects/)** - Durable Object reference
 - **[Database Guide](/guides/database/)** - D1 in depth
 - **[Authentication](/guides/authentication/)** - Using KV for sessions
-- **[Durable Objects](/guides/durable-objects/)** - Stateful applications
