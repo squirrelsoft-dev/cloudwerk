@@ -5,7 +5,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/squirrelsoft-dev/cloudwerk.git",
-    "directory": "apps/create-cloudwerk-app"
+    "directory": "packages/create-app"
   },
   "type": "module",
   "bin": {

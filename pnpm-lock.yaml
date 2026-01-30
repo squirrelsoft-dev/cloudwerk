@@ -39,40 +39,6 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.30)
 
-  apps/create-cloudwerk-app:
-    dependencies:
-      '@clack/prompts':
-        specifier: ^0.8.2
-        version: 0.8.2
-      commander:
-        specifier: ^12.1.0
-        version: 12.1.0
-      fs-extra:
-        specifier: ^11.0.0
-        version: 11.3.3
-      picocolors:
-        specifier: ^1.1.0
-        version: 1.1.1
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.0
-        version: 11.0.4
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.30
-      '@vitest/coverage-v8':
-        specifier: ^1.0.0
-        version: 1.6.1(vitest@1.6.1(@types/node@20.19.30))
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@swc/core@1.15.11)(postcss@8.5.6)(typescript@5.9.3)
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.3
-      vitest:
-        specifier: ^1.0.0
-        version: 1.6.1(@types/node@20.19.30)
-
   apps/docs:
     dependencies:
       '@astrojs/starlight':
@@ -97,50 +63,6 @@ importers:
       linkinator:
         specifier: ^6.1.2
         version: 6.3.0
-
-  apps/test-hydration:
-    dependencies:
-      '@cloudwerk/cli':
-        specifier: workspace:*
-        version: link:../../packages/cli
-      '@cloudwerk/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@cloudwerk/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      hono:
-        specifier: ^4.0.0
-        version: 4.11.5
-    devDependencies:
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.3
-
-  examples/hello-world: {}
-
-  examples/saas-starter: {}
-
-  examples/with-error-boundaries:
-    dependencies:
-      '@cloudwerk/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@cloudwerk/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      '@cloudwerk/vite-plugin':
-        specifier: workspace:*
-        version: link:../../packages/vite-plugin
-      '@hono/vite-dev-server':
-        specifier: ^0.21.0
-        version: 0.21.1(hono@4.11.5)
-      hono:
-        specifier: ^4.11.5
-        version: 4.11.5
-      vite:
-        specifier: ^6.0.0
-        version: 6.4.1(@types/node@20.19.30)
 
   packages/auth: {}
 
@@ -217,6 +139,40 @@ importers:
         specifier: ^4.0.0
         version: 4.11.5
     devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^1.0.0
+        version: 1.6.1(vitest@1.6.1(@types/node@20.19.30))
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.11)(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.30)
+
+  packages/create-app:
+    dependencies:
+      '@clack/prompts':
+        specifier: ^0.8.2
+        version: 0.8.2
+      commander:
+        specifier: ^12.1.0
+        version: 12.1.0
+      fs-extra:
+        specifier: ^11.0.0
+        version: 11.3.3
+      picocolors:
+        specifier: ^1.1.0
+        version: 1.1.1
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.0
+        version: 11.0.4
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.30
       '@vitest/coverage-v8':
         specifier: ^1.0.0
         version: 1.6.1(vitest@1.6.1(@types/node@20.19.30))
@@ -669,19 +625,6 @@ packages:
 
   '@hono/vite-dev-server@0.18.3':
     resolution: {integrity: sha512-JztypLmq6qtQ3OAcz5vDzwXYBBymLztSbfDuNf4XTWkfppLjf6DHvYHtQZ5idOfNhUzdnbYY7/6QAKlVk6G3QQ==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: '*'
-      miniflare: '*'
-      wrangler: '*'
-    peerDependenciesMeta:
-      miniflare:
-        optional: true
-      wrangler:
-        optional: true
-
-  '@hono/vite-dev-server@0.21.1':
-    resolution: {integrity: sha512-HRqwsgbbTJ4a0Jiq7aB5aWb12upHtXGSU6nh+LuokTaB6VzFfiIkUBRUdAtRbGV7a3EWehoGhAbVZZjfKgR3uw==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: '*'
@@ -4291,12 +4234,6 @@ snapshots:
       hono: 4.11.5
 
   '@hono/vite-dev-server@0.18.3(hono@4.11.5)':
-    dependencies:
-      '@hono/node-server': 1.19.9(hono@4.11.5)
-      hono: 4.11.5
-      minimatch: 9.0.5
-
-  '@hono/vite-dev-server@0.21.1(hono@4.11.5)':
     dependencies:
       '@hono/node-server': 1.19.9(hono@4.11.5)
       hono: 4.11.5
