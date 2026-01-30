@@ -20,6 +20,10 @@
     "./middleware": {
       "types": "./dist/middleware.d.ts",
       "import": "./dist/middleware.js"
+    },
+    "./password": {
+      "types": "./dist/password.d.ts",
+      "import": "./dist/password.js"
     }
   },
   "files": [

@@ -85,3 +85,9 @@ export {
   type OnSessionResult,
   type SetCsrfCookieOptions,
 } from './middleware/index.js'
+
+// ============================================================================
+// Password Utilities
+// ============================================================================
+
+export { hashPassword, verifyPassword } from './password/index.js'
