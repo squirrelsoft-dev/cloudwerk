@@ -2,5 +2,35 @@
   "name": "@cloudwerk/auth",
   "version": "0.0.1",
   "description": "Sessions, auth middleware, OAuth for Cloudwerk",
-  "private": true
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/squirrelsoft-dev/cloudwerk.git",
+    "directory": "packages/auth"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest --run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cloudwerk/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0",
+    "tsup": "^8.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
 }
