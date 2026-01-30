@@ -330,3 +330,58 @@ export type {
   ServiceManifest,
   BuildServiceManifestOptions,
 } from './service-compiler.js'
+
+// ============================================================================
+// Durable Object Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isDurableObjectFile,
+
+  // Name Conversion
+  fileNameToObjectName,
+  objectNameToBindingName,
+  objectNameToClassName,
+  bindingNameToObjectName,
+
+  // Durable Object Scanning
+  scanDurableObjects,
+  scanDurableObjectsSync,
+
+  // Constants
+  OBJECTS_DIR,
+} from './durable-object-scanner.js'
+
+export type {
+  ScannedDurableObject,
+  DurableObjectScanResult,
+} from './durable-object-scanner.js'
+
+// ============================================================================
+// Durable Object Compiler Exports
+// ============================================================================
+
+export {
+  // Durable Object Compilation
+  compileDurableObject,
+  buildDurableObjectManifest,
+  updateDurableObjectEntryFromDefinition,
+  addDurableObjectWarnings,
+
+  // Formatting
+  formatDurableObjectErrors,
+  formatDurableObjectWarnings,
+
+  // Utilities
+  hasDurableObjectErrors,
+  hasDurableObjectWarnings,
+} from './durable-object-compiler.js'
+
+export type {
+  DurableObjectEntry,
+  DurableObjectValidationError,
+  DurableObjectValidationWarning,
+  DurableObjectManifest,
+  BuildDurableObjectManifestOptions,
+} from './durable-object-compiler.js'

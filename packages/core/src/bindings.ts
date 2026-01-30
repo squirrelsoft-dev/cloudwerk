@@ -1069,3 +1069,418 @@ export function getServiceNames(): string[] {
   // Return unique names
   return [...new Set([...localServiceNames, ...extractedNames])]
 }
+
+// ============================================================================
+// Durable Object Types
+// ============================================================================
+
+/**
+ * Unique identifier for a durable object instance.
+ */
+export interface DurableObjectId {
+  toString(): string
+  equals(other: DurableObjectId): boolean
+  name?: string
+}
+
+/**
+ * Stub for interacting with a durable object instance.
+ * Methods defined in `defineDurableObject({ methods })` are directly callable via native RPC.
+ *
+ * @typeParam T - The methods available on the durable object
+ */
+export interface DurableObjectStub<T = unknown> {
+  /** The unique ID of this durable object instance */
+  id: DurableObjectId
+  /** The name of this durable object instance (if created with idFromName) */
+  name?: string
+  /** Send an HTTP request to the durable object */
+  fetch(request: Request): Promise<Response>
+  /** Additional RPC methods are available based on the methods config */
+}
+
+/**
+ * Namespace for accessing durable object stubs.
+ *
+ * @typeParam T - The methods available on durable object stubs in this namespace
+ */
+export interface DurableObjectNamespace<T = unknown> {
+  /** Create an ID from a human-readable name */
+  idFromName(name: string): DurableObjectId
+  /** Parse an ID from its string representation */
+  idFromString(id: string): DurableObjectId
+  /** Generate a new unique ID */
+  newUniqueId(): DurableObjectId
+  /** Get a stub to interact with a specific durable object instance */
+  get(id: DurableObjectId): DurableObjectStub<T>
+}
+
+// ============================================================================
+// Durable Object Error Messages
+// ============================================================================
+
+const DURABLE_OBJECT_OUTSIDE_CONTEXT_ERROR = `Durable object accessed outside of request handler.
+
+This can happen when:
+1. Accessing durable objects at module-load time (top-level code)
+2. Accessing durable objects in a setTimeout/setInterval callback
+3. The request context was not properly initialized
+
+Durable objects can only be accessed during request handling within a Cloudwerk application.
+
+Example of correct usage:
+  import { durableObjects } from '@cloudwerk/core/bindings'
+
+  export async function POST(request: Request, { params }: Context) {
+    const id = durableObjects.Counter.idFromName(params.counterId)
+    const counter = durableObjects.Counter.get(id)
+    const value = await counter.increment(1)
+    return json({ value })
+  }
+`
+
+function createMissingDurableObjectError(name: string, availableObjects: string[]): string {
+  const available =
+    availableObjects.length > 0
+      ? `Available durable objects: ${availableObjects.join(', ')}`
+      : 'No durable objects are configured in wrangler.toml'
+
+  return `Durable object '${name}' not found in current environment.
+
+${available}
+
+To add this durable object, create a file at app/objects/${name.charAt(0).toLowerCase() + name.slice(1).replace(/([A-Z])/g, '-$1').toLowerCase()}.ts with:
+  import { defineDurableObject } from '@cloudwerk/durable-object'
+  export default defineDurableObject({
+    methods: {
+      async yourMethod(params) { ... }
+    }
+  })
+`
+}
+
+// ============================================================================
+// Durable Object Helper Functions
+// ============================================================================
+
+/**
+ * Get all durable object binding names from the environment.
+ * Durable object bindings are DurableObjectNamespace instances.
+ */
+function getDurableObjectBindingNames(env: Record<string, unknown>): string[] {
+  return Object.keys(env).filter((key) => {
+    const binding = env[key]
+    // Check if it looks like a DurableObjectNamespace (has idFromName, idFromString, get methods)
+    return (
+      binding !== undefined &&
+      typeof binding === 'object' &&
+      binding !== null &&
+      'idFromName' in binding &&
+      'idFromString' in binding &&
+      'get' in binding &&
+      typeof (binding as Record<string, unknown>).idFromName === 'function' &&
+      typeof (binding as Record<string, unknown>).idFromString === 'function' &&
+      typeof (binding as Record<string, unknown>).get === 'function'
+    )
+  })
+}
+
+/**
+ * Convert an object name (camelCase) to binding name (SCREAMING_SNAKE_CASE).
+ */
+function objectNameToBindingName(objectName: string): string {
+  return objectName
+    .replace(/([A-Z])/g, '_$1')
+    .toUpperCase()
+    .replace(/^_/, '')
+}
+
+/**
+ * Convert a binding name (SCREAMING_SNAKE_CASE) to object name (camelCase).
+ */
+function doBindingNameToObjectName(bindingName: string): string {
+  return bindingName.toLowerCase().replace(/_([a-z])/g, (_, letter) =>
+    letter.toUpperCase()
+  )
+}
+
+// ============================================================================
+// Durable Objects Proxy
+// ============================================================================
+
+/**
+ * Proxy object that provides typed access to durable object namespaces.
+ *
+ * Access durable objects by their class name (PascalCase), which will resolve
+ * from the current request's environment at access time.
+ *
+ * @example
+ * ```typescript
+ * import { durableObjects } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request, { params }: Context) {
+ *   // Get the durable object namespace
+ *   const id = durableObjects.Counter.idFromName(params.counterId)
+ *
+ *   // Get a stub to the specific instance
+ *   const counter = durableObjects.Counter.get(id)
+ *
+ *   // Call RPC methods directly (no HTTP overhead!)
+ *   const value = await counter.increment(1)
+ *   const current = await counter.getValue()
+ *
+ *   return json({ value, current })
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Chat room example with WebSocket
+ * import { durableObjects } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET(request: Request, { params }: Context) {
+ *   const upgradeHeader = request.headers.get('Upgrade')
+ *   if (upgradeHeader !== 'websocket') {
+ *     return new Response('Expected WebSocket', { status: 426 })
+ *   }
+ *
+ *   const id = durableObjects.ChatRoom.idFromName(params.roomId)
+ *   const room = durableObjects.ChatRoom.get(id)
+ *
+ *   // Forward the WebSocket request to the durable object
+ *   return room.fetch(request)
+ * }
+ * ```
+ */
+export const durableObjects: Record<string, DurableObjectNamespace> = new Proxy(
+  {} as Record<string, DurableObjectNamespace>,
+  {
+    get(_target, prop) {
+      // Ignore symbol access
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      // Get current context
+      let ctx
+      try {
+        ctx = getContext()
+      } catch {
+        throw new Error(DURABLE_OBJECT_OUTSIDE_CONTEXT_ERROR)
+      }
+
+      const env = ctx.env as Record<string, unknown>
+
+      // Convert object name to binding name
+      const bindingName = objectNameToBindingName(prop)
+      const binding = env[bindingName]
+
+      if (binding !== undefined) {
+        // Verify it looks like a DurableObjectNamespace
+        if (
+          typeof binding === 'object' &&
+          binding !== null &&
+          'idFromName' in binding &&
+          'get' in binding
+        ) {
+          return binding as DurableObjectNamespace
+        }
+      }
+
+      // Not found - provide helpful error
+      const doBindings = getDurableObjectBindingNames(env)
+      const availableObjects = doBindings.map(doBindingNameToObjectName)
+      throw new Error(createMissingDurableObjectError(prop, availableObjects))
+    },
+
+    has(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return false
+      }
+
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = objectNameToBindingName(prop)
+        const binding = env[bindingName]
+        return (
+          binding !== undefined &&
+          typeof binding === 'object' &&
+          binding !== null &&
+          'idFromName' in binding &&
+          'get' in binding
+        )
+      } catch {
+        return false
+      }
+    },
+
+    ownKeys() {
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const doBindings = getDurableObjectBindingNames(env)
+        return doBindings.map(doBindingNameToObjectName)
+      } catch {
+        return []
+      }
+    },
+
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = objectNameToBindingName(prop)
+        const binding = env[bindingName]
+        if (
+          binding !== undefined &&
+          typeof binding === 'object' &&
+          binding !== null &&
+          'idFromName' in binding &&
+          'get' in binding
+        ) {
+          return {
+            enumerable: true,
+            configurable: true,
+            value: binding,
+          }
+        }
+      } catch {
+        // Outside context
+      }
+      return undefined
+    },
+  }
+)
+
+/**
+ * Get a specific durable object namespace with type safety.
+ *
+ * @param name - The durable object class name (PascalCase)
+ * @returns The typed durable object namespace
+ * @throws Error if called outside request context
+ * @throws Error if durable object is not found
+ *
+ * @example
+ * ```typescript
+ * import { getDurableObject } from '@cloudwerk/core/bindings'
+ *
+ * interface CounterMethods {
+ *   increment(amount?: number): Promise<number>
+ *   decrement(amount?: number): Promise<number>
+ *   getValue(): Promise<number>
+ * }
+ *
+ * export async function POST(request: Request, { params }: Context) {
+ *   const Counter = getDurableObject<CounterMethods>('Counter')
+ *   const id = Counter.idFromName(params.counterId)
+ *   const counter = Counter.get(id)
+ *
+ *   const value = await counter.increment(5)
+ *   return json({ value })
+ * }
+ * ```
+ */
+export function getDurableObject<T = unknown>(name: string): DurableObjectNamespace<T> {
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    throw new Error(DURABLE_OBJECT_OUTSIDE_CONTEXT_ERROR)
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = objectNameToBindingName(name)
+  const binding = env[bindingName]
+
+  if (
+    binding !== undefined &&
+    typeof binding === 'object' &&
+    binding !== null &&
+    'idFromName' in binding &&
+    'get' in binding
+  ) {
+    return binding as DurableObjectNamespace<T>
+  }
+
+  // Not found - provide helpful error
+  const doBindings = getDurableObjectBindingNames(env)
+  const availableObjects = doBindings.map(doBindingNameToObjectName)
+  throw new Error(createMissingDurableObjectError(name, availableObjects))
+}
+
+/**
+ * Check if a durable object exists in the current environment.
+ *
+ * @param name - The durable object class name (PascalCase) to check
+ * @returns true if the durable object exists, false otherwise
+ * @throws Error if called outside request context
+ *
+ * @example
+ * ```typescript
+ * import { hasDurableObject, getDurableObject } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request, { params }: Context) {
+ *   if (hasDurableObject('Counter')) {
+ *     const Counter = getDurableObject('Counter')
+ *     const id = Counter.idFromName(params.counterId)
+ *     const counter = Counter.get(id)
+ *     const value = await counter.increment()
+ *     return json({ value })
+ *   }
+ *   return json({ error: 'Counter not available' }, { status: 503 })
+ * }
+ * ```
+ */
+export function hasDurableObject(name: string): boolean {
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    throw new Error(DURABLE_OBJECT_OUTSIDE_CONTEXT_ERROR)
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = objectNameToBindingName(name)
+  const binding = env[bindingName]
+  return (
+    binding !== undefined &&
+    typeof binding === 'object' &&
+    binding !== null &&
+    'idFromName' in binding &&
+    'get' in binding
+  )
+}
+
+/**
+ * Get all available durable object names in the current environment.
+ *
+ * @returns Array of durable object class names (PascalCase)
+ * @throws Error if called outside request context
+ *
+ * @example
+ * ```typescript
+ * import { getDurableObjectNames } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET() {
+ *   const names = getDurableObjectNames()
+ *   return json({ availableDurableObjects: names })
+ * }
+ * ```
+ */
+export function getDurableObjectNames(): string[] {
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    throw new Error(DURABLE_OBJECT_OUTSIDE_CONTEXT_ERROR)
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const doBindings = getDurableObjectBindingNames(env)
+  return doBindings.map(doBindingNameToObjectName)
+}
