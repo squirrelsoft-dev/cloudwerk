@@ -450,3 +450,70 @@ export type {
   TriggerManifest,
   BuildTriggerManifestOptions,
 } from './trigger-compiler.js'
+
+// ============================================================================
+// Auth Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isAuthFile,
+  getAuthFileType,
+
+  // Name Conversion
+  fileNameToProviderId,
+
+  // Auth Scanning
+  scanAuth,
+  scanAuthSync,
+
+  // Utilities
+  hasAuthDirectory,
+
+  // Constants
+  AUTH_DIR,
+  PROVIDERS_DIR,
+} from './auth-scanner.js'
+
+export type {
+  AuthFileType,
+  ScannedAuthFile,
+  AuthScanResult,
+} from './auth-scanner.js'
+
+// ============================================================================
+// Auth Compiler Exports
+// ============================================================================
+
+export {
+  // Auth Compilation
+  compileProviderEntry,
+  generateAuthRoutes,
+  buildAuthManifest,
+
+  // Module Loading
+  loadProviderModule,
+  loadConfigModule,
+  loadCallbacksModule,
+  loadPagesModule,
+  loadRBACModule,
+  buildAuthManifestWithModules,
+
+  // Utilities
+  hasErrors as hasAuthErrors,
+  hasWarnings as hasAuthWarnings,
+  getManifestSummary as getAuthManifestSummary,
+
+  // Constants
+  DEFAULT_BASE_PATH,
+  DEFAULT_SESSION_STRATEGY,
+} from './auth-compiler.js'
+
+export type {
+  AuthProviderEntry,
+  AuthRouteEntry,
+  AuthPagesConfig,
+  AuthValidationError,
+  AuthValidationWarning,
+  AuthManifest,
+} from './auth-compiler.js'

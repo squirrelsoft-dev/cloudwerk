@@ -662,7 +662,7 @@ export interface D1UserAdapterConfig<TD1 = unknown> extends AdapterConfig {
 /**
  * Type of authentication provider.
  */
-export type ProviderType = 'oauth' | 'oidc' | 'credentials' | 'email'
+export type ProviderType = 'oauth' | 'oidc' | 'credentials' | 'email' | 'passkey'
 
 /**
  * Base provider interface.
@@ -877,6 +877,55 @@ export interface EmailProvider extends Provider {
 
   /** Generate verification token (default: random string) */
   generateVerificationToken?: () => Awaitable<string>
+}
+
+/**
+ * WebAuthn/Passkey provider.
+ *
+ * Enables passwordless authentication using FIDO2/WebAuthn passkeys.
+ *
+ * @example
+ * ```typescript
+ * import { passkey } from '@cloudwerk/auth/providers'
+ *
+ * const providers = [
+ *   passkey({
+ *     rpName: 'My Application',
+ *     rpId: 'myapp.com',
+ *     origin: 'https://myapp.com',
+ *   }),
+ * ]
+ * ```
+ */
+export interface PasskeyProvider extends Provider {
+  type: 'passkey'
+
+  /** Relying Party ID (your domain) */
+  rpId?: string
+
+  /** Relying Party name shown to users */
+  rpName: string
+
+  /** Allowed origins for WebAuthn operations */
+  origin?: string | string[]
+
+  /** Timeout for WebAuthn operations in milliseconds */
+  timeout?: number
+
+  /** Authenticator attachment preference */
+  authenticatorAttachment?: 'platform' | 'cross-platform'
+
+  /** Resident key requirement */
+  residentKey?: 'required' | 'preferred' | 'discouraged'
+
+  /** User verification requirement */
+  userVerification?: 'required' | 'preferred' | 'discouraged'
+
+  /** Attestation conveyance preference */
+  attestation?: 'none' | 'indirect' | 'direct' | 'enterprise'
+
+  /** Supported cryptographic algorithms (COSE algorithm identifiers) */
+  supportedAlgorithms?: number[]
 }
 
 // ============================================================================
