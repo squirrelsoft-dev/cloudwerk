@@ -485,20 +485,27 @@ function decodeCBORWithLength(data: Uint8Array): { value: any; bytesRead: number
       case 2: // Byte string
         return readBytes(Number(argument))
 
-      case 3: // Text string
+      case 3: {
+        // Text string
         const textBytes = readBytes(Number(argument))
         return new TextDecoder().decode(textBytes)
+      }
 
-      case 4: // Array
+      case 4: {
+        // Array
         const arrayLength = Number(argument)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const array: any[] = []
         for (let i = 0; i < arrayLength; i++) {
           array.push(decodeValue())
         }
         return array
+      }
 
-      case 5: // Map
+      case 5: {
+        // Map
         const mapLength = Number(argument)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map: Record<string, any> = {}
         for (let i = 0; i < mapLength; i++) {
           const key = decodeValue()
@@ -506,6 +513,7 @@ function decodeCBORWithLength(data: Uint8Array): { value: any; bytesRead: number
           map[String(key)] = value
         }
         return map
+      }
 
       case 6: // Tagged value
         // Skip tag and decode value

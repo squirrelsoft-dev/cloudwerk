@@ -6,7 +6,6 @@
 
 import type {
   TenantResolverConfig,
-  TenantStrategy,
   Tenant,
   TenantStorage,
   TenantContext,

@@ -1089,7 +1089,7 @@ export interface DurableObjectId {
  *
  * @typeParam T - The methods available on the durable object
  */
-export interface DurableObjectStub<T = unknown> {
+export interface DurableObjectStub<_T = unknown> {
   /** The unique ID of this durable object instance */
   id: DurableObjectId
   /** The name of this durable object instance (if created with idFromName) */

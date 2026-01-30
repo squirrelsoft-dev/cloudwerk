@@ -184,7 +184,7 @@ export interface DurableObjectNamespace<T = unknown> {
  * Stub for interacting with a durable object instance.
  * Methods defined in `defineDurableObject({ methods })` are directly callable via native RPC.
  */
-export interface DurableObjectStub<T = unknown> {
+export interface DurableObjectStub<_T = unknown> {
   id: DurableObjectId
   name?: string
   fetch(request: Request): Promise<Response>

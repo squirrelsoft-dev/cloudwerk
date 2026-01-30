@@ -45,7 +45,7 @@
 
 import type { RBACConfig, RBACChecker, RBACUser, Resource } from './types.js'
 import { checkRole, checkAnyRole, checkAllRoles, getUserRoles } from './roles.js'
-import { checkPermission, getUserPermissions, hasMatchingPermission } from './permissions.js'
+import { checkPermission, getUserPermissions } from './permissions.js'
 
 // Re-export types
 export type {

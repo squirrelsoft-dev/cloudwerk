@@ -191,7 +191,7 @@ function validateSource(source: TriggerSource): void {
         )
       }
       break
-    case 'r2':
+    case 'r2': {
       if (!source.bucket || typeof source.bucket !== 'string') {
         throw new TriggerInvalidSourceError(
           'R2 source must specify a bucket name',
@@ -214,6 +214,7 @@ function validateSource(source: TriggerSource): void {
         }
       }
       break
+    }
     case 'webhook':
       validateWebhookSource(source as WebhookTriggerSource)
       break

@@ -6,7 +6,6 @@
 
 import type { ScannedService, ServiceScanResult } from './service-scanner.js'
 import {
-  directoryNameToServiceName,
   serviceNameToBindingName,
   serviceNameToWorkerName,
   serviceNameToEntrypointClass,

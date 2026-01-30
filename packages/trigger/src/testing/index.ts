@@ -75,7 +75,7 @@ export interface TestTriggerResult {
 function createScheduledEvent(
   options: Partial<ScheduledEvent> & { cron?: string }
 ): ScheduledEvent {
-  let noRetryFn = () => {}
+  const noRetryFn = () => {}
 
   return {
     cron: options.cron ?? '* * * * *',

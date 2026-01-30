@@ -30,8 +30,6 @@ import {
   SERVICES_DIR,
   SERVICE_FILE_NAME,
   type CloudwerkConfig,
-  type QueueManifest,
-  type ServiceManifest,
 } from '@cloudwerk/core/build'
 import type {
   CloudwerkVitePluginOptions,

@@ -587,20 +587,24 @@ function decodeCBOR(data: Uint8Array): any {
       case 2:
         return readBytes(Number(argument))
 
-      case 3:
+      case 3: {
         const textBytes = readBytes(Number(argument))
         return new TextDecoder().decode(textBytes)
+      }
 
-      case 4:
+      case 4: {
         const arrayLength = Number(argument)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const array: any[] = []
         for (let i = 0; i < arrayLength; i++) {
           array.push(decodeValue())
         }
         return array
+      }
 
-      case 5:
+      case 5: {
         const mapLength = Number(argument)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const map: Record<string | number, any> = {}
         for (let i = 0; i < mapLength; i++) {
           const key = decodeValue()
@@ -608,6 +612,7 @@ function decodeCBOR(data: Uint8Array): any {
           map[key] = value
         }
         return map
+      }
 
       case 6:
         return decodeValue()
