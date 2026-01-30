@@ -121,34 +121,31 @@ Methods are exposed as native Cloudflare RPC methods.
 
 ```typescript
 export default defineDurableObject<CounterState>({
-  init: async (ctx) => ({ count: 0, lastUpdated: new Date() }),
+  init: async () => ({ count: 0, lastUpdated: new Date() }),
 
   methods: {
-    async increment(ctx, amount: number = 1) {
-      ctx.setState({
-        count: ctx.state.count + amount,
-        lastUpdated: new Date(),
-      })
-      await ctx.storage.put('state', ctx.state)
-      return ctx.state.count
+    async increment(amount: number = 1) {
+      this.state.count += amount
+      this.state.lastUpdated = new Date()
+      await this.ctx.storage.put('state', this.state)
+      return this.state.count
     },
 
-    async decrement(ctx, amount: number = 1) {
-      ctx.setState({
-        count: ctx.state.count - amount,
-        lastUpdated: new Date(),
-      })
-      await ctx.storage.put('state', ctx.state)
-      return ctx.state.count
+    async decrement(amount: number = 1) {
+      this.state.count -= amount
+      this.state.lastUpdated = new Date()
+      await this.ctx.storage.put('state', this.state)
+      return this.state.count
     },
 
-    async getCount(ctx) {
-      return ctx.state.count
+    async getCount() {
+      return this.state.count
     },
 
-    async reset(ctx) {
-      ctx.setState({ count: 0, lastUpdated: new Date() })
-      await ctx.storage.put('state', ctx.state)
+    async reset() {
+      this.state.count = 0
+      this.state.lastUpdated = new Date()
+      await this.ctx.storage.put('state', this.state)
       return 0
     },
   },

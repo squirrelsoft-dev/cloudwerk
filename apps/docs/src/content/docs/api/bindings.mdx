@@ -108,7 +108,8 @@ await queues.email.send({
 })
 
 // Send with delay
-await queues.email.send(message, { delaySeconds: 60 })
+const delayedMessage = { to: 'user@example.com', subject: 'Reminder', body: 'Follow up' }
+await queues.email.send(delayedMessage, { delaySeconds: 60 })
 
 // Batch send
 await queues.notifications.sendBatch([

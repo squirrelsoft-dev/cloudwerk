@@ -295,9 +295,9 @@ export function requireAuth<T = User>(options?: RequireAuthOptions): T {
     const config = ctx.get<AuthConfig>(AUTH_CONFIG_KEY)
     const signInUrl = options?.redirectTo ?? config?.pages?.signIn ?? '/auth/signin'
 
-    // Build callback URL from current request
-    const callbackUrl = encodeURIComponent(ctx.request.url)
-    const redirectUrl = `${signInUrl}?callbackUrl=${callbackUrl}`
+    // Build callback URL from current request (path + query only, not full URL)
+    const { pathname, search } = new URL(ctx.request.url)
+    const redirectUrl = `${signInUrl}?callbackUrl=${encodeURIComponent(pathname + search)}`
 
     throw new RedirectError(redirectUrl)
   }
