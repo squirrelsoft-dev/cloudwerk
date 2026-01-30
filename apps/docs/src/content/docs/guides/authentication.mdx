@@ -292,7 +292,7 @@ import { env } from '@cloudwerk/core/context'
 export async function GET() {
   const authUrl = new URL('https://github.com/login/oauth/authorize')
   authUrl.searchParams.set('client_id', env.GITHUB_CLIENT_ID as string)
-  authUrl.searchParams.set('redirect_uri', `${env.APP_URL}/api/auth/github/callback`)
+  authUrl.searchParams.set('redirect_uri', `${env.APP_URL as string}/api/auth/github/callback`)
   authUrl.searchParams.set('scope', 'user:email')
 
   return new Response(null, {

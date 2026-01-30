@@ -100,7 +100,8 @@ export async function POST() {
 
 **Background tasks with executionCtx:**
 ```typescript
-import { executionCtx } from '@cloudwerk/core/context'
+import { executionCtx, request } from '@cloudwerk/core/context'
+import { json } from '@cloudwerk/core'
 
 export async function POST() {
   const data = await request.json()
@@ -127,6 +128,7 @@ export const middleware: Middleware = async (request, next) => {
 
 // route.ts
 import { get } from '@cloudwerk/core/context'
+import { json } from '@cloudwerk/core'
 
 export async function GET() {
   const user = get<User>('user')
