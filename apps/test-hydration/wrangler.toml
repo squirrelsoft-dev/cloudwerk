@@ -1,12 +1,22 @@
 name = "test-hydration"
 main = "dist/index.js"
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = [ "nodejs_compat" ]
+account_id = "aff07dce0c5a9de6a4b70905ccfea21c"
 
 [assets]
 directory = "./dist/static"
 binding = "ASSETS"
 
-# Preview environment for testing
 [env.preview]
 name = "test-hydration-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "test-hydration-preview-db"
+database_id = "bfa1ccee-39f8-4c78-909e-835f13fd681c"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "test-hydration-db"
+database_id = "860b88d3-df88-47d6-8d66-b00485f19b47"

@@ -5,6 +5,8 @@ export default defineConfig({
     index: 'src/index.ts',
     runtime: 'src/runtime.ts',
     build: 'src/build.ts',
+    bindings: 'src/bindings.ts',
+    'context-exports': 'src/context-exports.ts',
   },
   format: ['esm'],
   dts: true,
