@@ -35,7 +35,7 @@ export default defineConfig({
   // Resolve TypeScript paths
   resolve: {
     alias: {
-      // Allow importing from apps/create-cloudwerk-app/src
+      // Allow importing from packages/create-app/src
     },
   },
 })

@@ -57,7 +57,7 @@ describe('End-to-End Spike Validation', () => {
     const tarballs = await packLocalPackages(tempDir)
 
     // 3. Scaffold project programmatically
-    const scaffoldPath = join(MONOREPO_ROOT, 'apps/create-cloudwerk-app/src/scaffold.ts')
+    const scaffoldPath = join(MONOREPO_ROOT, 'packages/create-app/src/scaffold.ts')
     const { scaffold } = await import(scaffoldPath)
 
     console.log('[E2E] Scaffolding project...')
