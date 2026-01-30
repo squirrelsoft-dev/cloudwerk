@@ -20,7 +20,12 @@ import {
   hasUseClientDirective,
   generateComponentId,
   ROUTE_FILE_NAMES,
+  // Queue scanning
+  scanQueues,
+  buildQueueManifest,
+  QUEUES_DIR,
   type CloudwerkConfig,
+  type QueueManifest,
 } from '@cloudwerk/core/build'
 import type {
   CloudwerkVitePluginOptions,
@@ -158,6 +163,43 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
   }
 
   /**
+   * Build or rebuild the queue manifest.
+   */
+  async function buildQueueManifestIfExists(root: string): Promise<void> {
+    if (!state) {
+      throw new Error('Plugin state not initialized')
+    }
+
+    // Check if queues directory exists
+    const queuesPath = path.resolve(root, state.options.appDir, QUEUES_DIR)
+    try {
+      await fs.promises.access(queuesPath)
+    } catch {
+      // No queues directory, skip
+      state.queueScanResult = null
+      state.queueManifest = null
+      return
+    }
+
+    // Scan queues
+    state.queueScanResult = await scanQueues(
+      path.resolve(root, state.options.appDir),
+      { extensions: state.options.config.extensions }
+    )
+
+    // Build queue manifest
+    state.queueManifest = buildQueueManifest(
+      state.queueScanResult,
+      root,
+      { appName: 'cloudwerk' }
+    )
+
+    if (state.options.verbose && state.queueManifest.queues.length > 0) {
+      console.log(`[cloudwerk] Found ${state.queueManifest.queues.length} queue(s)`)
+    }
+  }
+
+  /**
    * Check if a file is a route file that should trigger rebuild.
    */
   function isRouteFile(filePath: string): boolean {
@@ -170,6 +212,24 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
     const nameWithoutExt = basename.replace(/\.(ts|tsx|js|jsx)$/, '')
 
     return ROUTE_FILE_NAMES.includes(nameWithoutExt as typeof ROUTE_FILE_NAMES[number])
+  }
+
+  /**
+   * Check if a file is a queue file that should trigger rebuild.
+   */
+  function isQueueFile(filePath: string): boolean {
+    if (!state) return false
+
+    const queuesDir = path.resolve(state.options.root, state.options.appDir, QUEUES_DIR)
+    if (!filePath.startsWith(queuesDir)) return false
+
+    // Queue files are direct children of the queues directory
+    const relativePath = path.relative(queuesDir, filePath)
+    if (relativePath.includes(path.sep)) return false
+
+    // Must be a supported extension
+    const ext = path.extname(filePath)
+    return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
   }
 
   /**
@@ -292,6 +352,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           errors: [],
           notFound: [],
         },
+        queueManifest: null,
+        queueScanResult: null,
         clientComponents: new Map(),
         serverEntryCache: null,
         clientEntryCache: null,
@@ -299,6 +361,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Build initial manifest
       await buildManifest(root)
+
+      // Build queue manifest if queues directory exists
+      await buildQueueManifestIfExists(root)
 
       // Pre-scan for client components (needed for production builds)
       await scanClientComponents(root, state)
@@ -325,6 +390,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildManifest(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for queue file additions
+        if (isQueueFile(filePath)) {
+          const queuesDir = path.resolve(root, state!.options.appDir, QUEUES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Queue added: ${path.relative(queuesDir, filePath)}`)
+          }
+          await buildQueueManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('unlink', async (filePath: string) => {
@@ -335,6 +410,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildManifest(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for queue file removals
+        if (isQueueFile(filePath)) {
+          const queuesDir = path.resolve(root, state!.options.appDir, QUEUES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Queue removed: ${path.relative(queuesDir, filePath)}`)
+          }
+          await buildQueueManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('change', async (filePath: string) => {
@@ -343,6 +428,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             console.log(`[cloudwerk] Route changed: ${path.relative(appDir, filePath)}`)
           }
           await buildManifest(state!.options.root)
+          invalidateVirtualModules()
+        }
+
+        // Watch for queue file changes
+        if (isQueueFile(filePath)) {
+          const queuesDir = path.resolve(root, state!.options.appDir, QUEUES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Queue changed: ${path.relative(queuesDir, filePath)}`)
+          }
+          await buildQueueManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
 
@@ -400,7 +495,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           state.serverEntryCache = generateServerEntry(
             state.manifest,
             state.scanResult,
-            state.options
+            state.options,
+            { queueManifest: state.queueManifest }
           )
         }
         return state.serverEntryCache

@@ -224,3 +224,54 @@ export {
   SUPPORTED_EXTENSIONS,
   ROUTE_FILE_NAMES,
 } from './types.js'
+
+// ============================================================================
+// Queue Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isQueueFile,
+
+  // Name Conversion
+  fileNameToQueueName,
+  queueNameToBindingName,
+  queueNameToCloudflareQueueName,
+
+  // Queue Scanning
+  scanQueues,
+  scanQueuesSync,
+
+  // Constants
+  QUEUES_DIR,
+} from './queue-scanner.js'
+
+export type { ScannedQueue, QueueScanResult } from './queue-scanner.js'
+
+// ============================================================================
+// Queue Compiler Exports
+// ============================================================================
+
+export {
+  // Queue Compilation
+  compileQueue,
+  buildQueueManifest,
+  updateQueueEntryFromDefinition,
+
+  // Formatting
+  formatQueueErrors,
+  formatQueueWarnings,
+
+  // Utilities
+  hasQueueErrors,
+  hasQueueWarnings,
+} from './queue-compiler.js'
+
+export type {
+  QueueProcessingConfig,
+  QueueEntry,
+  QueueValidationError,
+  QueueValidationWarning,
+  QueueManifest,
+  BuildQueueManifestOptions,
+} from './queue-compiler.js'
