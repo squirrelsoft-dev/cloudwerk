@@ -192,7 +192,7 @@ export default defineService({
 Services can run in two modes with identical APIs:
 
 <Tabs>
-  <TabItem label="Local Mode">
+<TabItem label="Local Mode">
 Services run as direct function calls in the main Worker:
 
 ```typescript
@@ -213,8 +213,9 @@ export default defineConfig({
 - Simple utility services
 - Low-latency operations
 - Services with minimal resource usage
-  </TabItem>
-  <TabItem label="Extracted Mode">
+
+</TabItem>
+<TabItem label="Extracted Mode">
 Services run as separate Workers using Cloudflare service bindings:
 
 ```typescript
@@ -236,8 +237,9 @@ export default defineConfig({
 - Resource-intensive operations
 - Services that need independent scaling
 - Microservices architecture
-  </TabItem>
-  <TabItem label="Hybrid Mode">
+
+</TabItem>
+<TabItem label="Hybrid Mode">
 Mix local and extracted services:
 
 ```typescript
@@ -256,7 +258,8 @@ export default defineConfig({
 **Best of both worlds:**
 - Extract expensive/slow services
 - Keep fast utilities local
-  </TabItem>
+
+</TabItem>
 </Tabs>
 
 ## Using Services
