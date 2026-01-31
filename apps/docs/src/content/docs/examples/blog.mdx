@@ -1,0 +1,650 @@
+---
+title: Blog with D1 Database
+description: Build a full-featured blog with D1 database, Tailwind CSS, and static site generation.
+---
+
+import { Aside, Steps, Tabs, TabItem, FileTree, LinkCard } from '@astrojs/starlight/components';
+
+In this tutorial, you'll build a complete blog application with:
+
+- **D1 Database** for storing posts
+- **Tailwind CSS** for styling
+- **Static Site Generation** for fast page loads
+- **Dynamic routing** for individual post pages
+
+<LinkCard
+  title="View Source on GitHub"
+  href="https://github.com/squirrelsoft-dev/cloudwerk/tree/main/examples/blog"
+  description="See the complete source code for this example"
+/>
+
+## Project Overview
+
+The final project structure:
+
+<FileTree>
+- app/
+  - layout.tsx
+  - page.tsx
+  - styles.css
+  - about/
+    - page.tsx
+  - posts/
+    - [slug]/
+      - page.tsx
+  - lib/
+    - db.ts
+    - markdown.ts
+  - components/
+    - PostCard.tsx
+- migrations/
+  - 0001_create_posts.sql
+- cloudwerk.config.ts
+- wrangler.toml
+- package.json
+</FileTree>
+
+## Step 1: Create the Project
+
+<Steps>
+1. Create a new Cloudwerk app:
+
+   ```bash
+   pnpm create @cloudwerk/app blog --renderer hono-jsx
+   cd blog
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+</Steps>
+
+## Step 2: Configure Tailwind CSS
+
+The starter template already includes Tailwind CSS. Create the styles file:
+
+```css title="app/styles.css"
+@import "tailwindcss";
+```
+
+## Step 3: Set Up D1 Database
+
+<Steps>
+1. Create a D1 database:
+
+   ```bash
+   wrangler d1 create blog-db
+   ```
+
+2. Copy the database ID from the output and update `wrangler.toml`:
+
+   ```toml title="wrangler.toml"
+   name = "blog"
+   main = "dist/index.js"
+   compatibility_flags = ["nodejs_compat"]
+   compatibility_date = "2024-09-23"
+   account_id = "your_account_id"
+
+   [build]
+   command = "npm run build"
+
+   [assets]
+   directory = "dist/static"
+   binding = "ASSETS"
+
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "blog-db"
+   database_id = "your_database_id"
+   migrations_dir = "migrations"
+   ```
+
+3. Create the migration file:
+
+   ```bash
+   mkdir -p migrations
+   ```
+</Steps>
+
+### Database Schema
+
+Create the posts table with seed data:
+
+```sql title="migrations/0001_create_posts.sql"
+CREATE TABLE posts (
+  id TEXT PRIMARY KEY,
+  slug TEXT UNIQUE NOT NULL,
+  title TEXT NOT NULL,
+  excerpt TEXT,
+  content TEXT NOT NULL,
+  published_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_posts_slug ON posts(slug);
+CREATE INDEX idx_posts_published ON posts(published_at);
+
+-- Seed data
+INSERT INTO posts (id, slug, title, excerpt, content, published_at) VALUES
+  ('1', 'hello-world', 'Hello World', 'Welcome to my blog built with Cloudwerk.',
+   '# Hello World
+
+Welcome to my blog! This is my first post built with **Cloudwerk**.
+
+## What is Cloudwerk?
+
+Cloudwerk provides file-based routing that compiles to Hono, with integrated support for:
+
+- D1 databases
+- KV storage
+- R2 object storage
+- Authentication
+- Queues
+
+Stay tuned for more posts!',
+   '2025-01-15'),
+
+  ('2', 'getting-started', 'Getting Started with Cloudwerk', 'Learn how to build your first app.',
+   '# Getting Started with Cloudwerk
+
+In this post, we will walk through building your first Cloudwerk application.
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm (recommended)
+- A Cloudflare account
+
+## Create Your App
+
+```bash
+pnpm create @cloudwerk/app my-blog --renderer hono-jsx
+cd my-blog
+pnpm install
+```
+
+Visit `http://localhost:3000` to see your app!',
+   '2025-01-20');
+```
+
+Apply the migration locally:
+
+```bash
+wrangler d1 migrations apply blog-db --local
+```
+
+## Step 4: Create Database Helpers
+
+Create a module to interact with the D1 database:
+
+```typescript title="app/lib/db.ts"
+import { DB } from '@cloudwerk/core/bindings'
+
+export interface Post {
+  id: string
+  slug: string
+  title: string
+  excerpt: string | null
+  content: string
+  published_at: string | null
+  created_at: string
+}
+
+export async function getPosts(): Promise<Post[]> {
+  const result = await DB
+    .prepare(
+      'SELECT id, slug, title, excerpt, published_at, created_at FROM posts WHERE published_at IS NOT NULL ORDER BY published_at DESC'
+    )
+    .all<Post>()
+  return result.results
+}
+
+export async function getPostBySlug(slug: string): Promise<Post | null> {
+  const result = await DB
+    .prepare('SELECT * FROM posts WHERE slug = ?')
+    .bind(slug)
+    .first<Post>()
+  return result
+}
+
+export async function getAllSlugs(): Promise<string[]> {
+  const result = await DB
+    .prepare('SELECT slug FROM posts WHERE published_at IS NOT NULL')
+    .all<{ slug: string }>()
+  return result.results.map((r: { slug: string }) => r.slug)
+}
+```
+
+<Aside type="tip">
+Import `DB` directly from `@cloudwerk/core/bindings` to access your D1 database. Run `pnpm bindings` to generate TypeScript types for your bindings.
+</Aside>
+
+## Step 5: Create a Markdown Renderer
+
+Create a simple markdown renderer for blog posts:
+
+```typescript title="app/lib/markdown.ts"
+type MarkdownNode = {
+  type: string
+  content?: string
+  level?: number
+  lang?: string
+  items?: string[]
+}
+
+function parseMarkdown(source: string): MarkdownNode[] {
+  const lines = source.split('\n')
+  const nodes: MarkdownNode[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Headers
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/)
+    if (headerMatch) {
+      nodes.push({
+        type: 'heading',
+        level: headerMatch[1].length,
+        content: headerMatch[2],
+      })
+      i++
+      continue
+    }
+
+    // Code blocks
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim()
+      const codeLines: string[] = []
+      i++
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i])
+        i++
+      }
+      nodes.push({
+        type: 'code',
+        lang: lang || undefined,
+        content: codeLines.join('\n'),
+      })
+      i++
+      continue
+    }
+
+    // Unordered lists
+    if (line.match(/^[-*]\s+/)) {
+      const items: string[] = []
+      while (i < lines.length && lines[i].match(/^[-*]\s+/)) {
+        items.push(lines[i].replace(/^[-*]\s+/, ''))
+        i++
+      }
+      nodes.push({ type: 'list', items })
+      continue
+    }
+
+    // Empty lines
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+
+    // Paragraphs
+    const paragraphLines: string[] = []
+    while (i < lines.length && lines[i].trim() !== '' && !lines[i].match(/^[#\-*`]/)) {
+      paragraphLines.push(lines[i])
+      i++
+    }
+    if (paragraphLines.length > 0) {
+      nodes.push({ type: 'paragraph', content: paragraphLines.join(' ') })
+    }
+  }
+
+  return nodes
+}
+
+function formatInlineText(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>')
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+export function renderMarkdown(source: string): string {
+  const nodes = parseMarkdown(source)
+  const parts: string[] = []
+
+  for (const node of nodes) {
+    switch (node.type) {
+      case 'heading': {
+        const Tag = `h${node.level}`
+        const classes: Record<number, string> = {
+          1: 'text-3xl font-bold mt-8 mb-4',
+          2: 'text-2xl font-semibold mt-6 mb-3',
+          3: 'text-xl font-medium mt-4 mb-2',
+        }
+        parts.push(
+          `<${Tag} class="${classes[node.level!] || 'font-medium mt-4 mb-2'}">${formatInlineText(node.content!)}</${Tag}>`
+        )
+        break
+      }
+      case 'paragraph':
+        parts.push(
+          `<p class="mb-4 leading-relaxed">${formatInlineText(node.content!)}</p>`
+        )
+        break
+      case 'code':
+        parts.push(
+          `<pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4"><code>${escapeHtml(node.content!)}</code></pre>`
+        )
+        break
+      case 'list':
+        parts.push('<ul class="list-disc list-inside mb-4 space-y-1">')
+        for (const item of node.items!) {
+          parts.push(`<li>${formatInlineText(item)}</li>`)
+        }
+        parts.push('</ul>')
+        break
+    }
+  }
+
+  return parts.join('\n')
+}
+```
+
+## Step 6: Create the Root Layout
+
+Create a layout that wraps all pages:
+
+```tsx title="app/layout.tsx"
+import type { LayoutProps } from '@cloudwerk/core'
+import stylesUrl from './styles.css?url'
+
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Blog - Cloudwerk</title>
+        <link rel="stylesheet" href={stylesUrl} />
+      </head>
+      <body>
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+<Aside type="note">
+Use `?url` suffix to import CSS files as URLs. This enables Vite to process the CSS and return a hashed URL for cache busting.
+</Aside>
+
+## Step 7: Create the Home Page
+
+The home page displays a list of all published posts:
+
+```tsx title="app/page.tsx"
+import type { PageProps, LoaderArgs } from '@cloudwerk/core'
+import { getPosts, type Post } from './lib/db'
+import PostCard from './components/PostCard'
+
+export async function loader(_args: LoaderArgs) {
+  const posts = await getPosts()
+  return { posts }
+}
+
+interface HomePageProps extends PageProps {
+  posts: Post[]
+}
+
+export default function HomePage({ posts }: HomePageProps) {
+  return (
+    <div class="min-h-screen bg-gray-100 py-12 px-4">
+      <div class="max-w-2xl mx-auto">
+        <header class="mb-12">
+          <h1 class="text-4xl font-bold text-gray-900 mb-4">My Blog</h1>
+          <p class="text-gray-600">
+            A personal blog built with Cloudwerk and Cloudflare Workers.
+          </p>
+          <nav class="mt-4 flex gap-4">
+            <a href="/" class="text-blue-600 hover:underline">Home</a>
+            <a href="/about" class="text-blue-600 hover:underline">About</a>
+          </nav>
+        </header>
+
+        <main>
+          <h2 class="text-2xl font-semibold text-gray-800 mb-6">Latest Posts</h2>
+          {posts.length > 0 ? (
+            <div class="space-y-6">
+              {posts.map((post) => (
+                <PostCard post={post} />
+              ))}
+            </div>
+          ) : (
+            <p class="text-gray-500">No posts yet.</p>
+          )}
+        </main>
+      </div>
+    </div>
+  )
+}
+```
+
+## Step 8: Create the PostCard Component
+
+Create a reusable component to display post previews:
+
+```tsx title="app/components/PostCard.tsx"
+import type { Post } from '../lib/db'
+
+interface PostCardProps {
+  post: Omit<Post, 'content'>
+}
+
+export default function PostCard({ post }: PostCardProps) {
+  const date = post.published_at
+    ? new Date(post.published_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : null
+
+  return (
+    <article class="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+      <a href={`/posts/${post.slug}`} class="block p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-2 hover:text-blue-600">
+          {post.title}
+        </h2>
+        {post.excerpt && <p class="text-gray-600 mb-4">{post.excerpt}</p>}
+        {date && <time class="text-sm text-gray-500">{date}</time>}
+      </a>
+    </article>
+  )
+}
+```
+
+## Step 9: Create the Post Detail Page
+
+This page uses **Static Site Generation (SSG)** to pre-render posts at build time:
+
+```tsx title="app/posts/[slug]/page.tsx"
+import type { PageProps, LoaderArgs } from '@cloudwerk/core'
+import { NotFoundError } from '@cloudwerk/core'
+import { raw } from 'hono/html'
+import { getPostBySlug, getAllSlugs, type Post } from '../../lib/db'
+import { renderMarkdown } from '../../lib/markdown'
+
+// Enable static site generation
+export const config = {
+  rendering: 'static',
+}
+
+// Generate static paths for all posts
+export async function generateStaticParams() {
+  const slugs = await getAllSlugs()
+  return slugs.map((slug) => ({ slug }))
+}
+
+export async function loader({ params }: LoaderArgs) {
+  const post = await getPostBySlug(params.slug)
+  if (!post) {
+    throw new NotFoundError(`Post not found: ${params.slug}`)
+  }
+  const html = renderMarkdown(post.content)
+  return { post, html }
+}
+
+interface PostPageProps extends PageProps {
+  post: Post
+  html: string
+}
+
+export default function PostPage({ post, html }: PostPageProps) {
+  const date = post.published_at
+    ? new Date(post.published_at).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : null
+
+  return (
+    <div class="min-h-screen bg-gray-100 py-12 px-4">
+      <div class="max-w-2xl mx-auto">
+        <nav class="mb-8">
+          <a href="/" class="text-blue-600 hover:underline">
+            &larr; Back to all posts
+          </a>
+        </nav>
+
+        <article class="bg-white rounded-lg shadow-md p-8">
+          <header class="mb-8 border-b pb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">{post.title}</h1>
+            {date && <time class="text-gray-500">{date}</time>}
+          </header>
+
+          <div class="prose prose-gray max-w-none">{raw(html)}</div>
+        </article>
+      </div>
+    </div>
+  )
+}
+```
+
+<Aside type="tip" title="Static Site Generation">
+By setting `config.rendering = 'static'` and exporting `generateStaticParams()`, Cloudwerk will pre-render these pages at build time. This results in instant page loads since HTML is served directly from Cloudflare's edge network.
+</Aside>
+
+## Step 10: Create the About Page
+
+Add a static about page:
+
+```tsx title="app/about/page.tsx"
+export default function AboutPage() {
+  return (
+    <div class="min-h-screen bg-gray-100 py-12 px-4">
+      <div class="max-w-2xl mx-auto">
+        <nav class="mb-8 flex gap-4">
+          <a href="/" class="text-blue-600 hover:underline">Home</a>
+          <a href="/about" class="text-blue-600 hover:underline font-semibold">About</a>
+        </nav>
+
+        <article class="bg-white rounded-lg shadow-md p-8">
+          <h1 class="text-3xl font-bold text-gray-900 mb-6">About</h1>
+
+          <div class="prose prose-gray max-w-none">
+            <p class="mb-4 leading-relaxed">
+              Welcome to my blog! This is a demo application built with{' '}
+              <strong>Cloudwerk</strong>, a full-stack framework for Cloudflare Workers.
+            </p>
+
+            <h2 class="text-2xl font-semibold mt-6 mb-3">Features</h2>
+            <ul class="list-disc list-inside mb-4 space-y-1">
+              <li>File-based routing with dynamic segments</li>
+              <li>Server-side rendering with Hono JSX</li>
+              <li>D1 database integration</li>
+              <li>Static site generation for blog posts</li>
+              <li>Tailwind CSS styling</li>
+            </ul>
+
+            <h2 class="text-2xl font-semibold mt-6 mb-3">Technology Stack</h2>
+            <ul class="list-disc list-inside mb-4 space-y-1">
+              <li>Cloudwerk framework</li>
+              <li>Cloudflare Workers</li>
+              <li>Cloudflare D1 (SQLite)</li>
+              <li>Hono JSX</li>
+              <li>Tailwind CSS v4</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </div>
+  )
+}
+```
+
+## Step 11: Run the Development Server
+
+Start the development server:
+
+```bash
+pnpm dev
+```
+
+Visit `http://localhost:3000` to see your blog!
+
+## Step 12: Build and Deploy
+
+<Steps>
+1. Build the application:
+
+   ```bash
+   pnpm build
+   ```
+
+   This will:
+   - Bundle your server code
+   - Process Tailwind CSS
+   - Pre-render static pages (posts)
+   - Output everything to `dist/`
+
+2. Apply migrations to production:
+
+   ```bash
+   wrangler d1 migrations apply blog-db --remote
+   ```
+
+3. Deploy to Cloudflare:
+
+   ```bash
+   pnpm deploy
+   ```
+</Steps>
+
+## Summary
+
+You've built a complete blog with:
+
+- **D1 Database**: Storing posts with full-text content and metadata
+- **Type-safe bindings**: Using `@cloudwerk/core/bindings` for database access
+- **Static Site Generation**: Pre-rendering blog posts for instant loads
+- **Dynamic routing**: Using `[slug]` for post URLs
+- **Tailwind CSS**: Modern, utility-first styling
+- **Server-side rendering**: Fast initial page loads
+
+## Next Steps
+
+- **[Database Guide](/guides/database/)** - Learn more about D1 patterns
+- **[Data Loading](/guides/data-loading/)** - Advanced loader patterns
+- **[Authentication](/guides/authentication/)** - Add user authentication
+- **[Deployment](/guides/deployment/)** - Production deployment options
