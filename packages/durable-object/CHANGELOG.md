@@ -1,5 +1,12 @@
 # @cloudwerk/durable-object
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`5f38299`](https://github.com/squirrelsoft-dev/cloudwerk/commit/5f3829954b73d119ef57bceddc6c806a5fbaca3c)]:
+  - @cloudwerk/core@0.14.0
+
 ## 0.1.0
 
 ### Minor Changes

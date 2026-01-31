@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/trigger",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Event-driven triggers for Cloudwerk (scheduled, queue, R2, webhooks)",
   "repository": {
     "type": "git",

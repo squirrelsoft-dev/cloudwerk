@@ -1,5 +1,27 @@
 # @cloudwerk/cli
 
+## 0.14.0
+
+### Minor Changes
+
+- [#221](https://github.com/squirrelsoft-dev/cloudwerk/pull/221) [`5f38299`](https://github.com/squirrelsoft-dev/cloudwerk/commit/5f3829954b73d119ef57bceddc6c806a5fbaca3c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - feat(cli): add Static Site Generation (SSG) support
+  - Use `getPlatformProxy()` from wrangler to access D1/KV/R2 bindings at build time
+  - Use Hono's `toSSG()` helper to generate static HTML files
+  - Add cloudwerk plugin to SSG Vite server for proper binding transforms
+  - Merge user's vite config with base config during build
+  - Pages with `generateStaticParams` export are pre-rendered at build time
+
+  fix(core): clean up debug logging from context and bindings modules
+
+  fix(vite-plugin): ensure binding transforms work correctly in SSG mode
+
+### Patch Changes
+
+- Updated dependencies [[`5f38299`](https://github.com/squirrelsoft-dev/cloudwerk/commit/5f3829954b73d119ef57bceddc6c806a5fbaca3c)]:
+  - @cloudwerk/core@0.14.0
+  - @cloudwerk/vite-plugin@0.6.1
+  - @cloudwerk/ui@0.14.0
+
 ## 0.13.0
 
 ### Minor Changes
