@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import starlightThemeGalaxy from 'starlight-theme-galaxy'
 import starlightPageActions from 'starlight-page-actions'
+import starlightLlmsTxt from 'starlight-llms-txt'
 
 export default defineConfig({
   site: 'https://cloudwerk.dev',
@@ -9,8 +10,42 @@ export default defineConfig({
     starlight({
       plugins: [
         starlightThemeGalaxy(),
-        starlightPageActions({
-          baseUrl: 'https://cloudwerk.dev/',
+        starlightPageActions(),
+        starlightLlmsTxt({
+            projectName: 'cloudwerk',
+            description: 'Cloudwerk is a full-stack framework for Cloudflare Workers',
+            customSets: [
+                {
+                    label: 'Getting Started',
+                    description: 'Learn the basics of Cloudwerk and how to get started quickly.',
+                    paths: '["/getting-started/**"]',
+                },
+                {
+                    label: 'Guides',
+                    description: 'In-depth guides to help you master Cloudwerk features and functionalities.',
+                    paths: '["/guides/**"]',
+                },
+                {
+                    label: 'API Reference',
+                    description: 'Reference documentation for Cloudwerk APIs.',
+                    paths: '["/api/**"]',
+                },
+                {
+                    label: 'Examples',
+                    description: 'In-depth examples to help you master Cloudwerk features and functionalities.',
+                    paths: '["/examples/**"]',
+                },
+                {
+                    label: 'Guides',
+                    description: 'In-depth guides to help you master Cloudwerk features and functionalities.',
+                    paths: '["/guides/**"]',
+                },
+                {
+                    label: 'Other Reference',
+                    description: 'In-depth reference documentation for Cloudwerk files',
+                    paths: '["/reference/**"]',
+                }
+            ],
         }),
       ],
       title: 'Cloudwerk',

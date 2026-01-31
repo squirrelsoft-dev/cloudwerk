@@ -59,6 +59,9 @@ importers:
       sharp:
         specifier: ^0.33.5
         version: 0.33.5
+      starlight-llms-txt:
+        specifier: ^0.7.0
+        version: 0.7.0(@astrojs/starlight@0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)))(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))
       starlight-page-actions:
         specifier: ^0.4.0
         version: 0.4.0(@astrojs/starlight@0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)))(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -84,6 +87,37 @@ importers:
       '@cloudwerk/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
+
+  examples/linkly:
+    dependencies:
+      '@cloudwerk/cli':
+        specifier: ^0.14.0
+        version: 0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      '@cloudwerk/core':
+        specifier: ^0.14.0
+        version: 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@cloudwerk/ui':
+        specifier: ^0.14.0
+        version: 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
       hono:
         specifier: ^4.0.0
         version: 4.11.5
@@ -588,6 +622,43 @@ packages:
 
   '@cloudflare/workers-types@4.20260130.0':
     resolution: {integrity: sha512-eVJZjA4o0ANE/RX5g6mBs5MKRQxcSJYDPsFj8SPul7FDSFv682UzwXK3i0CSdIy/rtDNrMRmwJZ8KxANg2bY8A==}
+
+  '@cloudwerk/cli@0.14.0':
+    resolution: {integrity: sha512-2FCO8Pjdr3xbZWoHuA9H90RWz4PCzrGrVIQgmVsHJVljdgZfAp57wHYPXoHasqhSJxSUpsq+WYyue8/eeT4Dwg==}
+    hasBin: true
+    peerDependencies:
+      typescript: ^5.0.0
+
+  '@cloudwerk/core@0.14.0':
+    resolution: {integrity: sha512-IF6vDELTJXkRLw4ah3+KbrEB2iezTojQq1tdH9/MdDPiJJ/A074AAE6uJO07dTRovUpZ4d9mf7VivbQzdrjXlQ==}
+    peerDependencies:
+      typescript: ^5.0.0
+      vite: ^5.0.0 || ^6.0.0
+
+  '@cloudwerk/ui@0.14.0':
+    resolution: {integrity: sha512-yVXE/9jWEi0dN5lGJskMxzNmkE5PR0VFoke/UhWtBisMJY535Yfil1wMr+yHy4F/qhnwSR+PpRrlxRwf6rfxmA==}
+    peerDependencies:
+      hono: ^4.0.0
+      react: ^19.0.0
+      react-dom: ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@cloudwerk/utils@0.6.1':
+    resolution: {integrity: sha512-i38vj6cLNNZ0Acsq88JOlVl5Drfzyl8vW+fT7waa6YcMU+m3m7EXMdzhsaQuQibDv9hQBLo7QkngjquxEsFI8g==}
+
+  '@cloudwerk/vite-plugin@0.6.1':
+    resolution: {integrity: sha512-qf4+nStwLVnlLWu0lzhcKNwdj8iQEVo0UnqTxyDmV0gjgmgEudkXxnABtXZchbSGqYWcPaJFnMDG+mMlaH95Ag==}
+    peerDependencies:
+      '@hono/vite-dev-server': '>=0.18.0'
+      hono: ^4.0.0
+      vite: ^5.0.0 || ^6.0.0
+    peerDependenciesMeta:
+      '@hono/vite-dev-server':
+        optional: true
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -1733,6 +1804,9 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
 
+  '@types/braces@3.0.5':
+    resolution: {integrity: sha512-SQFof9H+LXeWNz8wDe7oN5zu7ket0qwMu5vZubW4GCJ8Kkeh6nBWUz87+KTz/G3Kqsrp0j/W253XJb3KMEeg3w==}
+
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
 
@@ -1759,6 +1833,9 @@ packages:
 
   '@types/mdx@2.0.13':
     resolution: {integrity: sha512-+OWZQfAYyio6YkJb3HLxDrvnx6SWWDbC0zVPfBRzUk0/nqoDyf6dNxQi3eArPe8rJ473nobTMQ/8Zk+LxJ+Yuw==}
+
+  '@types/micromatch@4.0.10':
+    resolution: {integrity: sha512-5jOhFDElqr4DKTrTEbnW8DZ4Hz5LRUEmyrGpCMrD/NphYv3nUnaF08xmSLx1rGGnyEs/kFnhiw6dCgcDqMr5PQ==}
 
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
@@ -2636,6 +2713,9 @@ packages:
 
   hast-util-to-jsx-runtime@2.3.6:
     resolution: {integrity: sha512-zl6s8LwNyo1P9uw+XJGvZtdFF1GdAkOg8ujOw+4Pyb76874fLps4ueHXDhXWdk6YHQ6OgUtinliG7RsYvCbbBg==}
+
+  hast-util-to-mdast@10.1.2:
+    resolution: {integrity: sha512-FiCRI7NmOvM4y+f5w32jPRzcxDIz+PUqDwEqn1A+1q2cdp3B8Gx7aVrXORdOKjMNDQsD1ogOr896+0jJHW1EFQ==}
 
   hast-util-to-parse5@8.0.1:
     resolution: {integrity: sha512-MlWT6Pjt4CG9lFCjiz4BH7l9wmrMkfkJYCxFwKQic8+RTZgWPuWxwAfjJElsXkex7DJjfSJsQIt931ilUgmwdA==}
@@ -3596,6 +3676,9 @@ packages:
   rehype-format@5.0.1:
     resolution: {integrity: sha512-zvmVru9uB0josBVpr946OR8ui7nJEdzZobwLOOqHb/OOD88W0Vk2SqLwoVOj0fM6IPCCO6TaV9CvQvJMWwukFQ==}
 
+  rehype-minify-whitespace@6.0.2:
+    resolution: {integrity: sha512-Zk0pyQ06A3Lyxhe9vGtOtzz3Z0+qZ5+7icZ/PL/2x1SHPbKao5oB/g/rlc6BCTajqBb33JcOe71Ye1oFsuYbnw==}
+
   rehype-parse@9.0.1:
     resolution: {integrity: sha512-ksCzCD0Fgfh7trPDxr2rSylbwq9iYDkSn8TCDmEJ49ljEUBxDVCzCHv7QNzZOfODanX4+bWQ4WZqLCRWYLfhag==}
 
@@ -3604,6 +3687,9 @@ packages:
 
   rehype-recma@1.0.0:
     resolution: {integrity: sha512-lqA4rGUf1JmacCNWWZx0Wv1dHqMwxzsDWYMTowuplHF3xH0N/MmrZ/G3BDZnzAkRmxDadujCjaKM2hqYdCBOGw==}
+
+  rehype-remark@10.0.1:
+    resolution: {integrity: sha512-EmDndlb5NVwXGfUa4c9GPK+lXeItTilLhE6ADSaQuHr4JUlKw9MidzGzx4HpqZrNCt6vnHmEifXQiiA+CEnjYQ==}
 
   rehype-stringify@10.0.1:
     resolution: {integrity: sha512-k9ecfXHmIPuFVI61B9DeLPN0qFHfawM6RsuX48hoqlaKSF61RskNjSm1lI8PhBEM0MRdLxVVm4WmTqJQccH9mA==}
@@ -3764,6 +3850,13 @@ packages:
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
+  starlight-llms-txt@0.7.0:
+    resolution: {integrity: sha512-KAay6JLXqB0GiNQ481z3Z/h/y4xeAU55TUGLz+npjxcRvN3h/7rDxjmyLiphZF8xfoqqSTduQPanl5Ct4Je6kA==}
+    engines: {node: ^18.17.1 || ^20.3.0 || >=21.0.0}
+    peerDependencies:
+      '@astrojs/starlight': '>=0.31'
+      astro: ^5.15.9
+
   starlight-page-actions@0.4.0:
     resolution: {integrity: sha512-PJn6m1ERlwkI3coZKT1T2O0unZR9xbF++20ZHh+PdmAJmwVSIeXYTM9on7Hr8MnhCiYz0o1M7dWJo3G5c1mrWQ==}
     engines: {node: ^18.17.1 || ^20.3.0 || >=21.0.0}
@@ -3912,6 +4005,9 @@ packages:
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
 
+  trim-trailing-lines@2.1.0:
+    resolution: {integrity: sha512-5UR5Biq4VlVOtzqkm2AZlgvSlDJtME46uV0br0gENbwN4l5+mMKT4b9gJKqWtuL2zAIqajGJGuvbCbcAJUZqBg==}
+
   trough@2.2.0:
     resolution: {integrity: sha512-tmMpK00BjZiUyVyvrBK7knerNgmgvcV/KLVyuma/SC+TQN167GrMRciANTz09+k3zW8L8t60jWO1GpfkZdjTaw==}
 
@@ -4032,6 +4128,9 @@ packages:
 
   unist-util-remove-position@5.0.0:
     resolution: {integrity: sha512-Hp5Kh3wLxv0PHj9m2yZhhLt58KzPtEYKQQ4yxfYFEO7EvHwzyDYnduhHnY1mDxoqr7VUwVuHXk9RXKIiYS1N8Q==}
+
+  unist-util-remove@4.0.0:
+    resolution: {integrity: sha512-b4gokeGId57UVRX/eVKej5gXqGlc9+trkORhFJpu9raqZkZhU0zm8Doi05+HaiBsMEIJowL+2WtQ5ItjsngPXg==}
 
   unist-util-stringify-position@4.0.0:
     resolution: {integrity: sha512-0ASV06AAoKCDkS2+xw5RXJywruurpbC4JZSm7nr7MOt1ojAzvyyaO+UxZf18j8FCF6kmzCZKcAgN/yu2gm2XgQ==}
@@ -4698,6 +4797,81 @@ snapshots:
     optional: true
 
   '@cloudflare/workers-types@4.20260130.0': {}
+
+  '@cloudwerk/cli@0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
+    dependencies:
+      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@cloudwerk/ui': 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@cloudwerk/vite-plugin': 0.6.1(@hono/vite-dev-server@0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0)))(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@hono/node-server': 1.19.9(hono@4.11.5)
+      '@hono/vite-build': 1.9.2(hono@4.11.5)
+      '@hono/vite-dev-server': 0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0))
+      '@iarna/toml': 2.2.5
+      '@inquirer/prompts': 8.2.0(@types/node@20.19.30)
+      commander: 12.1.0
+      esbuild: 0.25.12
+      picocolors: 1.1.1
+      typescript: 5.9.3
+      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+      wrangler: 4.61.1(@cloudflare/workers-types@4.20260130.0)
+    transitivePeerDependencies:
+      - '@cloudflare/workers-types'
+      - '@swc/helpers'
+      - '@types/node'
+      - bufferutil
+      - hono
+      - jiti
+      - less
+      - lightningcss
+      - miniflare
+      - react
+      - react-dom
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - utf-8-validate
+      - yaml
+
+  '@cloudwerk/core@0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
+    dependencies:
+      '@cloudwerk/utils': 0.6.1
+      esbuild: 0.25.12
+      fast-glob: 3.3.3
+      hono: 4.11.5
+      typescript: 5.9.3
+      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+
+  '@cloudwerk/ui@0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
+    dependencies:
+      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@cloudwerk/utils': 0.6.1
+      hono: 4.11.5
+    optionalDependencies:
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+    transitivePeerDependencies:
+      - typescript
+      - vite
+
+  '@cloudwerk/utils@0.6.1': {}
+
+  '@cloudwerk/vite-plugin@0.6.1(@hono/vite-dev-server@0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0)))(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
+    dependencies:
+      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@cloudwerk/ui': 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@swc/core': 1.15.11
+      hono: 4.11.5
+      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+    optionalDependencies:
+      '@hono/vite-dev-server': 0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0))
+    transitivePeerDependencies:
+      - '@swc/helpers'
+      - react
+      - react-dom
+      - typescript
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -5604,6 +5778,8 @@ snapshots:
       tailwindcss: 4.1.18
       vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
 
+  '@types/braces@3.0.5': {}
+
   '@types/debug@4.1.12':
     dependencies:
       '@types/ms': 2.1.0
@@ -5634,6 +5810,10 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/mdx@2.0.13': {}
+
+  '@types/micromatch@4.0.10':
+    dependencies:
+      '@types/braces': 3.0.5
 
   '@types/ms@2.1.0': {}
 
@@ -6797,6 +6977,23 @@ snapshots:
       vfile-message: 4.0.3
     transitivePeerDependencies:
       - supports-color
+
+  hast-util-to-mdast@10.1.2:
+    dependencies:
+      '@types/hast': 3.0.4
+      '@types/mdast': 4.0.4
+      '@ungap/structured-clone': 1.3.0
+      hast-util-phrasing: 3.0.1
+      hast-util-to-html: 9.0.5
+      hast-util-to-text: 4.0.2
+      hast-util-whitespace: 3.0.0
+      mdast-util-phrasing: 4.1.0
+      mdast-util-to-hast: 13.2.1
+      mdast-util-to-string: 4.0.0
+      rehype-minify-whitespace: 6.0.2
+      trim-trailing-lines: 2.1.0
+      unist-util-position: 5.0.0
+      unist-util-visit: 5.1.0
 
   hast-util-to-parse5@8.0.1:
     dependencies:
@@ -7993,6 +8190,11 @@ snapshots:
       '@types/hast': 3.0.4
       hast-util-format: 1.1.0
 
+  rehype-minify-whitespace@6.0.2:
+    dependencies:
+      '@types/hast': 3.0.4
+      hast-util-minify-whitespace: 1.0.1
+
   rehype-parse@9.0.1:
     dependencies:
       '@types/hast': 3.0.4
@@ -8012,6 +8214,14 @@ snapshots:
       hast-util-to-estree: 3.1.3
     transitivePeerDependencies:
       - supports-color
+
+  rehype-remark@10.0.1:
+    dependencies:
+      '@types/hast': 3.0.4
+      '@types/mdast': 4.0.4
+      hast-util-to-mdast: 10.1.2
+      unified: 11.0.5
+      vfile: 6.0.3
 
   rehype-stringify@10.0.1:
     dependencies:
@@ -8293,6 +8503,25 @@ snapshots:
 
   stackback@0.0.2: {}
 
+  starlight-llms-txt@0.7.0(@astrojs/starlight@0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)))(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)):
+    dependencies:
+      '@astrojs/mdx': 4.3.13(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))
+      '@astrojs/starlight': 0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))
+      '@types/hast': 3.0.4
+      '@types/micromatch': 4.0.10
+      astro: 5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)
+      github-slugger: 2.0.0
+      hast-util-select: 6.0.4
+      micromatch: 4.0.8
+      rehype-parse: 9.0.1
+      rehype-remark: 10.0.1
+      remark-gfm: 4.0.1
+      remark-stringify: 11.0.0
+      unified: 11.0.5
+      unist-util-remove: 4.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   starlight-page-actions@0.4.0(@astrojs/starlight@0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3)))(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))(vite@6.4.1(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)):
     dependencies:
       '@astrojs/starlight': 0.37.4(astro@5.16.15(@types/node@22.19.7)(jiti@2.6.1)(lightningcss@1.30.2)(rollup@4.56.0)(typescript@5.9.3))
@@ -8439,6 +8668,8 @@ snapshots:
 
   trim-lines@3.0.1: {}
 
+  trim-trailing-lines@2.1.0: {}
+
   trough@2.2.0: {}
 
   ts-api-utils@1.4.3(typescript@5.9.3):
@@ -8567,6 +8798,12 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
       unist-util-visit: 5.1.0
+
+  unist-util-remove@4.0.0:
+    dependencies:
+      '@types/unist': 3.0.3
+      unist-util-is: 6.0.1
+      unist-util-visit-parents: 6.0.2
 
   unist-util-stringify-position@4.0.0:
     dependencies:
