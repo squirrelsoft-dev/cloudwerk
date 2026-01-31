@@ -1,0 +1,17 @@
+name = "blog"
+main = "dist/index.js"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2024-09-23"
+account_id = "your_account_id"
+
+[build]
+command = "npm run build"
+
+[assets]
+directory = "dist/static"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blog-db"
+database_id = "your_database_id"
+migrations_dir = "migrations"
