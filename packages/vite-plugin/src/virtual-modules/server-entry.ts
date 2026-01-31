@@ -64,6 +64,13 @@ export function generateServerEntry(
   let errorIndex = 0
   let notFoundIndex = 0
 
+  // Track page info for SSG endpoint generation
+  const ssgPageInfo: Array<{
+    varName: string
+    urlPattern: string
+    hasDynamicSegments: boolean
+  }> = []
+
   // Import all error boundary modules for global handler lookup
   for (const err of scanResult.errors) {
     if (!importedModules.has(err.absolutePath)) {
@@ -131,6 +138,12 @@ export function generateServerEntry(
       const varName = `page_${pageIndex++}`
       imports.push(`import * as ${varName} from '${route.absolutePath}'`)
 
+      // Track for SSG endpoint
+      const hasDynamicSegments = route.segments.some(
+        (s) => s.type === 'dynamic' || s.type === 'catchAll' || s.type === 'optionalCatchAll'
+      )
+      ssgPageInfo.push({ varName, urlPattern: route.urlPattern, hasDynamicSegments })
+
       // Generate layout chain for this route
       const layoutChain = route.layouts.map((p) => layoutModules.get(p)!).join(', ')
       const middlewareChain = route.middleware.map((p) => middlewareModules.get(p)!).join(', ')
@@ -182,6 +195,7 @@ export function generateServerEntry(
  */
 
 import { Hono } from 'hono'
+import { ssgParams } from 'hono/ssg'
 import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'
 import { setActiveRenderer } from '@cloudwerk/ui'
 
@@ -352,6 +366,11 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
     })
   }
 
+  // Apply SSG params middleware if page has generateStaticParams (for static generation)
+  if (typeof pageModule.generateStaticParams === 'function') {
+    app.use(pattern, ssgParams(pageModule.generateStaticParams))
+  }
+
   // Register GET handler for page
   app.get(pattern, async (c) => {
     const params = c.req.param()
@@ -516,6 +535,13 @@ app.use('*', async (c, next) => {
 ${pageRegistrations.join('\n')}
 ${routeRegistrations.join('\n')}
 
+// SSG routes endpoint - returns all static routes for build-time generation
+app.get('/__ssg/routes', async (c) => {
+  const routes = []
+${generateSSGRouteChecks(ssgPageInfo)}
+  return c.json({ routes })
+})
+
 // 404 handler
 app.notFound(async (c) => {
   const path = c.req.path
@@ -586,6 +612,48 @@ export default app
 ${generateQueueExports(queueManifest)}
 ${generateServiceRegistration(serviceManifest)}
 `
+}
+
+/**
+ * Generate the SSG route check code for each page.
+ * For dynamic routes, calls generateStaticParams to get all params.
+ * For static routes, checks if config.rendering === 'static'.
+ */
+function generateSSGRouteChecks(
+  pages: Array<{ varName: string; urlPattern: string; hasDynamicSegments: boolean }>
+): string {
+  const lines: string[] = []
+
+  for (const page of pages) {
+    if (page.hasDynamicSegments) {
+      // Dynamic route - need to call generateStaticParams
+      lines.push(`  // ${page.urlPattern}`)
+      lines.push(`  if (typeof ${page.varName}.generateStaticParams === 'function') {`)
+      lines.push(`    try {`)
+      lines.push(`      const params = await ${page.varName}.generateStaticParams()`)
+      lines.push(`      if (Array.isArray(params)) {`)
+      lines.push(`        for (const p of params) {`)
+      lines.push(`          let url = '${page.urlPattern}'`)
+      lines.push(`          for (const [key, value] of Object.entries(p)) {`)
+      lines.push(`            url = url.replace(':' + key, String(value))`)
+      lines.push(`          }`)
+      lines.push(`          routes.push(url)`)
+      lines.push(`        }`)
+      lines.push(`      }`)
+      lines.push(`    } catch (e) {`)
+      lines.push(`      console.error('SSG: Failed to get params for ${page.urlPattern}:', e)`)
+      lines.push(`    }`)
+      lines.push(`  }`)
+    } else {
+      // Static route - check if it has config.rendering === 'static'
+      lines.push(`  // ${page.urlPattern}`)
+      lines.push(`  if ('config' in ${page.varName} && ${page.varName}.config?.rendering === 'static') {`)
+      lines.push(`    routes.push('${page.urlPattern}')`)
+      lines.push(`  }`)
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /**

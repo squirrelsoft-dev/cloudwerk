@@ -5,6 +5,7 @@
  */
 
 import type { Context as HonoContext, MiddlewareHandler } from 'hono'
+import type { UserConfig as ViteUserConfig } from 'vite'
 
 // Re-export Context for backward compatibility
 type Context = HonoContext
@@ -308,6 +309,24 @@ export interface CloudwerkConfig {
    * UI renderer configuration.
    */
   ui?: UIConfig
+
+  /**
+   * Vite configuration to merge with the default Cloudwerk Vite config.
+   * Use this to add custom Vite plugins, configure build options, etc.
+   *
+   * @example
+   * ```typescript
+   * import { defineConfig } from '@cloudwerk/core'
+   * import tailwindcss from '@tailwindcss/vite'
+   *
+   * export default defineConfig({
+   *   vite: {
+   *     plugins: [tailwindcss()],
+   *   },
+   * })
+   * ```
+   */
+  vite?: ViteUserConfig
 }
 
 /**

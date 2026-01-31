@@ -77,6 +77,7 @@ export function mergeConfig(
     basePath: user.basePath ?? defaults.basePath,
     debug: user.debug ?? defaults.debug,
     ui: user.ui ?? defaults.ui,
+    vite: user.vite ?? defaults.vite,
   }
 }
 
@@ -123,7 +124,9 @@ async function compileTypeScriptConfig(configPath: string): Promise<string> {
     format: 'esm',
     platform: 'node',
     target: 'node20',
-    external: ['@cloudwerk/core'], // Don't bundle the core package
+    // Externalize all packages - they'll be resolved from node_modules at runtime.
+    // This prevents bundling native modules (.node files) and vite plugins.
+    packages: 'external',
   })
 
   // Write temp file in the same directory as the config so it can resolve node_modules
@@ -160,7 +163,7 @@ export async function loadConfig(cwd: string): Promise<CloudwerkConfig> {
       importPath = pathToFileURL(tempFile).href
     }
 
-    const configModule = await import(importPath)
+    const configModule = await import(/* @vite-ignore */ importPath)
     const userConfig = configModule.default as CloudwerkUserConfig
 
     return mergeConfig(DEFAULT_CONFIG, userConfig)
