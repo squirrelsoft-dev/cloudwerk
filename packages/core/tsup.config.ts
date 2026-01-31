@@ -7,6 +7,7 @@ export default defineConfig({
     build: 'src/build.ts',
     bindings: 'src/bindings.ts',
     'context-exports': 'src/context-exports.ts',
+    'middleware/index': 'src/middleware/index.ts',
   },
   format: ['esm'],
   dts: true,

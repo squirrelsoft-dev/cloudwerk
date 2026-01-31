@@ -1,7 +1,7 @@
 /**
- * @cloudwerk/auth - Rate Limiting Types
+ * @cloudwerk/core - Rate Limiting Types
  *
- * Type definitions for rate limiting.
+ * Type definitions for rate limiting middleware.
  */
 
 // ============================================================================
