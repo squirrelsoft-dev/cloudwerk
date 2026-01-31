@@ -111,9 +111,17 @@ export default function ShortenForm() {
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 truncate">
-            Original: {result.url}
-          </p>
+          <div class="flex items-center justify-between mt-3 pt-3 border-t border-green-200 dark:border-green-800">
+            <p class="text-xs text-gray-500 dark:text-gray-500 truncate flex-1 mr-4">
+              Original: {result.url}
+            </p>
+            <a
+              href={`/stats/${result.code}`}
+              class="text-xs text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+            >
+              View Stats
+            </a>
+          </div>
         </div>
       )}
     </div>
