@@ -1,0 +1,447 @@
+---
+interface Props {
+  title?: string;
+  tagline?: string;
+}
+
+const {} = Astro.props;
+---
+
+<section class="hero-section">
+  <div class="hero-content">
+    <p class="badge pre-alpha">Pre-Alpha</p>
+    <h1 class="hero-headline">
+      Build for the Edge.<br/>
+      Ship Without the Complexity.
+    </h1>
+    <p class="hero-subheadline">
+      Cloudwerk is a full-stack framework for Cloudflare Workers.
+      Start simple. Scale infinitely. One codebase. One deploy command.
+    </p>
+    <div class="hero-actions">
+      <a href="/getting-started/installation/" class="hero-button primary">
+        <span>Get Started</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+      <a href="https://github.com/squirrelsoft-dev/cloudwerk" class="hero-button secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+        </svg>
+        <span>View on GitHub</span>
+      </a>
+    </div>
+    <div class="hero-stats">
+      <span>Zero cold starts</span>
+      <span class="separator">•</span>
+      <span>Global edge deployment</span>
+      <span class="separator">•</span>
+      <span>Built on Cloudflare</span>
+    </div>
+  </div>
+
+  <div class="hero-terminal">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+        <span class="terminal-title">Terminal</span>
+      </div>
+      <div class="terminal-body">
+        <div class="terminal-content" id="terminal-content">
+          <!-- Lines will be added here by JavaScript -->
+        </div>
+        <span class="cursor" id="cursor">█</span>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span>Scroll to explore</span>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 5v14M5 12l7 7 7-7"/>
+    </svg>
+  </div>
+</section>
+
+<style>
+  .hero-section {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    min-height: calc(100vh - 4rem);
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem 5rem;
+  }
+
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .badge.pre-alpha {
+    display: inline-block;
+    width: fit-content;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border-radius: 9999px;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .hero-headline {
+    font-size: 3.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #6d28d9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+  }
+
+  .hero-subheadline {
+    font-size: 1.25rem;
+    color: var(--sl-color-text-accent);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 500px;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .hero-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .hero-button.primary {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+  }
+
+  .hero-button.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+  }
+
+  .hero-button.secondary {
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-text);
+    border: 1px solid var(--sl-color-hairline);
+  }
+
+  .hero-button.secondary:hover {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-accent);
+  }
+
+  .hero-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--sl-color-text-accent);
+  }
+
+  .hero-stats .separator {
+    color: var(--sl-color-hairline);
+  }
+
+  .hero-terminal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .terminal-window {
+    background: #1e1e2e;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot.red { background: #f38ba8; }
+  .dot.yellow { background: #f9e2af; }
+  .dot.green { background: #a6e3a1; }
+
+  .terminal-title {
+    margin-left: 0.5rem;
+    font-size: 0.8125rem;
+    color: #6c7086;
+  }
+
+  .terminal-body {
+    padding: 1.25rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    color: #cdd6f4;
+    min-height: 280px;
+    position: relative;
+  }
+
+  .terminal-content {
+    display: block;
+  }
+
+  /* Use :global() for dynamically created elements */
+  .terminal-content :global(.terminal-line) {
+    display: block;
+    white-space: pre-wrap;
+  }
+
+  .terminal-content :global(.terminal-line.command) {
+    color: #cdd6f4;
+  }
+
+  .terminal-content :global(.terminal-line.output) {
+    color: #6c7086;
+  }
+
+  .terminal-content :global(.terminal-line.success) {
+    color: #a6e3a1;
+  }
+
+  .terminal-content :global(.terminal-line.highlight) {
+    color: #f9e2af;
+  }
+
+  .cursor {
+    display: inline;
+    color: #cdd6f4;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--sl-color-accent);
+    font-size: 0.875rem;
+    animation: bounce 2s infinite;
+    cursor: pointer;
+  }
+
+  .scroll-hint svg {
+    opacity: 0.7;
+  }
+
+  @keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+      transform: translateY(0);
+    }
+    40% {
+      transform: translateY(-10px);
+    }
+    60% {
+      transform: translateY(-5px);
+    }
+  }
+
+  @media (max-width: 900px) {
+    .hero-section {
+      grid-template-columns: 1fr;
+      text-align: center;
+      min-height: auto;
+      padding: 4rem 1.5rem;
+      gap: 3rem;
+    }
+
+    .hero-content {
+      align-items: center;
+    }
+
+    .hero-headline {
+      font-size: 2.5rem;
+    }
+
+    .hero-subheadline {
+      max-width: 100%;
+    }
+
+    .hero-actions {
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .hero-stats {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .hero-terminal {
+      order: -1;
+    }
+
+    .terminal-body {
+      min-height: 240px;
+    }
+
+    .scroll-hint {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  interface TerminalLine {
+    type: 'command' | 'output' | 'success' | 'highlight';
+    text: string;
+    typeDelay?: number;
+    postDelay?: number;
+  }
+
+  const lines: TerminalLine[] = [
+    { type: 'command', text: '$ npx @cloudwerk/create-app my-app', typeDelay: 35, postDelay: 400 },
+    { type: 'command', text: '$ cd my-app', typeDelay: 35, postDelay: 300 },
+    { type: 'command', text: '$ cloudwerk dev', typeDelay: 35, postDelay: 600 },
+    { type: 'output', text: '', postDelay: 200 },
+    { type: 'success', text: '✓ Routes compiled (3 routes)', postDelay: 150 },
+    { type: 'success', text: '✓ Database ready (D1)', postDelay: 150 },
+    { type: 'success', text: '✓ Types generated', postDelay: 300 },
+    { type: 'output', text: '', postDelay: 100 },
+    { type: 'highlight', text: '🚀 Server running at http://localhost:8787', postDelay: 0 },
+  ];
+
+  async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function typeText(
+    container: HTMLElement,
+    cursor: HTMLElement,
+    text: string,
+    className: string,
+    typeDelay: number
+  ): Promise<void> {
+    const span = document.createElement('span');
+    span.className = `terminal-line ${className}`;
+    container.appendChild(span);
+
+    // Create a text node for the typed content
+    const textNode = document.createTextNode('');
+    span.appendChild(textNode);
+    span.appendChild(cursor);
+
+    for (let i = 0; i < text.length; i++) {
+      textNode.textContent += text[i];
+      await sleep(typeDelay);
+    }
+
+    // Move cursor back to container after typing
+    container.appendChild(cursor);
+  }
+
+  async function addLine(
+    container: HTMLElement,
+    cursor: HTMLElement,
+    text: string,
+    className: string
+  ): Promise<void> {
+    const span = document.createElement('span');
+    span.className = `terminal-line ${className}`;
+    span.textContent = text;
+    container.appendChild(span);
+    container.appendChild(cursor);
+  }
+
+  async function runTerminalAnimation(): Promise<void> {
+    const container = document.getElementById('terminal-content');
+    const cursor = document.getElementById('cursor');
+
+    if (!container || !cursor) return;
+
+    // Clear any existing content using safe DOM methods
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
+    container.appendChild(cursor);
+
+    for (const line of lines) {
+      if (line.type === 'command' && line.typeDelay) {
+        // Type out commands character by character
+        await typeText(container, cursor, line.text, line.type, line.typeDelay);
+      } else {
+        // Show output lines instantly
+        await addLine(container, cursor, line.text, line.type);
+      }
+
+      if (line.postDelay) {
+        await sleep(line.postDelay);
+      }
+    }
+
+    // Hide cursor after animation completes
+    cursor.style.display = 'none';
+
+    // Restart animation after a pause
+    await sleep(5000);
+    runTerminalAnimation();
+  }
+
+  // Start animation when page loads
+  document.addEventListener('DOMContentLoaded', () => {
+    // Small delay before starting
+    setTimeout(runTerminalAnimation, 500);
+
+    // Scroll hint click handler
+    const scrollHint = document.querySelector('.hero-section .scroll-hint');
+    if (scrollHint) {
+      scrollHint.addEventListener('click', () => {
+        window.scrollBy({
+          top: window.innerHeight,
+          behavior: 'smooth'
+        });
+      });
+    }
+  });
+</script>

@@ -1,0 +1,411 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface CodeFile {
+  name: string;
+  path: string;
+  code: string;
+  lang?: string;
+}
+
+interface Props {
+  files: string[];
+  highlight?: string[];
+  codeFiles: CodeFile[];
+  activeTab?: number;
+}
+
+const { files, highlight = [], codeFiles, activeTab = 0 } = Astro.props;
+
+function isHighlighted(file: string, highlights: string[]): boolean {
+  const name = file.replace(/^.*[│├└─\s]+/, '').trim();
+  return highlights.some(h => name.includes(h) || file.includes(h));
+}
+
+const uniqueId = Math.random().toString(36).substring(7);
+---
+
+<div class="ide-panel" data-ide-id={uniqueId}>
+  <div class="ide-header">
+    <div class="window-controls">
+      <span class="dot red"></span>
+      <span class="dot yellow"></span>
+      <span class="dot green"></span>
+    </div>
+    <span class="ide-title">Cloudwerk Project</span>
+  </div>
+
+  <div class="ide-body">
+    <aside class="ide-sidebar">
+      <div class="sidebar-header">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 3h18v18H3z"/>
+        </svg>
+        <span>Explorer</span>
+      </div>
+      <div class="file-tree">
+        {files.map(file => {
+          const highlighted = isHighlighted(file, highlight);
+          const fileName = file.replace(/^.*[│├└─\s]+/, '').trim();
+          const isClickable = codeFiles.some(cf => cf.path.includes(fileName) || fileName.includes(cf.name));
+          const tabIndex = codeFiles.findIndex(cf => cf.path.includes(fileName) || fileName.includes(cf.name));
+
+          return (
+            <div
+              class={`file-line ${highlighted ? 'highlighted' : ''} ${isClickable ? 'clickable' : ''}`}
+              data-tab-index={isClickable ? tabIndex : undefined}
+            >
+              <code>{file}</code>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
+
+    <main class="ide-main">
+      <div class="tab-bar">
+        {codeFiles.map((file, index) => (
+          <button
+            class={`tab ${index === activeTab ? 'active' : ''}`}
+            data-tab={index}
+          >
+            <span class="tab-icon">
+              {file.lang === 'tsx' || file.lang === 'jsx' ? '⚛️' :
+               file.lang === 'ts' || file.lang === 'typescript' ? '📘' : '📄'}
+            </span>
+            <span class="tab-name">{file.name}</span>
+            <span class="tab-path">{file.path}</span>
+          </button>
+        ))}
+      </div>
+
+      <div class="code-panels">
+        {codeFiles.map((file, index) => (
+          <div class={`code-panel ${index === activeTab ? 'active' : ''}`} data-panel={index}>
+            <Code code={file.code} lang={file.lang || 'typescript'} />
+          </div>
+        ))}
+      </div>
+    </main>
+  </div>
+</div>
+
+<style>
+  /* Light theme (Catppuccin Latte) */
+  .ide-panel {
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-hairline);
+    background: #eff1f5;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .ide-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: #e6e9ef;
+    border-bottom: 1px solid #ccd0da;
+  }
+
+  .window-controls {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot.red { background: #d20f39; }
+  .dot.yellow { background: #df8e1d; }
+  .dot.green { background: #40a02b; }
+
+  .ide-title {
+    font-size: 0.75rem;
+    color: #6c6f85;
+    font-family: system-ui, sans-serif;
+  }
+
+  .ide-body {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: 350px;
+    max-height: 450px;
+  }
+
+  .ide-sidebar {
+    background: #eff1f5;
+    border-right: 1px solid #ccd0da;
+    overflow: auto;
+  }
+
+  .sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6c6f85;
+    border-bottom: 1px solid #ccd0da;
+  }
+
+  .sidebar-header svg {
+    stroke: #6c6f85;
+  }
+
+  .file-tree {
+    padding: 0.25rem 0;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+  }
+
+  .file-line {
+    padding: 0 0.75rem;
+    white-space: pre;
+    color: #4c4f69;
+    line-height: 1.1;
+    margin: 0;
+  }
+
+  .file-line code {
+    background: none;
+    font-size: inherit;
+    color: inherit;
+    line-height: inherit;
+    padding: 0;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    display: inline;
+  }
+
+  .file-line.highlighted {
+    background: rgba(136, 57, 239, 0.1);
+    color: #8839ef;
+  }
+
+  .file-line.clickable {
+    cursor: pointer;
+  }
+
+  .file-line.clickable:hover {
+    background: rgba(136, 57, 239, 0.08);
+  }
+
+  .ide-main {
+    display: flex;
+    flex-direction: column;
+    background: #eff1f5;
+    overflow: hidden;
+  }
+
+  .tab-bar {
+    display: flex;
+    background: #e6e9ef;
+    border-bottom: 1px solid #ccd0da;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-right: 1px solid #ccd0da;
+    color: #6c6f85;
+    font-size: 0.75rem;
+    font-family: system-ui, sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .tab:hover {
+    background: rgba(136, 57, 239, 0.05);
+    color: #4c4f69;
+  }
+
+  .tab.active {
+    background: #eff1f5;
+    color: #4c4f69;
+    border-bottom: 2px solid #8839ef;
+    margin-bottom: -1px;
+  }
+
+  .tab-icon {
+    font-size: 0.875rem;
+  }
+
+  .tab-name {
+    font-weight: 500;
+  }
+
+  .tab-path {
+    color: #9ca0b0;
+    font-size: 0.6875rem;
+  }
+
+  .code-panels {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .code-panel {
+    display: none;
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+
+  .code-panel.active {
+    display: block;
+  }
+
+  .code-panel :global(pre) {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    background: #eff1f5 !important;
+    font-size: 0.8125rem;
+  }
+
+  .code-panel :global(code) {
+    background: none !important;
+  }
+
+  /* Dark theme (Catppuccin Mocha) */
+  :root[data-theme='dark'] .ide-panel {
+    background: #1e1e2e;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  :root[data-theme='dark'] .ide-header {
+    background: #181825;
+    border-bottom-color: #313244;
+  }
+
+  :root[data-theme='dark'] .dot.red { background: #f38ba8; }
+  :root[data-theme='dark'] .dot.yellow { background: #f9e2af; }
+  :root[data-theme='dark'] .dot.green { background: #a6e3a1; }
+
+  :root[data-theme='dark'] .ide-title {
+    color: #6c7086;
+  }
+
+  :root[data-theme='dark'] .ide-sidebar {
+    background: #1e1e2e;
+    border-right-color: #313244;
+  }
+
+  :root[data-theme='dark'] .sidebar-header {
+    color: #6c7086;
+    border-bottom-color: #313244;
+  }
+
+  :root[data-theme='dark'] .sidebar-header svg {
+    stroke: #6c7086;
+  }
+
+  :root[data-theme='dark'] .file-line {
+    color: #cdd6f4;
+  }
+
+  :root[data-theme='dark'] .file-line.highlighted {
+    background: rgba(203, 166, 247, 0.15);
+    color: #cba6f7;
+  }
+
+  :root[data-theme='dark'] .file-line.clickable:hover {
+    background: rgba(203, 166, 247, 0.1);
+  }
+
+  :root[data-theme='dark'] .ide-main {
+    background: #1e1e2e;
+  }
+
+  :root[data-theme='dark'] .tab-bar {
+    background: #181825;
+    border-bottom-color: #313244;
+  }
+
+  :root[data-theme='dark'] .tab {
+    border-right-color: #313244;
+    color: #6c7086;
+  }
+
+  :root[data-theme='dark'] .tab:hover {
+    background: rgba(203, 166, 247, 0.05);
+    color: #cdd6f4;
+  }
+
+  :root[data-theme='dark'] .tab.active {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-bottom-color: #cba6f7;
+  }
+
+  :root[data-theme='dark'] .tab-path {
+    color: #45475a;
+  }
+
+  :root[data-theme='dark'] .code-panel :global(pre) {
+    background: #1e1e2e !important;
+  }
+
+  @media (max-width: 768px) {
+    .ide-body {
+      grid-template-columns: 1fr;
+    }
+
+    .ide-sidebar {
+      display: none;
+    }
+  }
+</style>
+
+<script define:vars={{ uniqueId }}>
+  document.addEventListener('DOMContentLoaded', () => {
+    const panel = document.querySelector(`[data-ide-id="${uniqueId}"]`);
+    if (!panel) return;
+
+    const tabs = panel.querySelectorAll('.tab');
+    const codePanels = panel.querySelectorAll('.code-panel');
+    const fileLines = panel.querySelectorAll('.file-line.clickable');
+
+    function setActiveTab(index) {
+      tabs.forEach((tab, i) => {
+        tab.classList.toggle('active', i === index);
+      });
+      codePanels.forEach((codePanel, i) => {
+        codePanel.classList.toggle('active', i === index);
+      });
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => setActiveTab(index));
+    });
+
+    fileLines.forEach((line) => {
+      line.addEventListener('click', () => {
+        const tabIndex = parseInt(line.dataset.tabIndex || '0');
+        setActiveTab(tabIndex);
+      });
+    });
+  });
+</script>

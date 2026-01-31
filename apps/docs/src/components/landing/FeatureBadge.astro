@@ -1,0 +1,75 @@
+---
+interface Props {
+  label: string;
+  variant?: 'default' | 'new' | 'core' | 'storage' | 'compute' | 'auth';
+}
+
+const { label, variant = 'default' } = Astro.props;
+---
+
+<span class={`feature-badge ${variant}`}>{label}</span>
+
+<style>
+  .feature-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    white-space: nowrap;
+  }
+
+  .feature-badge.default {
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-text);
+    border: 1px solid var(--sl-color-hairline);
+  }
+
+  .feature-badge.new {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+  }
+
+  .feature-badge.core {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  :root[data-theme='dark'] .feature-badge.core {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
+
+  .feature-badge.storage {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  :root[data-theme='dark'] .feature-badge.storage {
+    background: #14532d;
+    color: #86efac;
+  }
+
+  .feature-badge.compute {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  :root[data-theme='dark'] .feature-badge.compute {
+    background: #451a03;
+    color: #fbbf24;
+  }
+
+  .feature-badge.auth {
+    background: #fce7f3;
+    color: #9d174d;
+  }
+
+  :root[data-theme='dark'] .feature-badge.auth {
+    background: #500724;
+    color: #f9a8d4;
+  }
+</style>

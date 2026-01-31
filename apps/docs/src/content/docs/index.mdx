@@ -2,132 +2,796 @@
 title: Cloudwerk
 description: A full-stack framework for Cloudflare Workers with file-based routing that compiles to Hono.
 template: splash
-hero:
-  tagline: Build fast, deploy faster. A full-stack framework for Cloudflare Workers with file-based routing, integrated D1, KV, R2, authentication, services, queues, and triggers.
-  image:
-    file: ../../assets/logo.svg
-  actions:
-    - text: Get Started
-      link: /getting-started/installation/
-      icon: right-arrow
-      variant: primary
-    - text: View on GitHub
-      link: https://github.com/squirrelsoft-dev/cloudwerk
-      icon: external
+pageActions: false
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Code } from '@astrojs/starlight/components';
+import Hero from '../../components/landing/Hero.astro';
+import Journey from '../../components/landing/Journey.astro';
+import JourneyStep from '../../components/landing/JourneyStep.astro';
+import JourneyStepper from '../../components/landing/JourneyStepper.astro';
+import IDEPanel from '../../components/landing/IDEPanel.astro';
+import Terminal from '../../components/landing/Terminal.astro';
+import FeatureBadge from '../../components/landing/FeatureBadge.astro';
+import FeaturesGrid from '../../components/landing/FeaturesGrid.astro';
+import ComparisonTable from '../../components/landing/ComparisonTable.astro';
+import CallToAction from '../../components/landing/CallToAction.astro';
 
-<p class="badge pre-alpha">Pre-Alpha</p>
+<Hero />
 
-## Why Cloudwerk?
+<JourneyStepper steps={[
+  { id: 'chapter-1', title: 'Chapter 1', subtitle: 'The Landing Page' },
+  { id: 'chapter-2', title: 'Chapter 2', subtitle: 'Confirmation Emails' },
+  { id: 'chapter-3', title: 'Chapter 3', subtitle: 'Background Jobs' },
+  { id: 'chapter-4', title: 'Chapter 4', subtitle: 'Viral Referrals' },
+  { id: 'chapter-5', title: 'Chapter 5', subtitle: 'Image Uploads' },
+  { id: 'chapter-6', title: 'Chapter 6', subtitle: 'External Integrations' },
+  { id: 'chapter-7', title: 'Chapter 7', subtitle: 'Service Extraction' },
+  { id: 'chapter-8', title: 'Chapter 8', subtitle: 'Admin Dashboard' },
+  { id: 'journey-complete', title: 'Complete', subtitle: 'Production-Ready' },
+]} />
 
-Cloudwerk brings the developer experience of modern frameworks like Next.js to Cloudflare Workers. Write intuitive file-based routes, use familiar patterns for data loading, and deploy globally in seconds.
+<Journey>
 
-<CardGrid stagger>
-  <Card title="File-Based Routing" icon="document">
-    Intuitive routing powered by your file structure. Create `page.tsx` and `route.ts` files, and Cloudwerk handles the rest.
-  </Card>
-  <Card title="Compiles to Hono" icon="rocket">
-    Your routes compile to Hono, giving you the performance and flexibility of one of the fastest web frameworks.
-  </Card>
-  <Card title="Cloudflare Native" icon="cloud">
-    First-class support for D1, KV, R2, Durable Objects, Queues, and all Cloudflare primitives.
-  </Card>
-  <Card title="Edge-First" icon="lightning">
-    Deploy to 300+ edge locations worldwide. Your code runs milliseconds from your users.
-  </Card>
-</CardGrid>
+<JourneyStep
+  id="chapter-1"
+  chapter={1}
+  title="The Landing Page"
+  subtitle="You have an idea. Let's validate it."
+  description="Every great product starts with a landing page. With Cloudwerk, you're production-ready in minutes—not hours. Just create a route, connect your database, and deploy."
+  features={[
+    { label: 'Routes', variant: 'core' },
+    { label: 'D1 Database', variant: 'storage' },
+  ]}
+  active={true}
+>
 
-## Quick Example
-
-Create a page with data loading in seconds:
-
-```tsx
-// app/users/[id]/page.tsx
-import type { PageProps, LoaderArgs } from '@cloudwerk/core';
-
-export async function loader({ params, context }: LoaderArgs) {
-  const user = await context.db
-    .selectFrom('users')
-    .where('id', '=', params.id)
-    .executeTakeFirst();
-
-  if (!user) throw new NotFoundError();
-  return { user };
-}
-
-export default function UserPage({ user }: PageProps & { user: User }) {
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "└── api/",
+    "    └── waitlist/",
+    "        └── route.ts",
+  ]}
+  highlight={['page.tsx', 'route.ts']}
+  codeFiles={[
+    {
+      name: "page.tsx",
+      path: "app/page.tsx",
+      lang: "tsx",
+      code: `export default function Home() {
   return (
-    <div>
-      <h1>{user.name}</h1>
-      <p>{user.email}</p>
-    </div>
+    <main>
+      <h1>Coming Soon</h1>
+      <form action="/api/waitlist" method="POST">
+        <input name="email" type="email" required />
+        <button type="submit">Join Waitlist</button>
+      </form>
+    </main>
   );
+}`
+    },
+    {
+      name: "route.ts",
+      path: "app/api/waitlist/route.ts",
+      lang: "ts",
+      code: `import { db } from '@cloudwerk/bindings'
+
+export async function POST(request: Request) {
+  const { email } = await request.json()
+
+  await db.prepare(\`
+    INSERT INTO waitlist (email, created_at)
+    VALUES (?, datetime('now'))
+  \`).bind(email).run()
+
+  return Response.json({ success: true })
+}`
+    }
+  ]}
+/>
+
+<Terminal
+  title="Deploy"
+  lines={[
+    "$ cloudwerk deploy",
+    "",
+    "Deploying to Cloudflare...",
+    "✓ Routes compiled (2 routes)",
+    "✓ Database migrated",
+    "",
+    "🚀 https://mylaunch.dev",
+  ]}
+/>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-2"
+  chapter={2}
+  title="Confirmation Emails"
+  subtitle="People are signing up! Let's confirm their interest."
+  description="Create a reusable email service that lives alongside your app. Services start local—running in the same worker—so there's zero latency and zero configuration."
+  features={[
+    { label: '+ Services (Local)', variant: 'new' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── api/",
+    "│   └── waitlist/",
+    "│       └── route.ts",
+    "└── services/",
+    "    └── email/",
+    "        └── service.ts",
+  ]}
+  highlight={['service.ts', 'route.ts']}
+  codeFiles={[
+    {
+      name: "service.ts",
+      path: "app/services/email/service.ts",
+      lang: "ts",
+      code: `import { defineService } from '@cloudwerk/service'
+
+interface EmailService {
+  sendWelcome(params: { to: string; position: number }): Promise<void>
 }
-```
 
-## Features at a Glance
+export default defineService<EmailService>({
+  name: 'email',
 
-- **File-based routing** - Pages, layouts, and API routes from your file structure
-- **Server-side rendering** - Built-in SSR with streaming support
-- **Data loading** - `loader()` functions for server-side data fetching
-- **Middleware** - Request middleware at any route level
-- **Authentication** - Full auth system with providers, sessions, RBAC, and multi-tenancy
-- **Services** - Reusable services with local or extracted Worker modes
-- **Queues** - Type-safe queue consumers with schema validation and DLQ
-- **Triggers** - Event-driven handlers for cron, webhooks, R2, email, D1, and more
-- **Durable Objects** - Convention-based DOs with native RPC and WebSockets
-- **Database** - First-class D1 integration with query builder
-- **Storage** - KV and R2 bindings made simple
-- **Type-safe** - Full TypeScript support throughout
+  methods: {
+    async sendWelcome({ to, position }) {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': \`Bearer \${env.RESEND_API_KEY}\`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to,
+          subject: \`You're #\${position} on the waitlist!\`,
+          html: \`<h1>You're in!</h1><p>You're #\${position} in line.</p>\`,
+        }),
+      })
+    },
+  },
+})`
+    },
+    {
+      name: "route.ts",
+      path: "app/api/waitlist/route.ts",
+      lang: "ts",
+      code: `import { db, services } from '@cloudwerk/bindings'
 
-## Getting Started
+export async function POST(request: Request) {
+  const { email } = await request.json()
 
-<CardGrid>
-  <Card title="Installation" icon="rocket">
-    Set up a new Cloudwerk project in minutes.
+  const result = await db.prepare(\`
+    INSERT INTO waitlist (email) VALUES (?) RETURNING id
+  \`).bind(email).first()
 
-    [Install Cloudwerk](/getting-started/installation/)
-  </Card>
-  <Card title="Quick Start" icon="pencil">
-    Build your first page and API route.
+  await services.email.sendWelcome({
+    to: email,
+    position: result.id
+  })
 
-    [Quick Start Guide](/getting-started/quick-start/)
-  </Card>
-  <Card title="Project Structure" icon="folder">
-    Learn the Cloudwerk file conventions.
+  return Response.json({ success: true, position: result.id })
+}`
+    }
+  ]}
+/>
+</div>
 
-    [Project Structure](/getting-started/project-structure/)
-  </Card>
-  <Card title="Examples" icon="code">
-    Explore full example applications.
+</JourneyStep>
 
-    [View Examples](/examples/blog/)
-  </Card>
-</CardGrid>
+<JourneyStep
+  id="chapter-3"
+  chapter={3}
+  title="Don't Block the Response"
+  subtitle="Emails are slowing down signups. Let's queue them."
+  description="Sending emails inline adds latency. Move them to a queue and respond instantly. Cloudwerk queues are just files—define a handler and start sending."
+  features={[
+    { label: '+ Queues', variant: 'new' },
+  ]}
+>
 
-## Core Packages
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── api/",
+    "│   └── waitlist/",
+    "│       └── route.ts",
+    "├── services/",
+    "│   └── email/",
+    "│       └── service.ts",
+    "└── queues/",
+    "    └── emails.ts",
+  ]}
+  highlight={['emails.ts', 'route.ts']}
+  codeFiles={[
+    {
+      name: "emails.ts",
+      path: "app/queues/emails.ts",
+      lang: "ts",
+      code: `import { defineQueue } from '@cloudwerk/queue'
+import { services } from '@cloudwerk/bindings'
 
-<CardGrid>
-  <Card title="@cloudwerk/auth" icon="star">
-    Authentication with OAuth providers, credentials, sessions, RBAC, and multi-tenancy.
+interface WelcomeEmail {
+  to: string
+  position: number
+}
 
-    [Authentication Guide](/guides/authentication/)
-  </Card>
-  <Card title="@cloudwerk/service" icon="setting">
-    Reusable services that run locally or extract to separate Workers.
+export default defineQueue<WelcomeEmail>({
+  name: 'emails',
 
-    [Services Guide](/guides/services/)
-  </Card>
-  <Card title="@cloudwerk/queue" icon="list-format">
-    Type-safe queue consumers with Zod validation and dead letter queues.
+  async process(message) {
+    await services.email.sendWelcome(message.body)
+  },
+})`
+    },
+    {
+      name: "route.ts",
+      path: "app/api/waitlist/route.ts",
+      lang: "ts",
+      code: `import { db, queues } from '@cloudwerk/bindings'
 
-    [Queues Guide](/guides/queues/)
-  </Card>
-  <Card title="@cloudwerk/trigger" icon="rocket">
-    Event-driven handlers for cron, webhooks, R2, email, D1, and tail events.
+export async function POST(request: Request) {
+  const { email } = await request.json()
 
-    [Triggers Guide](/guides/triggers/)
-  </Card>
-</CardGrid>
+  const result = await db.prepare(\`
+    INSERT INTO waitlist (email) VALUES (?) RETURNING id
+  \`).bind(email).first()
+
+  // Queue email — respond instantly!
+  await queues.emails.send({
+    to: email,
+    position: result.id
+  })
+
+  return Response.json({ success: true, position: result.id })
+}`
+    }
+  ]}
+/>
+
+<div class="performance-callout">
+  <div class="callout-row before">
+    <span class="label">BEFORE</span>
+    <span class="description">User waits 800ms (DB + Email API)</span>
+  </div>
+  <div class="callout-row after">
+    <span class="label">AFTER</span>
+    <span class="description">User waits 50ms (DB + Queue)</span>
+  </div>
+</div>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-4"
+  chapter={4}
+  title="Viral Referrals"
+  subtitle="Let's incentivize sharing with a real-time leaderboard."
+  description="Durable Objects give you strongly consistent, real-time state at the edge. Perfect for counters, leaderboards, and collaboration. Each user gets their own referral code, and the leaderboard updates live via WebSocket."
+  features={[
+    { label: '+ Durable Objects', variant: 'new' },
+    { label: 'Real-time WebSocket', variant: 'compute' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── refer/",
+    "│   └── [code]/",
+    "│       └── page.tsx",
+    "├── api/",
+    "│   ├── waitlist/",
+    "│   │   └── route.ts",
+    "│   └── leaderboard/",
+    "│       └── route.ts",
+    "├── services/",
+    "├── queues/",
+    "└── objects/",
+    "    └── leaderboard.ts",
+  ]}
+  highlight={['leaderboard.ts', 'leaderboard/']}
+  codeFiles={[
+    {
+      name: "leaderboard.ts",
+      path: "app/objects/leaderboard.ts",
+      lang: "ts",
+      code: `import { defineDurableObject } from '@cloudwerk/realtime'
+
+export default defineDurableObject({
+  name: 'Leaderboard',
+
+  methods: {
+    async addReferral(userId: string) {
+      const current = (await this.ctx.storage.get(userId)) ?? 0
+      await this.ctx.storage.put(userId, current + 1)
+
+      // Notify all connected clients
+      this.broadcast(JSON.stringify({
+        type: 'update',
+        userId,
+        count: current + 1
+      }))
+
+      return current + 1
+    },
+
+    async getTop(limit = 10) {
+      const all = await this.ctx.storage.list()
+      return [...all.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+    },
+  },
+})`
+    },
+    {
+      name: "route.ts",
+      path: "app/api/leaderboard/route.ts",
+      lang: "ts",
+      code: `import { durableObjects } from '@cloudwerk/bindings'
+
+export async function GET() {
+  const leaderboard = durableObjects.Leaderboard.get('global')
+  const top = await leaderboard.getTop(10)
+
+  return Response.json(top)
+}`
+    }
+  ]}
+/>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-5"
+  chapter={5}
+  title="Image Uploads"
+  subtitle="Let users add profile pictures and shareable cards."
+  description="R2 gives you S3-compatible object storage with zero egress fees. Upload files directly, then queue heavy processing like thumbnails and social cards for background execution."
+  features={[
+    { label: '+ R2 Storage', variant: 'new' },
+    { label: 'Image Processing', variant: 'compute' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── refer/",
+    "│   └── [code]/",
+    "│       └── page.tsx",
+    "├── api/",
+    "│   ├── waitlist/",
+    "│   │   └── route.ts",
+    "│   ├── leaderboard/",
+    "│   │   └── route.ts",
+    "│   └── upload/",
+    "│       └── route.ts",
+    "├── services/",
+    "│   ├── email/",
+    "│   │   └── service.ts",
+    "│   └── images/",
+    "│       └── service.ts",
+    "├── queues/",
+    "│   ├── emails.ts",
+    "│   └── image-processing.ts",
+    "└── objects/",
+    "    └── leaderboard.ts",
+  ]}
+  highlight={['upload/', 'image-processing.ts']}
+  codeFiles={[
+    {
+      name: "route.ts",
+      path: "app/api/upload/route.ts",
+      lang: "ts",
+      code: `import { r2, queues } from '@cloudwerk/bindings'
+
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const file = formData.get('avatar') as File
+
+  const key = \`avatars/\${crypto.randomUUID()}\`
+  await r2.put(key, file.stream(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  // Generate thumbnail + social card async
+  await queues.imageProcessing.send({
+    key,
+    operations: ['thumbnail-200', 'social-card']
+  })
+
+  return Response.json({ key, url: \`/cdn/\${key}\` })
+}`
+    },
+    {
+      name: "image-processing.ts",
+      path: "app/queues/image-processing.ts",
+      lang: "ts",
+      code: `import { defineQueue } from '@cloudwerk/queue'
+import { services } from '@cloudwerk/bindings'
+
+export default defineQueue<{ key: string; operations: string[] }>({
+  name: 'imageProcessing',
+
+  config: {
+    batchSize: 5,  // Process 5 images at a time
+    maxRetries: 3,
+  },
+
+  async process(message) {
+    const { key, operations } = message.body
+
+    for (const op of operations) {
+      await services.images.process(key, op)
+    }
+  },
+})`
+    }
+  ]}
+/>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-6"
+  chapter={6}
+  title="External Integrations"
+  subtitle="Notify our Discord when someone hits a milestone."
+  description="Triggers let you react to events across your system. When a user hits 10 referrals, fire a webhook to Discord. When a payment succeeds, send a receipt. Clean, decoupled, testable."
+  features={[
+    { label: '+ Event Triggers', variant: 'new' },
+    { label: 'Webhooks', variant: 'core' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── refer/",
+    "│   └── [code]/",
+    "│       └── page.tsx",
+    "├── api/",
+    "│   └── ...",
+    "├── services/",
+    "├── queues/",
+    "├── objects/",
+    "└── triggers/",
+    "    └── referral-milestone.ts",
+  ]}
+  highlight={['referral-milestone.ts']}
+  codeFiles={[
+    {
+      name: "referral-milestone.ts",
+      path: "app/triggers/referral-milestone.ts",
+      lang: "ts",
+      code: `import { defineTrigger } from '@cloudwerk/triggers'
+import { db } from '@cloudwerk/bindings'
+
+export default defineTrigger({
+  name: 'referral-milestone',
+  event: 'referral.milestone',
+
+  async handler({ userId, count, email }) {
+    // Notify Discord
+    await fetch(env.DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: \`🎉 **\${email}** just hit **\${count} referrals**!\`,
+      }),
+    })
+
+    // Award a badge
+    await db.prepare(\`
+      INSERT INTO badges (user_id, badge, awarded_at)
+      VALUES (?, ?, datetime('now'))
+    \`).bind(userId, \`referrals-\${count}\`).run()
+  },
+})`
+    },
+    {
+      name: "usage.ts",
+      path: "emit event",
+      lang: "ts",
+      code: `// In your leaderboard logic
+import { emit } from '@cloudwerk/triggers'
+
+const count = await leaderboard.addReferral(userId)
+
+if (count === 10 || count === 50 || count === 100) {
+  await emit('referral.milestone', { userId, count, email })
+}`
+    }
+  ]}
+/>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-7"
+  chapter={7}
+  title="Scale for Launch Day"
+  subtitle="Launch is tomorrow. Let's extract heavy services."
+  description="Your email and image services are getting heavy. Extract them to dedicated workers with a single config change. Same code. Same imports. Cloudwerk handles the service bindings automatically."
+  features={[
+    { label: '+ Service Extraction', variant: 'new' },
+    { label: 'Service Bindings', variant: 'core' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── refer/",
+    "│   └── [code]/",
+    "│       └── page.tsx",
+    "├── api/",
+    "│   └── ...",
+    "├── services/",
+    "│   ├── email/",
+    "│   └── images/",
+    "├── queues/",
+    "├── objects/",
+    "└── triggers/",
+    "cloudwerk.config.ts",
+  ]}
+  highlight={['cloudwerk.config.ts', 'email/', 'images/']}
+  codeFiles={[
+    {
+      name: "cloudwerk.config.ts",
+      path: "cloudwerk.config.ts",
+      lang: "ts",
+      code: `import { defineConfig } from '@cloudwerk/core'
+
+export default defineConfig({
+  services: {
+    extract: ['email', 'images'],
+  },
+})`
+    }
+  ]}
+/>
+
+<Terminal
+  title="Deploy"
+  lines={[
+    "$ cloudwerk deploy",
+    "",
+    "Building...",
+    "  ✓ Routes (8 routes)",
+    "  ✓ Services",
+    "    • email → extracting to email-service",
+    "    • images → extracting to images-service",
+    "  ✓ Queues (2 queues)",
+    "  ✓ Durable Objects (1 object)",
+    "  ✓ Triggers (1 trigger)",
+    "",
+    "Deploying 3 workers...",
+    "  ✓ mylaunch (main)",
+    "  ✓ mylaunch-email-service",
+    "  ✓ mylaunch-images-service",
+    "",
+    "🚀 Deployed in 5.3s",
+  ]}
+/>
+
+<div class="architecture-callout">
+  <div class="arch-column">
+    <div class="arch-label">BEFORE (Local Mode)</div>
+    <div class="arch-box main-only">
+      <div class="arch-title">Main Worker</div>
+      <div class="arch-items">
+        <span>Routes</span>
+        <span>Email</span>
+        <span>Images</span>
+        <span>Queues</span>
+      </div>
+    </div>
+  </div>
+  <div class="arch-arrow">→</div>
+  <div class="arch-column">
+    <div class="arch-label">AFTER (Extracted)</div>
+    <div class="arch-box main-extracted">
+      <div class="arch-title">Main Worker</div>
+      <div class="arch-items">
+        <span>Routes</span>
+        <span>Queues</span>
+        <span>Objects</span>
+      </div>
+    </div>
+    <div class="arch-services">
+      <div class="arch-box service">
+        <div class="arch-title">Email Service</div>
+      </div>
+      <div class="arch-box service">
+        <div class="arch-title">Images Service</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="arch-footer">Same code. Same imports. Zero changes to your app.</p>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="chapter-8"
+  chapter={8}
+  title="Admin Dashboard"
+  subtitle="Manage your waitlist and send announcements."
+  description="Add authentication in minutes. Cloudwerk's convention-based auth supports OAuth providers, credentials, passkeys, and role-based access control. Protect routes with a single function call."
+  features={[
+    { label: '+ Authentication', variant: 'new' },
+    { label: 'OAuth', variant: 'auth' },
+    { label: 'RBAC', variant: 'auth' },
+  ]}
+>
+
+<div class="step-stack">
+<IDEPanel
+  files={[
+    "app/",
+    "├── page.tsx",
+    "├── refer/",
+    "│   └── [code]/",
+    "│       └── page.tsx",
+    "├── admin/",
+    "│   ├── layout.tsx",
+    "│   ├── page.tsx",
+    "│   └── announce/",
+    "│       └── route.ts",
+    "├── api/",
+    "│   └── ...",
+    "├── auth/",
+    "│   ├── providers/",
+    "│   │   └── google.ts",
+    "│   └── rbac.ts",
+    "├── services/",
+    "├── queues/",
+    "├── objects/",
+    "└── triggers/",
+  ]}
+  highlight={['google.ts', 'rbac.ts', 'layout.tsx']}
+  codeFiles={[
+    {
+      name: "google.ts",
+      path: "app/auth/providers/google.ts",
+      lang: "ts",
+      code: `import { defineProvider, google } from '@cloudwerk/auth'
+
+export default defineProvider(
+  google({
+    clientId: { env: 'GOOGLE_CLIENT_ID' },
+    clientSecret: { env: 'GOOGLE_CLIENT_SECRET' },
+  })
+)`
+    },
+    {
+      name: "rbac.ts",
+      path: "app/auth/rbac.ts",
+      lang: "ts",
+      code: `import { defineRBAC } from '@cloudwerk/auth'
+
+export default defineRBAC({
+  roles: {
+    admin: ['*'],
+    user: ['waitlist:read'],
+  },
+  defaultRole: 'user',
+})`
+    },
+    {
+      name: "layout.tsx",
+      path: "app/admin/layout.tsx",
+      lang: "tsx",
+      code: `import { requireRole } from '@cloudwerk/auth'
+
+export default function AdminLayout({ children }) {
+  requireRole('admin')
+
+  return (
+    <div className="admin-layout">
+      <nav>{/* Admin nav */}</nav>
+      <main>{children}</main>
+    </div>
+  )
+}`
+    }
+  ]}
+/>
+</div>
+
+</JourneyStep>
+
+<JourneyStep
+  id="journey-complete"
+  chapter={9}
+  title="Your App, Production-Ready"
+  subtitle="The journey is complete."
+  description="What started as a simple landing page is now a full-stack edge application with real-time features, background processing, file storage, external integrations, and secure admin access."
+  features={[]}
+>
+
+<div class="step-stack">
+<div class="final-architecture">
+  <div class="final-header">THE FINAL ARCHITECTURE</div>
+  <div class="final-tree">
+    <div class="tree-row"><span class="folder">app/</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="file">page.tsx</span> <span class="desc">Landing page</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">refer/[code]/</span> <span class="desc">Referral pages</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">admin/</span> <span class="desc">Protected admin (layout + pages)</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">api/</span> <span class="desc">API routes</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">auth/</span> <span class="desc">Google OAuth + RBAC</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">services/</span> <span class="desc">2 services (extracted)</span></div>
+    <div class="tree-row"><span class="indent">│   ├──</span> <span class="folder">email/</span> <span class="desc extracted">→ mylaunch-email-service</span></div>
+    <div class="tree-row"><span class="indent">│   └──</span> <span class="folder">images/</span> <span class="desc extracted">→ mylaunch-images-service</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">queues/</span> <span class="desc">2 queues</span></div>
+    <div class="tree-row"><span class="indent">│   ├──</span> <span class="file">emails.ts</span> <span class="desc">Async email delivery</span></div>
+    <div class="tree-row"><span class="indent">│   └──</span> <span class="file">images.ts</span> <span class="desc">Background processing</span></div>
+    <div class="tree-row"><span class="indent">├──</span> <span class="folder">objects/</span> <span class="desc">1 durable object</span></div>
+    <div class="tree-row"><span class="indent">│   └──</span> <span class="file">leaderboard.ts</span> <span class="desc">Real-time referral tracking</span></div>
+    <div class="tree-row"><span class="indent">└──</span> <span class="folder">triggers/</span> <span class="desc">1 trigger</span></div>
+    <div class="tree-row"><span class="indent">    └──</span> <span class="file">milestones.ts</span> <span class="desc">Discord notifications</span></div>
+  </div>
+  <div class="final-divider"></div>
+  <div class="final-deploy">
+    <div class="deploy-cmd">$ cloudwerk deploy</div>
+    <div class="deploy-result">✓ Deployed 3 workers in 5.3s</div>
+    <div class="deploy-url">🚀 https://mylaunch.dev</div>
+  </div>
+</div>
+
+<div class="final-stats">
+  <span class="stat">8 Routes</span>
+  <span class="separator">•</span>
+  <span class="stat">2 Services</span>
+  <span class="separator">•</span>
+  <span class="stat">2 Queues</span>
+  <span class="separator">•</span>
+  <span class="stat">1 Durable Object</span>
+  <span class="separator">•</span>
+  <span class="stat">1 Trigger</span>
+</div>
+
+<p class="final-tagline">One codebase. One deploy command. Zero DevOps complexity.</p>
+</div>
+
+</JourneyStep>
+
+</Journey>
+
+<FeaturesGrid />
+
+<ComparisonTable />
+
+<CallToAction />

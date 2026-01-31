@@ -1,0 +1,147 @@
+---
+interface Feature {
+  icon: string;
+  title: string;
+  description: string;
+}
+
+interface Props {
+  features?: Feature[];
+}
+
+const defaultFeatures: Feature[] = [
+  {
+    icon: '📁',
+    title: 'File-Based Routing',
+    description: 'Intuitive routing powered by your file structure. Create page.tsx and route.ts files.'
+  },
+  {
+    icon: '⚡',
+    title: 'Compiles to Hono',
+    description: 'Your routes compile to Hono, giving you the performance of one of the fastest frameworks.'
+  },
+  {
+    icon: '☁️',
+    title: 'Cloudflare Native',
+    description: 'First-class support for D1, KV, R2, Durable Objects, Queues, and all Cloudflare primitives.'
+  },
+  {
+    icon: '🌍',
+    title: 'Edge-First',
+    description: 'Deploy to 300+ edge locations worldwide. Your code runs milliseconds from your users.'
+  },
+  {
+    icon: '🔐',
+    title: 'Built-in Auth',
+    description: 'OAuth providers, session management, RBAC, and multi-tenancy out of the box.'
+  },
+  {
+    icon: '📦',
+    title: 'Service Extraction',
+    description: 'Start with co-located services, extract to separate Workers when you scale.'
+  },
+  {
+    icon: '📬',
+    title: 'Queue Integration',
+    description: 'Type-safe queue consumers with Zod validation, retries, and dead letter queues.'
+  },
+  {
+    icon: '⏰',
+    title: 'Event Triggers',
+    description: 'Cron jobs, webhooks, R2 events, email handlers, and more—all with type safety.'
+  }
+];
+
+const { features = defaultFeatures } = Astro.props;
+---
+
+<section class="features-section">
+  <header class="features-header">
+    <h2>Everything You Need</h2>
+    <p>Cloudwerk provides all the primitives for building full-stack edge applications.</p>
+  </header>
+
+  <div class="features-grid">
+    {features.map(feature => (
+      <div class="feature-card">
+        <span class="feature-icon">{feature.icon}</span>
+        <h3>{feature.title}</h3>
+        <p>{feature.description}</p>
+      </div>
+    ))}
+  </div>
+</section>
+
+<style>
+  .features-section {
+    padding: 4rem 0;
+  }
+
+  .features-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .features-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--sl-color-text);
+    margin: 0 0 0.75rem;
+    letter-spacing: -0.025em;
+  }
+
+  .features-header p {
+    font-size: 1.125rem;
+    color: var(--sl-color-text-accent);
+    margin: 0;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+  }
+
+  .feature-card {
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    transition: all 0.2s ease;
+  }
+
+  .feature-card:hover {
+    border-color: rgba(168, 85, 247, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.1);
+  }
+
+  .feature-icon {
+    display: inline-block;
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .feature-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    margin: 0 0 0.5rem;
+  }
+
+  .feature-card p {
+    font-size: 0.9375rem;
+    color: var(--sl-color-text-accent);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .features-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,188 @@
+---
+import FeatureBadge from './FeatureBadge.astro';
+
+interface Props {
+  id: string;
+  chapter: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  features?: { label: string; variant?: 'default' | 'new' | 'core' | 'storage' | 'compute' | 'auth' }[];
+  active?: boolean;
+}
+
+const { id, chapter, title, subtitle, description, features = [], active = false } = Astro.props;
+---
+
+<article id={id} class={`journey-step ${active ? 'visible' : ''}`}>
+  <div class="step-inner">
+    <header class="step-header">
+      <span class="chapter-number">Chapter {chapter}</span>
+      <h3 class="step-title">{title}</h3>
+      <p class="step-subtitle">{subtitle}</p>
+    </header>
+
+    <p class="step-description">{description}</p>
+
+    {features.length > 0 && (
+      <div class="step-features">
+        {features.map(f => <FeatureBadge label={f.label} variant={f.variant} />)}
+      </div>
+    )}
+
+    <div class="step-content">
+      <slot />
+    </div>
+  </div>
+</article>
+
+<style>
+  .journey-step {
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 1rem;
+    opacity: 0;
+    transform: translateY(60px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+  }
+
+  .journey-step.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-inner {
+    max-width: 1000px;
+    width: 100%;
+  }
+
+  .step-header {
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .chapter-number {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 9999px;
+    margin-bottom: 0.75rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.2s, transform 0.5s ease-out 0.2s;
+  }
+
+  .journey-step.visible .chapter-number {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--sl-color-text);
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.025em;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.3s, transform 0.5s ease-out 0.3s;
+  }
+
+  .journey-step.visible .step-title {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-subtitle {
+    font-size: 1.125rem;
+    color: #a855f7;
+    font-weight: 600;
+    margin: 0;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.4s, transform 0.5s ease-out 0.4s;
+  }
+
+  .journey-step.visible .step-subtitle {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-description {
+    font-size: 1rem;
+    color: var(--sl-color-text-accent);
+    line-height: 1.7;
+    max-width: 700px;
+    margin: 0 auto 1.5rem;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.5s, transform 0.5s ease-out 0.5s;
+  }
+
+  .journey-step.visible .step-description {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease-out 0.6s, transform 0.5s ease-out 0.6s;
+  }
+
+  .journey-step.visible .step-features {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease-out 0.7s, transform 0.6s ease-out 0.7s;
+  }
+
+  .journey-step.visible .step-content {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Alternating background for visual separation */
+  .journey-step:nth-child(even) {
+    background: linear-gradient(180deg, transparent 0%, rgba(168, 85, 247, 0.03) 50%, transparent 100%);
+  }
+
+  :root[data-theme='dark'] .journey-step:nth-child(even) {
+    background: linear-gradient(180deg, transparent 0%, rgba(168, 85, 247, 0.08) 50%, transparent 100%);
+  }
+
+  @media (max-width: 768px) {
+    .journey-step {
+      min-height: auto;
+      padding: 3rem 1rem;
+    }
+
+    .step-title {
+      font-size: 1.5rem;
+    }
+
+    .step-content {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

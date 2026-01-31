@@ -1,0 +1,97 @@
+---
+interface Props {
+  files: string[];
+  highlight?: string[];
+}
+
+const { files, highlight = [] } = Astro.props;
+
+function getIndent(file: string): number {
+  const match = file.match(/^(│\s*|├──\s*|└──\s*|    )*/);
+  if (!match) return 0;
+  const prefix = match[0];
+  return prefix.replace(/[│├└─]/g, ' ').length / 4;
+}
+
+function getIcon(filename: string): string {
+  const name = filename.replace(/^.*[│├└─\s]+/, '').trim();
+
+  if (name.endsWith('/') || !name.includes('.')) {
+    return '📁';
+  }
+
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const icons: Record<string, string> = {
+    tsx: '⚛️',
+    ts: '📘',
+    js: '📜',
+    json: '📋',
+    md: '📝',
+    mdx: '📝',
+    css: '🎨',
+    svg: '🖼️',
+    env: '🔒',
+    toml: '⚙️',
+    yaml: '⚙️',
+    yml: '⚙️',
+  };
+
+  return icons[ext] || '📄';
+}
+
+function isHighlighted(file: string, highlights: string[]): boolean {
+  const name = file.replace(/^.*[│├└─\s]+/, '').trim();
+  return highlights.some(h => name.includes(h) || file.includes(h));
+}
+---
+
+<div class="file-tree">
+  {files.map(file => {
+    const highlighted = isHighlighted(file, highlight);
+    return (
+      <div class={`file-line ${highlighted ? 'highlighted' : ''}`}>
+        <code>{file}</code>
+      </div>
+    );
+  })}
+</div>
+
+<style>
+  .file-tree {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .file-line {
+    white-space: pre;
+    padding: 0.125rem 0.5rem;
+    margin: 0 -0.5rem;
+    border-radius: 0.25rem;
+  }
+
+  .file-line.highlighted {
+    background: rgba(168, 85, 247, 0.15);
+    border-left: 2px solid #a855f7;
+    padding-left: calc(0.5rem - 2px);
+  }
+
+  .file-line code {
+    background: none;
+    color: var(--sl-color-text);
+  }
+
+  .file-line.highlighted code {
+    color: #a855f7;
+    font-weight: 600;
+  }
+
+  :root[data-theme='dark'] .file-line.highlighted {
+    background: rgba(168, 85, 247, 0.2);
+  }
+</style>

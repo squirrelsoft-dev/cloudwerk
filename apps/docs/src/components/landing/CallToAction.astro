@@ -1,0 +1,207 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+  primaryText?: string;
+  primaryLink?: string;
+  secondaryText?: string;
+  secondaryLink?: string;
+}
+
+const {
+  title = "Ready to Build on the Edge?",
+  description = "Get started with Cloudwerk in minutes. Create your first edge-native application today.",
+  primaryText = "Get Started",
+  primaryLink = "/getting-started/installation/",
+  secondaryText = "View Examples",
+  secondaryLink = "/examples/blog/"
+} = Astro.props;
+---
+
+<section class="cta-section">
+  <div class="cta-content">
+    <h2>{title}</h2>
+    <p>{description}</p>
+    <div class="cta-actions">
+      <a href={primaryLink} class="cta-button primary">
+        <span>{primaryText}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+      <a href={secondaryLink} class="cta-button secondary">{secondaryText}</a>
+    </div>
+  </div>
+
+  <div class="cta-code">
+    <div class="code-block">
+      <div class="code-header">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <pre><code><span class="prompt">$</span> <span class="command">pnpm create cloudwerk my-app</span>
+<span class="output">
+✓ Created project structure
+✓ Installed dependencies
+✓ Initialized git repository
+
+<span class="success">Ready! Run the following to get started:</span>
+
+  <span class="command">cd my-app</span>
+  <span class="command">pnpm dev</span>
+</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: center;
+    padding: 4rem 2rem;
+    margin: 3rem 0;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+    border-radius: 1rem;
+    border: 1px solid rgba(168, 85, 247, 0.2);
+  }
+
+  :root[data-theme='dark'] .cta-section {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
+  }
+
+  .cta-content h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--sl-color-text);
+    margin: 0 0 1rem;
+    letter-spacing: -0.025em;
+  }
+
+  .cta-content p {
+    font-size: 1.125rem;
+    color: var(--sl-color-text-accent);
+    margin: 0 0 1.5rem;
+    line-height: 1.6;
+  }
+
+  .cta-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .cta-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1.75rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .cta-button.primary {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+  }
+
+  .cta-button.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
+  }
+
+  .cta-button.secondary {
+    background: var(--sl-color-bg);
+    color: var(--sl-color-text);
+    border: 1px solid var(--sl-color-hairline);
+  }
+
+  .cta-button.secondary:hover {
+    border-color: #a855f7;
+    color: #a855f7;
+  }
+
+  .cta-code {
+    display: flex;
+    justify-content: center;
+  }
+
+  .code-block {
+    background: #0d1117;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    width: 100%;
+    max-width: 450px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot.red { background: #ff5f56; }
+  .dot.yellow { background: #ffbd2e; }
+  .dot.green { background: #27c93f; }
+
+  .code-block pre {
+    margin: 0;
+    padding: 1.25rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: #c9d1d9;
+    overflow-x: auto;
+  }
+
+  .code-block code {
+    background: none;
+  }
+
+  .prompt {
+    color: #8b949e;
+  }
+
+  .command {
+    color: #58a6ff;
+  }
+
+  .output {
+    color: #8b949e;
+  }
+
+  .success {
+    color: #3fb950;
+    font-weight: 600;
+  }
+
+  @media (max-width: 900px) {
+    .cta-section {
+      grid-template-columns: 1fr;
+      text-align: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .cta-actions {
+      justify-content: center;
+    }
+
+    .cta-code {
+      order: -1;
+    }
+  }
+</style>

@@ -1,0 +1,56 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  code: string;
+  lang?: string;
+  title?: string;
+}
+
+const { code, lang = 'typescript', title } = Astro.props;
+---
+
+<div class="code-panel">
+  {title && (
+    <div class="panel-header">
+      <span class="panel-title">{title}</span>
+    </div>
+  )}
+  <div class="panel-body">
+    <Code code={code} lang={lang} />
+  </div>
+</div>
+
+<style>
+  .code-panel {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--sl-color-bg-sidebar);
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .panel-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--sl-color-text-accent);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  .panel-body {
+    margin: 0;
+  }
+
+  .panel-body :global(pre) {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+  }
+</style>

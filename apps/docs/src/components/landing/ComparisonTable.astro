@@ -1,0 +1,181 @@
+---
+interface Row {
+  feature: string;
+  cloudwerk: string | boolean;
+  traditional: string | boolean;
+}
+
+interface Props {
+  title?: string;
+  rows?: Row[];
+}
+
+const defaultRows: Row[] = [
+  { feature: 'Deployment', cloudwerk: 'Edge (300+ locations)', traditional: 'Single region' },
+  { feature: 'Cold Start', cloudwerk: '~0ms (no containers)', traditional: '100ms-10s' },
+  { feature: 'Scaling', cloudwerk: 'Automatic, instant', traditional: 'Manual or delayed auto-scale' },
+  { feature: 'Database', cloudwerk: 'D1 (distributed SQLite)', traditional: 'Centralized Postgres/MySQL' },
+  { feature: 'State Management', cloudwerk: 'Durable Objects', traditional: 'Redis/External store' },
+  { feature: 'Queue Processing', cloudwerk: 'Cloudflare Queues', traditional: 'SQS/RabbitMQ/Redis' },
+  { feature: 'File Storage', cloudwerk: 'R2 (S3-compatible)', traditional: 'S3/GCS' },
+  { feature: 'Auth', cloudwerk: 'Built-in + Workers KV', traditional: 'External service' },
+];
+
+const { title = 'Cloudwerk vs Traditional Architecture', rows = defaultRows } = Astro.props;
+
+function renderCell(value: string | boolean) {
+  if (typeof value === 'boolean') {
+    return value ? '✓' : '✗';
+  }
+  return value;
+}
+
+function getCellClass(value: string | boolean) {
+  if (typeof value === 'boolean') {
+    return value ? 'check' : 'cross';
+  }
+  return '';
+}
+---
+
+<section class="comparison-section">
+  <header class="comparison-header">
+    <h2>{title}</h2>
+  </header>
+
+  <div class="table-container">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="cloudwerk-col">
+            <span class="col-badge">Cloudwerk</span>
+          </th>
+          <th class="traditional-col">Traditional</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => (
+          <tr>
+            <td class="feature-name">{row.feature}</td>
+            <td class={`cloudwerk-col ${getCellClass(row.cloudwerk)}`}>
+              {renderCell(row.cloudwerk)}
+            </td>
+            <td class={`traditional-col ${getCellClass(row.traditional)}`}>
+              {renderCell(row.traditional)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .comparison-section {
+    padding: 4rem 0;
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+
+  .comparison-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .comparison-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--sl-color-text);
+    margin: 0;
+    letter-spacing: -0.025em;
+  }
+
+  .table-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    overflow-x: auto;
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .comparison-table th {
+    font-weight: 600;
+    color: var(--sl-color-text);
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  .comparison-table th:first-child {
+    border-radius: 0.5rem 0 0 0;
+  }
+
+  .comparison-table th:last-child {
+    border-radius: 0 0.5rem 0 0;
+  }
+
+  .col-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border-radius: 9999px;
+  }
+
+  .feature-name {
+    font-weight: 500;
+    color: var(--sl-color-text);
+  }
+
+  .cloudwerk-col {
+    color: var(--sl-color-text);
+    background: rgba(168, 85, 247, 0.05);
+  }
+
+  :root[data-theme='dark'] .cloudwerk-col {
+    background: rgba(168, 85, 247, 0.1);
+  }
+
+  .traditional-col {
+    color: var(--sl-color-text-accent);
+  }
+
+  .check {
+    color: #22c55e;
+    font-weight: 700;
+  }
+
+  .cross {
+    color: #ef4444;
+    font-weight: 700;
+  }
+
+  .comparison-table tbody tr:hover {
+    background: var(--sl-color-bg-sidebar);
+  }
+
+  @media (max-width: 600px) {
+    .comparison-table {
+      font-size: 0.8125rem;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 0.75rem 0.5rem;
+    }
+  }
+</style>

@@ -1,41 +1,64 @@
-/* Custom Cloudwerk Theme */
+/* Custom Cloudwerk Theme - Purple Edition */
 
 :root {
-  /* Indigo color palette for light mode */
-  --sl-color-accent-low: #e0e7ff;
-  --sl-color-accent: #4f46e5;
-  --sl-color-accent-high: #3730a3;
+  /* Purple color palette for light mode */
+  --sl-color-accent-low: #f3e8ff;
+  --sl-color-accent: #a855f7;
+  --sl-color-accent-high: #7c3aed;
 
   /* Background and text tweaks for light mode */
   --sl-color-bg: #ffffff;
-  --sl-color-bg-nav: #f8fafc;
-  --sl-color-bg-sidebar: #f8fafc;
+  --sl-color-bg-nav: #faf5ff;
+  --sl-color-bg-sidebar: #faf5ff;
 
   /* Border colors */
-  --sl-color-hairline: #e2e8f0;
-  --sl-color-hairline-light: #f1f5f9;
+  --sl-color-hairline: #e9d5ff;
+  --sl-color-hairline-light: #f3e8ff;
 
   /* Code block styling */
-  --sl-color-bg-inline-code: #f1f5f9;
+  --sl-color-bg-inline-code: #f3e8ff;
+
+  /* Custom purple variables */
+  --cw-purple-50: #faf5ff;
+  --cw-purple-100: #f3e8ff;
+  --cw-purple-200: #e9d5ff;
+  --cw-purple-300: #d8b4fe;
+  --cw-purple-400: #c084fc;
+  --cw-purple-500: #a855f7;
+  --cw-purple-600: #9333ea;
+  --cw-purple-700: #7c3aed;
+  --cw-purple-800: #6b21a8;
+  --cw-purple-900: #581c87;
 }
 
 :root[data-theme='dark'] {
-  /* Indigo color palette for dark mode */
-  --sl-color-accent-low: #312e81;
-  --sl-color-accent: #818cf8;
-  --sl-color-accent-high: #c7d2fe;
+  /* Purple color palette for dark mode */
+  --sl-color-accent-low: #3b0764;
+  --sl-color-accent: #c084fc;
+  --sl-color-accent-high: #e9d5ff;
 
   /* Background and text tweaks for dark mode */
-  --sl-color-bg: #0f172a;
-  --sl-color-bg-nav: #1e293b;
-  --sl-color-bg-sidebar: #1e293b;
+  --sl-color-bg: #0c0a1d;
+  --sl-color-bg-nav: #1a1333;
+  --sl-color-bg-sidebar: #1a1333;
 
   /* Border colors */
-  --sl-color-hairline: #334155;
-  --sl-color-hairline-light: #1e293b;
+  --sl-color-hairline: #3b0764;
+  --sl-color-hairline-light: #1a1333;
 
   /* Code block styling */
-  --sl-color-bg-inline-code: #1e293b;
+  --sl-color-bg-inline-code: #1a1333;
+}
+
+/* .main-frame .content-panel:nth-of-type(1) {
+    display: none;
+} */
+:has(> .main-frame):not(:has(> .sidebar)) > .main-frame .content-panel:nth-of-type(1) {
+  display: none;
+}
+/* Hide page title on splash page */
+[data-template="splash"] .content-panel > h1#_top {
+  display: none;
 }
 
 /* Typography enhancements */
@@ -65,42 +88,6 @@ nav.sidebar {
   border-right: 1px solid var(--sl-color-hairline);
 }
 
-/* Hero section on homepage */
-.hero {
-  padding: 4rem 0;
-  text-align: center;
-}
-
-.hero h1 {
-  font-size: 3rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Feature cards */
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
-}
-
-.feature-card {
-  padding: 1.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--sl-color-hairline);
-  background: var(--sl-color-bg-sidebar);
-}
-
-.feature-card h3 {
-  margin-top: 0;
-  color: var(--sl-color-accent);
-}
-
 /* Badge styling */
 .badge {
   display: inline-block;
@@ -122,7 +109,29 @@ nav.sidebar {
   color: #fbbf24;
 }
 
-/* Responsive adjustments */
+/* Code example wrapper for journey sections */
+.code-example {
+  margin: 0;
+}
+
+.code-example pre {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+/* Journey section container styles */
+.journey-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Ensure code blocks in journey steps have proper sizing */
+.journey-step .code-example pre {
+  max-height: 400px;
+  overflow: auto;
+}
+
+/* Responsive adjustments for landing page */
 @media (max-width: 768px) {
   .hero h1 {
     font-size: 2rem;
@@ -130,5 +139,441 @@ nav.sidebar {
 
   .feature-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Smooth scrolling for journey navigation */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for code blocks */
+.sl-markdown-content pre::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sl-markdown-content pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sl-markdown-content pre::-webkit-scrollbar-thumb {
+  background: var(--sl-color-hairline);
+  border-radius: 4px;
+}
+
+.sl-markdown-content pre::-webkit-scrollbar-thumb:hover {
+  background: var(--sl-color-accent);
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+
+/* Transition utilities for journey components */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Grid layout for step content */
+.step-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Stack layout for IDE + Terminal */
+.step-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  grid-column: 1 / -1;
+}
+
+/* Performance callout for before/after comparisons */
+.performance-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  background: #1e1e2e;
+  border-radius: 0.75rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+}
+
+.callout-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.callout-row .label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 70px;
+}
+
+.callout-row .description {
+  color: #cdd6f4;
+}
+
+.callout-row.before .label {
+  color: #f38ba8;
+}
+
+.callout-row.after .label {
+  color: #a6e3a1;
+}
+
+.callout-row.before .description {
+  color: #6c7086;
+  text-decoration: line-through;
+}
+
+.callout-row.after .description {
+  color: #a6e3a1;
+}
+
+/* Architecture callout for before/after diagrams */
+.architecture-callout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem;
+  background: #1e1e2e;
+  border-radius: 0.75rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+}
+
+.arch-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.arch-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c7086;
+  font-size: 0.75rem;
+}
+
+.arch-arrow {
+  font-size: 2rem;
+  color: #a855f7;
+  font-weight: bold;
+}
+
+.arch-box {
+  border: 2px solid #313244;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  min-width: 140px;
+}
+
+.arch-box.main-only,
+.arch-box.main-extracted {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: #a855f7;
+}
+
+.arch-box.service {
+  background: rgba(166, 227, 161, 0.1);
+  border-color: #a6e3a1;
+}
+
+.arch-title {
+  font-weight: 600;
+  color: #cdd6f4;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.arch-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.arch-items span {
+  color: #6c7086;
+  font-size: 0.6875rem;
+}
+
+.arch-services {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.arch-footer {
+  text-align: center;
+  color: #a6e3a1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .architecture-callout {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem 1rem;
+  }
+
+  .arch-arrow {
+    transform: rotate(90deg);
+  }
+
+  .arch-services {
+    flex-direction: column;
+  }
+}
+
+/* Final architecture visual for journey complete */
+.final-architecture {
+  background: #1e1e2e;
+  border-radius: 0.75rem;
+  padding: 1.5rem 2rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.8125rem;
+}
+
+.final-header {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a855f7;
+  margin-bottom: 1.5rem;
+  font-size: 0.75rem;
+}
+
+.final-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.tree-row .indent {
+  color: #45475a;
+}
+
+.tree-row .folder {
+  color: #89b4fa;
+}
+
+.tree-row .file {
+  color: #cdd6f4;
+}
+
+.tree-row .desc {
+  color: #6c7086;
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+.tree-row .desc.extracted {
+  color: #a6e3a1;
+}
+
+.final-divider {
+  border-top: 1px solid #313244;
+  margin: 1.5rem 0;
+}
+
+.final-deploy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.deploy-cmd {
+  color: #cdd6f4;
+}
+
+.deploy-result {
+  color: #a6e3a1;
+}
+
+.deploy-url {
+  color: #f9e2af;
+}
+
+.final-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: rgba(168, 85, 247, 0.1);
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.final-stats .stat {
+  color: var(--sl-color-text);
+  font-weight: 600;
+}
+
+.final-stats .separator {
+  color: var(--sl-color-hairline);
+}
+
+.final-tagline {
+  text-align: center;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #a855f7;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .final-architecture {
+    padding: 1rem;
+    overflow-x: auto;
+  }
+
+  .tree-row .desc {
+    display: none;
+  }
+
+  .final-stats {
+    gap: 0.5rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Make landing page full width */
+[data-template="splash"] .content-panel {
+  max-width: none;
+}
+
+[data-template="splash"] .sl-container {
+  max-width: none;
+  padding: 0;
+}
+
+[data-template="splash"] main {
+  padding: 0 1rem;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #6d28d9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Card hover effect */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.15);
+}
+
+/* Purple gradient background */
+.purple-gradient-bg {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+}
+
+:root[data-theme='dark'] .purple-gradient-bg {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+}
+
+/* Ensure proper spacing for landing page sections */
+[data-template="splash"] section {
+  margin-bottom: 2rem;
+}
+
+/* Icon styling in feature cards */
+.feature-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+/* Terminal styling overrides */
+.terminal-output {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* Comparison table sticky header */
+.comparison-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Journey stepper sticky positioning */
+@supports (position: sticky) {
+  .journey-stepper {
+    position: sticky;
+    top: var(--sl-nav-height, 64px);
+    background: var(--sl-color-bg);
+    z-index: 5;
+    padding-top: 1rem;
+    margin-top: -1rem;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  .journey-step .step-content {
+    grid-template-columns: 1fr;
+  }
+
+  .code-example pre {
+    font-size: 0.75rem;
+  }
+
+  .terminal {
+    font-size: 0.75rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .journey-stepper,
+  .journey-nav,
+  .cta-section {
+    display: none;
+  }
+
+  .journey-step {
+    display: block !important;
+    page-break-inside: avoid;
+    margin-bottom: 2rem;
   }
 }

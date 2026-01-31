@@ -1,0 +1,229 @@
+---
+interface Props {
+  lines: string[];
+  title?: string;
+  animated?: boolean;
+}
+
+const { lines, title = 'Terminal', animated = true } = Astro.props;
+const terminalId = `terminal-${Math.random().toString(36).substr(2, 9)}`;
+---
+
+<div class="terminal" data-terminal-id={terminalId} data-animated={animated}>
+  <div class="terminal-header">
+    <span class="dot red"></span>
+    <span class="dot yellow"></span>
+    <span class="dot green"></span>
+    <span class="terminal-title">{title}</span>
+  </div>
+  <div class="terminal-body">
+    <div class="terminal-content">
+      {!animated && lines.map(line => {
+        const isCommand = line.startsWith('$');
+        const isSuccess = line.includes('✓') || line.includes('success') || line.includes('deployed');
+        const isError = line.includes('error') || line.includes('failed');
+        const isHighlight = line.includes('🚀') || line.includes('http');
+
+        return (
+          <div class={`terminal-line ${isCommand ? 'command' : ''} ${isSuccess ? 'success' : ''} ${isError ? 'error' : ''} ${isHighlight ? 'highlight' : ''}`}>
+            {line || '\u00A0'}
+          </div>
+        );
+      })}
+    </div>
+    {animated && <span class="cursor">█</span>}
+  </div>
+</div>
+
+<script define:vars={{ terminalId, lines, animated }}>
+  if (animated) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const terminal = document.querySelector(`[data-terminal-id="${terminalId}"]`);
+      if (!terminal) return;
+
+      const content = terminal.querySelector('.terminal-content');
+      const cursor = terminal.querySelector('.cursor');
+      if (!content || !cursor) return;
+
+      let hasAnimated = false;
+
+      const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+      const getLineClass = (line) => {
+        if (line.startsWith('$')) return 'command';
+        if (line.includes('✓') || line.includes('success') || line.includes('deployed')) return 'success';
+        if (line.includes('error') || line.includes('failed')) return 'error';
+        if (line.includes('🚀') || line.includes('http')) return 'highlight';
+        return 'output';
+      };
+
+      const typeText = async (text, className) => {
+        const span = document.createElement('span');
+        span.className = `terminal-line ${className}`;
+        content.appendChild(span);
+
+        const textNode = document.createTextNode('');
+        span.appendChild(textNode);
+        span.appendChild(cursor);
+
+        for (let i = 0; i < text.length; i++) {
+          textNode.textContent += text[i];
+          await sleep(30);
+        }
+
+        content.appendChild(cursor);
+      };
+
+      const addLine = async (text, className) => {
+        const span = document.createElement('span');
+        span.className = `terminal-line ${className}`;
+        span.textContent = text || '\u00A0';
+        content.appendChild(span);
+        content.appendChild(cursor);
+      };
+
+      const runAnimation = async () => {
+        // Clear content
+        while (content.firstChild) {
+          content.removeChild(content.firstChild);
+        }
+        content.appendChild(cursor);
+        cursor.style.display = 'inline';
+
+        for (const line of lines) {
+          const className = getLineClass(line);
+
+          if (line.startsWith('$')) {
+            // Type commands character by character
+            await typeText(line, className);
+            await sleep(400);
+          } else {
+            // Show output instantly
+            await addLine(line, className);
+            await sleep(line.trim() ? 100 : 50);
+          }
+        }
+
+        // Hide cursor after animation
+        cursor.style.display = 'none';
+      };
+
+      // Use IntersectionObserver to start animation when visible
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !hasAnimated) {
+            hasAnimated = true;
+            setTimeout(runAnimation, 300);
+          }
+        });
+      }, { threshold: 0.5 });
+
+      observer.observe(terminal);
+    });
+  }
+</script>
+
+<style>
+  .terminal {
+    background: #1e1e2e;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    font-size: 0.8125rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+
+  .terminal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+  }
+
+  .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+  }
+
+  .dot.red { background: #f38ba8; }
+  .dot.yellow { background: #f9e2af; }
+  .dot.green { background: #a6e3a1; }
+
+  .terminal-title {
+    margin-left: 0.5rem;
+    font-size: 0.8125rem;
+    color: #6c7086;
+  }
+
+  .terminal-body {
+    padding: 1.25rem;
+    line-height: 1.7;
+    min-height: 120px;
+  }
+
+  .terminal-content {
+    display: block;
+  }
+
+  .terminal-content :global(.terminal-line) {
+    display: block;
+    white-space: pre-wrap;
+    min-height: 1.7em;
+  }
+
+  .terminal-content :global(.terminal-line.command) {
+    color: #cdd6f4;
+  }
+
+  .terminal-content :global(.terminal-line.output) {
+    color: #6c7086;
+  }
+
+  .terminal-content :global(.terminal-line.success) {
+    color: #a6e3a1;
+  }
+
+  .terminal-content :global(.terminal-line.error) {
+    color: #f38ba8;
+  }
+
+  .terminal-content :global(.terminal-line.highlight) {
+    color: #f9e2af;
+  }
+
+  .cursor {
+    display: inline;
+    color: #cdd6f4;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  /* Static lines (non-animated) */
+  .terminal-line {
+    color: #cdd6f4;
+    white-space: pre;
+  }
+
+  .terminal-line.command {
+    color: #cdd6f4;
+  }
+
+  .terminal-line.success {
+    color: #a6e3a1;
+  }
+
+  .terminal-line.error {
+    color: #f38ba8;
+  }
+
+  .terminal-line.highlight {
+    color: #f9e2af;
+  }
+</style>
