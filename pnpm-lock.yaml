@@ -109,15 +109,12 @@ importers:
 
   examples/linkly:
     dependencies:
-      '@cloudwerk/auth':
-        specifier: ^0.1.1
-        version: 0.1.1(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
       '@cloudwerk/cli':
         specifier: ^0.14.0
         version: 0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@cloudwerk/core':
-        specifier: ^0.14.0
-        version: 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+        specifier: ^0.15.0
+        version: 0.15.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
       '@cloudwerk/ui':
         specifier: ^0.14.0
         version: 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -626,11 +623,6 @@ packages:
   '@cloudflare/workers-types@4.20260130.0':
     resolution: {integrity: sha512-eVJZjA4o0ANE/RX5g6mBs5MKRQxcSJYDPsFj8SPul7FDSFv682UzwXK3i0CSdIy/rtDNrMRmwJZ8KxANg2bY8A==}
 
-  '@cloudwerk/auth@0.1.1':
-    resolution: {integrity: sha512-m770JPSe2fXXW9Z5EyqD/Ni4pWxxk0DgThAqqApiRXnusfgBcNtuQWqOeNFZQ8wqZNnWRHBZBcmUKlmAXLeyRA==}
-    peerDependencies:
-      typescript: ^5.0.0
-
   '@cloudwerk/cli@0.14.0':
     resolution: {integrity: sha512-2FCO8Pjdr3xbZWoHuA9H90RWz4PCzrGrVIQgmVsHJVljdgZfAp57wHYPXoHasqhSJxSUpsq+WYyue8/eeT4Dwg==}
     hasBin: true
@@ -639,6 +631,12 @@ packages:
 
   '@cloudwerk/core@0.14.0':
     resolution: {integrity: sha512-IF6vDELTJXkRLw4ah3+KbrEB2iezTojQq1tdH9/MdDPiJJ/A074AAE6uJO07dTRovUpZ4d9mf7VivbQzdrjXlQ==}
+    peerDependencies:
+      typescript: ^5.0.0
+      vite: ^5.0.0 || ^6.0.0
+
+  '@cloudwerk/core@0.15.0':
+    resolution: {integrity: sha512-j+sxO/CHZpy4IiT2pUjlwTyuCAKKQGO31L6/n50jKiaD1b1Gb4NeQvWnxjZVvoCfkRJTWFHKQVSKzHecjSczNg==}
     peerDependencies:
       typescript: ^5.0.0
       vite: ^5.0.0 || ^6.0.0
@@ -4806,14 +4804,6 @@ snapshots:
 
   '@cloudflare/workers-types@4.20260130.0': {}
 
-  '@cloudwerk/auth@0.1.1(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
-    dependencies:
-      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      jose: 5.10.0
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - vite
-
   '@cloudwerk/cli@0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
     dependencies:
       '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
@@ -4852,6 +4842,15 @@ snapshots:
       - yaml
 
   '@cloudwerk/core@0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
+    dependencies:
+      '@cloudwerk/utils': 0.6.1
+      esbuild: 0.25.12
+      fast-glob: 3.3.3
+      hono: 4.11.5
+      typescript: 5.9.3
+      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+
+  '@cloudwerk/core@0.15.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
     dependencies:
       '@cloudwerk/utils': 0.6.1
       esbuild: 0.25.12
