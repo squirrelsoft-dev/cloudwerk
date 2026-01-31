@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @cloudwerk/cli dev",
-    "build": "pnpm -r build",
+    "build": "pnpm -r --filter '!./examples/**' build",
     "test": "pnpm -r test",
     "test:e2e": "vitest --config e2e/vitest.config.ts --run",
     "validate:spike": "./scripts/validate-spike.sh",
