@@ -39,18 +39,15 @@ const {
         <span class="dot red"></span>
         <span class="dot yellow"></span>
         <span class="dot green"></span>
+        <span class="terminal-title">Terminal</span>
       </div>
-      <pre><code><span class="prompt">$</span> <span class="command">pnpm create cloudwerk my-app</span>
-<span class="output">
-✓ Created project structure
-✓ Installed dependencies
-✓ Initialized git repository
-
-<span class="success">Ready! Run the following to get started:</span>
-
-  <span class="command">cd my-app</span>
-  <span class="command">pnpm dev</span>
-</span></code></pre>
+      <pre><code><span class="command">$ npx @cloudwerk/create-app my-app</span>
+<span class="command">$ cd my-app</span>
+<span class="command">$ cloudwerk dev</span>
+<span class="success">✓ Routes compiled (3 routes)</span>
+<span class="success">✓ Database ready (D1)</span>
+<span class="success">✓ Types generated</span>
+<span class="highlight">🚀 Server running at http://localhost:8787</span></code></pre>
     </div>
   </div>
 </section>
@@ -131,12 +128,12 @@ const {
   }
 
   .code-block {
-    background: #0d1117;
+    background: #1e1e2e;
     border-radius: 0.75rem;
     overflow: hidden;
     width: 100%;
-    max-width: 450px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    max-width: 480px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   }
 
   .code-header {
@@ -144,8 +141,8 @@ const {
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    background: #161b22;
-    border-bottom: 1px solid #21262d;
+    background: #181825;
+    border-bottom: 1px solid #313244;
   }
 
   .dot {
@@ -154,9 +151,15 @@ const {
     border-radius: 50%;
   }
 
-  .dot.red { background: #ff5f56; }
-  .dot.yellow { background: #ffbd2e; }
-  .dot.green { background: #27c93f; }
+  .dot.red { background: #f38ba8; }
+  .dot.yellow { background: #f9e2af; }
+  .dot.green { background: #a6e3a1; }
+
+  .terminal-title {
+    margin-left: 0.5rem;
+    font-size: 0.8125rem;
+    color: #6c7086;
+  }
 
   .code-block pre {
     margin: 0;
@@ -164,7 +167,7 @@ const {
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 0.8125rem;
     line-height: 1.6;
-    color: #c9d1d9;
+    color: #cdd6f4;
     overflow-x: auto;
   }
 
@@ -172,21 +175,16 @@ const {
     background: none;
   }
 
-  .prompt {
-    color: #8b949e;
-  }
-
   .command {
-    color: #58a6ff;
-  }
-
-  .output {
-    color: #8b949e;
+    color: #cdd6f4;
   }
 
   .success {
-    color: #3fb950;
-    font-weight: 600;
+    color: #a6e3a1;
+  }
+
+  .highlight {
+    color: #f9e2af;
   }
 
   @media (max-width: 900px) {

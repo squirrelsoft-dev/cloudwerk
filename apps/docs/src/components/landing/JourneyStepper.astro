@@ -220,7 +220,7 @@ const { steps, activeStep = 0 } = Astro.props;
     updateProgress();
   });
 
-  // Stepper fade-in on scroll
+  // Stepper fade-in/out on scroll
   document.addEventListener('DOMContentLoaded', () => {
     const stepper = document.querySelector('.journey-stepper') as HTMLElement;
     const journeySection = document.querySelector('#journey');
@@ -234,12 +234,19 @@ const { steps, activeStep = 0 } = Astro.props;
       // Calculate how far into the viewport the journey section is
       // When top of journey reaches bottom of viewport: start fading in
       // When top of journey reaches top of viewport: fully visible
+      // When bottom of journey approaches top of viewport: start fading out
 
       if (rect.top >= windowHeight) {
         // Journey section not yet in view
         stepper.style.opacity = '0';
+      } else if (rect.bottom <= windowHeight * 0.5) {
+        // Journey section is ending - fade out
+        // When bottom is at 50% of viewport, start fading
+        // When bottom reaches top of viewport, fully hidden
+        const fadeOutProgress = rect.bottom / (windowHeight * 0.5);
+        stepper.style.opacity = Math.min(1, Math.max(0, fadeOutProgress)).toString();
       } else if (rect.top <= 0) {
-        // Journey header at or above top of viewport
+        // Journey header at or above top of viewport - fully visible
         stepper.style.opacity = '1';
       } else {
         // Journey section is entering viewport - interpolate opacity
