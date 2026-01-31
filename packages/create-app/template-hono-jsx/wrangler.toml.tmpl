@@ -2,6 +2,7 @@ name = "{{name}}"
 main = "dist/index.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
+account_id = "your_account_id"
 
 [assets]
 directory = "./dist/static"
@@ -10,6 +11,5 @@ binding = "ASSETS"
 [build]
 command = "npm run build"
 
-# Preview environment for testing
 [env.preview]
 name = "{{name}}-preview"

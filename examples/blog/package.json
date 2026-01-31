@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "cloudwerk dev",
     "build": "cloudwerk build",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "bindings": "cloudwerk bindings"
   },
   "dependencies": {
     "@cloudwerk/cli": "workspace:*",

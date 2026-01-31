@@ -8,7 +8,12 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": "./app"
+    "rootDir": "./app",
+    "baseUrl": ".",
+    "paths": {
+      "@cloudwerk/core/bindings": ["./.cloudwerk/types/bindings.d.ts"],
+      "@cloudwerk/core/context": ["./.cloudwerk/types/context.d.ts"]
+    }
   },
-  "include": ["app/**/*", "cloudwerk.config.ts"]
+  "include": [".cloudwerk/types/**/*", "app/**/*", "cloudwerk.config.ts"]
 }
