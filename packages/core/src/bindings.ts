@@ -19,6 +19,49 @@
 import { getContext } from './context.js'
 
 // ============================================================================
+// Lazy Binding Proxy
+// ============================================================================
+
+/**
+ * Create a lazy proxy for a binding that defers getContext() until property access.
+ *
+ * This is used by the Vite plugin transform to convert:
+ *   import { DB } from '@cloudwerk/core/bindings'
+ * Into:
+ *   import { createLazyBinding } from '@cloudwerk/core/bindings'
+ *   const DB = createLazyBinding('DB')
+ *
+ * The actual getContext() call is deferred until a property on DB is accessed
+ * (e.g., DB.prepare(...)), avoiding errors at module load time.
+ *
+ * @param name - The binding name
+ * @returns A Proxy that lazily accesses the binding
+ */
+export function createLazyBinding<T = unknown>(name: string): T {
+  return new Proxy({}, {
+    get(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+      const binding = getBinding(name)
+      return Reflect.get(binding as object, prop)
+    },
+    set(_target, prop, value) {
+      const binding = getBinding(name)
+      return Reflect.set(binding as object, prop, value)
+    },
+    has(_target, prop) {
+      const binding = getBinding(name)
+      return Reflect.has(binding as object, prop)
+    },
+    apply(_target, thisArg, args) {
+      const binding = getBinding(name) as (...args: unknown[]) => unknown
+      return Reflect.apply(binding, thisArg, args)
+    },
+  }) as T
+}
+
+// ============================================================================
 // Error Messages
 // ============================================================================
 

@@ -7,9 +7,11 @@
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
-import { createServer, type InlineConfig } from 'vite'
+import { createServer, mergeConfig as mergeViteConfig, type InlineConfig, type PluginOption } from 'vite'
 import devServer from '@hono/vite-dev-server'
+import cloudflareAdapter from '@hono/vite-dev-server/cloudflare'
 import cloudwerk from '@cloudwerk/vite-plugin'
+import { loadConfig } from '@cloudwerk/core'
 
 import type { DevCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
@@ -62,8 +64,12 @@ export async function dev(
       )
     }
 
-    // Build Vite config
-    const viteConfig: InlineConfig = {
+    // Load cloudwerk config
+    const config = await loadConfig(cwd)
+    logger.debug(`Loaded cloudwerk config`)
+
+    // Build base Vite config
+    const baseViteConfig: InlineConfig = {
       root: cwd,
       mode: 'development',
       server: {
@@ -76,12 +82,29 @@ export async function dev(
           verbose,
         }),
         devServer({
+          adapter: cloudflareAdapter,
           entry: 'virtual:cloudwerk/server-entry',
         }),
       ],
       // Suppress Vite's default startup message - we'll print our own
       logLevel: verbose ? 'info' : 'warn',
       clearScreen: false,
+    }
+
+    // Merge user's vite config if provided
+    // User plugins are prepended so they run before cloudwerk plugins
+    let viteConfig: InlineConfig = baseViteConfig
+    if (config.vite) {
+      const userPlugins = config.vite.plugins as PluginOption[] | undefined
+      const { plugins: _, ...userConfigWithoutPlugins } = config.vite
+
+      // Merge non-plugin config
+      viteConfig = mergeViteConfig(baseViteConfig, userConfigWithoutPlugins)
+
+      // Prepend user plugins before our plugins
+      if (userPlugins) {
+        viteConfig.plugins = [...userPlugins, ...(baseViteConfig.plugins ?? [])]
+      }
     }
 
     logger.debug(`Starting Vite dev server...`)

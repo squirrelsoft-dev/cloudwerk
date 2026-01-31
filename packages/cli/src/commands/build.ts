@@ -7,7 +7,8 @@
 import { builtinModules } from 'node:module'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import { build as viteBuild, type InlineConfig } from 'vite'
+import { build as viteBuild, mergeConfig as mergeViteConfig, type InlineConfig, type PluginOption } from 'vite'
+import { getPlatformProxy } from 'wrangler'
 import cloudwerk, { generateServerEntry } from '@cloudwerk/vite-plugin'
 import {
   scanRoutes,
@@ -25,6 +26,7 @@ import {
   buildServiceManifest,
   SERVICES_DIR,
 } from '@cloudwerk/core/build'
+import type { RouteManifest } from '@cloudwerk/core/build'
 
 import type { BuildCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
@@ -188,7 +190,7 @@ export async function build(
     // ========================================================================
     logger.debug(`Building client assets...`)
 
-    const clientConfig: InlineConfig = {
+    const baseClientConfig: InlineConfig = {
       root: cwd,
       mode: 'production',
       logLevel: verbose ? 'info' : 'warn',
@@ -211,6 +213,21 @@ export async function build(
       },
     }
 
+    // Merge user's vite config if provided
+    let clientConfig: InlineConfig = baseClientConfig
+    if (cloudwerkConfig.vite) {
+      const userPlugins = cloudwerkConfig.vite.plugins as PluginOption[] | undefined
+      const { plugins: _, ...userConfigWithoutPlugins } = cloudwerkConfig.vite
+
+      // Merge non-plugin config
+      clientConfig = mergeViteConfig(baseClientConfig, userConfigWithoutPlugins)
+
+      // Prepend user plugins before our plugins
+      if (userPlugins) {
+        clientConfig.plugins = [...userPlugins, ...(baseClientConfig.plugins ?? [])]
+      }
+    }
+
     try {
       await viteBuild(clientConfig)
       logger.debug(`Client assets built successfully`)
@@ -229,7 +246,7 @@ export async function build(
 
     // Build configuration optimized for Cloudflare Workers
     // Based on @hono/vite-build settings for minimal bundle size
-    const serverConfig: InlineConfig = {
+    const baseServerConfig: InlineConfig = {
       root: cwd,
       mode: 'production',
       logLevel: verbose ? 'info' : 'warn',
@@ -263,8 +280,41 @@ export async function build(
       },
     }
 
+    // Merge user's vite config if provided
+    let serverConfig: InlineConfig = baseServerConfig
+    if (cloudwerkConfig.vite) {
+      const userPlugins = cloudwerkConfig.vite.plugins as PluginOption[] | undefined
+      const { plugins: _, ...userConfigWithoutPlugins } = cloudwerkConfig.vite
+
+      // Merge non-plugin config
+      serverConfig = mergeViteConfig(baseServerConfig, userConfigWithoutPlugins)
+
+      // Prepend user plugins before our plugins
+      if (userPlugins) {
+        serverConfig.plugins = [...userPlugins, ...(baseServerConfig.plugins ?? [])]
+      }
+    }
+
     await viteBuild(serverConfig)
     logger.debug(`Server bundle built successfully`)
+
+    // ========================================================================
+    // Phase 3: Static Site Generation (optional)
+    // ========================================================================
+    let ssgPaths: string[] = []
+    if (options.ssg) {
+      logger.info(`Generating static pages...`)
+      ssgPaths = await generateStaticPages(
+        manifest,
+        cwd,
+        outputDir,
+        logger,
+        verbose
+      )
+      if (ssgPaths.length > 0) {
+        logger.debug(`Generated ${ssgPaths.length} static page(s)`)
+      }
+    }
 
     // ========================================================================
     // Final Report
@@ -291,7 +341,7 @@ export async function build(
     }
 
     console.log()
-    printBuildSummary(serverSize, clientSize, buildDuration, logger)
+    printBuildSummary(serverSize, clientSize, ssgPaths.length, buildDuration, logger)
     console.log()
     logger.success(`Build completed in ${buildDuration}ms`)
   } catch (error) {
@@ -335,6 +385,7 @@ export async function build(
 function printBuildSummary(
   serverSize: number,
   clientSize: number,
+  ssgPageCount: number,
   buildDuration: number,
   logger: Logger
 ): void {
@@ -350,6 +401,13 @@ function printBuildSummary(
   if (clientSize > 0) {
     logger.log('  Client:')
     logger.log(`    Total:      ${formatSize(clientSize)}`)
+    logger.log('')
+  }
+
+  // SSG pages (if any)
+  if (ssgPageCount > 0) {
+    logger.log('  Static Pages:')
+    logger.log(`    Generated:  ${ssgPageCount}`)
     logger.log('')
   }
 
@@ -370,4 +428,121 @@ function formatSize(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`
   }
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
+
+// ============================================================================
+// Static Site Generation
+// ============================================================================
+
+/**
+ * Generate static pages for routes with `generateStaticParams` exports.
+ *
+ * Uses getPlatformProxy to get Cloudflare bindings, then uses Hono's toSSG
+ * helper to generate static HTML files.
+ */
+async function generateStaticPages(
+  _manifest: RouteManifest,
+  cwd: string,
+  outputDir: string,
+  logger: Logger,
+  verbose: boolean
+): Promise<string[]> {
+  const generatedPaths: string[] = []
+
+  // Get Cloudflare bindings via getPlatformProxy
+  // This provides D1, KV, R2, etc. that work in Node.js
+  // Let wrangler use its default persist path so it matches where migrations are applied
+  const { env, dispose } = await getPlatformProxy({
+    configPath: path.join(cwd, 'wrangler.toml'),
+  })
+
+  if (verbose) {
+    logger.debug(`SSG env bindings: ${Object.keys(env as Record<string, unknown>).join(', ')}`)
+  }
+
+  try {
+    // Create a Vite server in SSR mode to load modules
+    const { createServer } = await import('vite')
+    const { toSSG } = await import('hono/ssg')
+    const fsPromises = await import('node:fs/promises')
+
+    const vite = await createServer({
+      root: cwd,
+      server: { middlewareMode: true },
+      appType: 'custom',
+      logLevel: verbose ? 'info' : 'warn',
+      plugins: [cloudwerk({ verbose })],
+    })
+
+    try {
+      // Load the server entry module via Vite SSR
+      const tempEntryPath = path.join(cwd, '.cloudwerk-build', '_server-entry.ts')
+
+      // Load the app module
+      const appModule = await vite.ssrLoadModule(
+        fs.existsSync(tempEntryPath) ? tempEntryPath : 'virtual:cloudwerk/server-entry'
+      )
+
+      // Get the Hono app instance
+      const app = appModule.default
+
+      if (!app || typeof app.fetch !== 'function') {
+        logger.debug('No valid Hono app found for SSG')
+        return generatedPaths
+      }
+
+      // Monkey-patch the app's fetch method to inject our bindings
+      // This ensures ALL fetch calls (including internal ones from toSSG) get our bindings
+      const originalFetch = app.fetch.bind(app)
+      app.fetch = (request: Request, passedEnv?: Record<string, unknown>, executionCtx?: unknown) => {
+        // Merge our bindings with any env passed (e.g., HONO_SSG_CONTEXT from toSSG)
+        const mergedEnv = { ...env, ...passedEnv }
+        if (verbose) {
+          const envKeys = Object.keys(mergedEnv)
+          logger.debug(`SSG fetch ${request.url} with env: ${envKeys.join(', ')}`)
+        }
+        return originalFetch(request, mergedEnv, executionCtx)
+      }
+
+      // Use Hono's toSSG helper to generate static files
+      const staticDir = path.join(outputDir, 'static')
+
+      const result = await toSSG(app, fsPromises, {
+        dir: staticDir,
+        // Only generate pages that have ssgParams middleware
+        // (pages with generateStaticParams export)
+      })
+
+      // Track generated paths
+      if (result.files) {
+        for (const file of result.files) {
+          // Convert file path back to URL path
+          const relativePath = path.relative(staticDir, file)
+          const urlPath = '/' + relativePath.replace(/\/index\.html$/, '').replace(/\.html$/, '')
+          generatedPaths.push(urlPath || '/')
+
+          if (verbose) {
+            logger.debug(`Generated: ${urlPath || '/'} -> ${relativePath}`)
+          }
+        }
+      }
+
+      if (generatedPaths.length > 0) {
+        logger.info(`Generated ${generatedPaths.length} static page(s)`)
+      }
+    } finally {
+      await vite.close()
+    }
+  } catch (error) {
+    if (verbose) {
+      logger.debug(`SSG error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    // Don't fail the build, just warn
+    logger.warn(`Static generation failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    // Clean up platform proxy
+    await dispose()
+  }
+
+  return generatedPaths
 }

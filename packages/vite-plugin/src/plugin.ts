@@ -638,7 +638,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
     },
 
     /**
-     * Transform hook to detect and wrap client components.
+     * Transform hook to detect and wrap client components,
+     * and rewrite binding imports to use the bindings proxy.
      */
     transform(code: string, id: string) {
       if (!state) return null
@@ -647,8 +648,79 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
       if (id.includes('node_modules')) return null
       if (!id.endsWith('.tsx') && !id.endsWith('.ts')) return null
 
+      let transformedCode = code
+      let wasTransformed = false
+
+      // Transform imports from @cloudwerk/core/bindings that use named exports
+      // The generated types declare bindings like DB, CACHE, etc. but the runtime
+      // module only exports the `bindings` proxy. We need to rewrite these imports
+      // to use createLazyBinding() which defers getContext() until actual use.
+      const bindingsImportRegex = /import\s*\{([^}]+)\}\s*from\s*['"]@cloudwerk\/core\/bindings['"]/g
+
+      if (bindingsImportRegex.test(code)) {
+        // Reset regex state
+        bindingsImportRegex.lastIndex = 0
+
+        transformedCode = code.replace(bindingsImportRegex, (match, imports: string) => {
+          // Parse the named imports
+          const importNames = imports.split(',').map((s: string) => s.trim()).filter(Boolean)
+
+          // Separate known runtime exports from generated binding exports
+          const knownExports = ['bindings', 'getBinding', 'hasBinding', 'getBindingNames',
+            'queues', 'getQueue', 'hasQueue', 'getQueueNames',
+            'services', 'getService', 'hasService', 'getServiceNames',
+            'registerLocalService', 'unregisterLocalService', 'clearLocalServices',
+            'durableObjects', 'getDurableObject', 'hasDurableObject', 'getDurableObjectNames',
+            'createLazyBinding']
+
+          const runtimeImports: string[] = []
+          const bindingImports: string[] = []
+
+          for (const name of importNames) {
+            // Handle aliased imports like "DB as database"
+            const [originalName] = name.split(/\s+as\s+/)
+            if (knownExports.includes(originalName.trim())) {
+              runtimeImports.push(name)
+            } else {
+              bindingImports.push(name)
+            }
+          }
+
+          if (bindingImports.length === 0) {
+            // No binding imports to transform
+            return match
+          }
+
+          wasTransformed = true
+
+          // Build the replacement code
+          const parts: string[] = []
+
+          // Import createLazyBinding (and any other runtime imports)
+          const helperImports = runtimeImports.includes('createLazyBinding')
+            ? runtimeImports
+            : ['createLazyBinding', ...runtimeImports]
+          parts.push(`import { ${helperImports.join(', ')} } from '@cloudwerk/core/bindings'`)
+
+          // Create lazy bindings for each binding import
+          // This defers the getContext() call until the binding is actually used
+          for (const name of bindingImports) {
+            const aliasMatch = name.match(/^(\w+)\s+as\s+(\w+)$/)
+            if (aliasMatch) {
+              // Aliased import: "DB as database" -> const database = createLazyBinding('DB')
+              parts.push(`const ${aliasMatch[2]} = createLazyBinding('${aliasMatch[1]}')`)
+            } else {
+              // Simple import: "DB" -> const DB = createLazyBinding('DB')
+              parts.push(`const ${name.trim()} = createLazyBinding('${name.trim()}')`)
+            }
+          }
+
+          return parts.join('\n')
+        })
+      }
+
       // Check for 'use client' directive
-      if (hasUseClientDirective(code)) {
+      if (hasUseClientDirective(transformedCode)) {
         const componentId = generateComponentId(id, state.options.root)
         const bundlePath = `${state.options.hydrationEndpoint}/${componentId}.js`
 
@@ -670,7 +742,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         // Transform the client component to wrap its default export
         // This adds the hydration wrapper for server-side rendering
         // Use the actual file path for Vite to resolve in dev mode
-        const result = transformClientComponent(code, {
+        const result = transformClientComponent(transformedCode, {
           componentId,
           bundlePath: id, // Use file path for Vite to resolve in dev mode
         })
@@ -681,6 +753,13 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
         return {
           code: result.code,
+          map: null,
+        }
+      }
+
+      if (wasTransformed) {
+        return {
+          code: transformedCode,
           map: null,
         }
       }

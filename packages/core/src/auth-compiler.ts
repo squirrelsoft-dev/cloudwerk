@@ -376,7 +376,7 @@ export async function loadProviderModule(
   entry: AuthProviderEntry
 ): Promise<AuthProviderEntry> {
   try {
-    const module = await import(entry.filePath)
+    const module = await import(/* @vite-ignore */ entry.filePath)
     const exported = module.default
 
     // Check if it's a provider definition
@@ -425,7 +425,7 @@ export async function loadConfigModule(
   disabledProviders?: string[]
 } | undefined> {
   try {
-    const module = await import(filePath)
+    const module = await import(/* @vite-ignore */ filePath)
     const config = module.default
 
     if (config && typeof config === 'object') {
@@ -451,7 +451,7 @@ export async function loadConfigModule(
  */
 export async function loadCallbacksModule(filePath: string): Promise<string[]> {
   try {
-    const module = await import(filePath)
+    const module = await import(/* @vite-ignore */ filePath)
     const callbacks = module.default
 
     if (callbacks && typeof callbacks === 'object') {
@@ -480,7 +480,7 @@ export async function loadPagesModule(
   filePath: string
 ): Promise<AuthPagesConfig | undefined> {
   try {
-    const module = await import(filePath)
+    const module = await import(/* @vite-ignore */ filePath)
     const pages = module.default
 
     if (pages && typeof pages === 'object') {
@@ -509,7 +509,7 @@ export async function loadRBACModule(
   filePath: string
 ): Promise<{ roles: string[]; defaultRole: string } | undefined> {
   try {
-    const module = await import(filePath)
+    const module = await import(/* @vite-ignore */ filePath)
     const rbac = module.default
 
     if (rbac && typeof rbac === 'object' && Array.isArray(rbac.roles)) {

@@ -10,14 +10,38 @@ import type { Context, Handler, MiddlewareHandler } from 'hono'
 import type { CloudwerkContext, CloudwerkHandler, ExecutionContext } from './types.js'
 
 // ============================================================================
-// Internal Context Storage
+// Internal Context Storage (Singleton via globalThis)
 // ============================================================================
 
 /**
- * Internal AsyncLocalStorage instance for request-scoped context.
- * This is not exported to prevent direct manipulation.
+ * Symbol key for storing the singleton AsyncLocalStorage on globalThis.
+ * Using Symbol.for() ensures the same symbol is returned across module instances,
+ * which is critical because Vite SSR may load this module multiple times.
  */
-const contextStorage = new AsyncLocalStorage<CloudwerkContext<unknown>>()
+const CONTEXT_STORAGE_KEY = Symbol.for('@cloudwerk/core/context-storage')
+
+/**
+ * Get or create the singleton AsyncLocalStorage instance.
+ * This ensures context propagation works correctly even when the module
+ * is loaded multiple times by Vite's SSR module system.
+ */
+function getContextStorage(): AsyncLocalStorage<CloudwerkContext<unknown>> {
+  const global = globalThis as typeof globalThis & {
+    [CONTEXT_STORAGE_KEY]?: AsyncLocalStorage<CloudwerkContext<unknown>>
+  }
+
+  if (!global[CONTEXT_STORAGE_KEY]) {
+    global[CONTEXT_STORAGE_KEY] = new AsyncLocalStorage<CloudwerkContext<unknown>>()
+  }
+
+  return global[CONTEXT_STORAGE_KEY]
+}
+
+/**
+ * Internal AsyncLocalStorage instance for request-scoped context.
+ * This is a singleton shared across all module instances via globalThis.
+ */
+const contextStorage = getContextStorage()
 
 // ============================================================================
 // Context Creation
@@ -162,9 +186,9 @@ export function contextMiddleware(): MiddlewareHandler {
     const ctx = createContext(c)
 
     // Run the rest of the middleware chain within the context
-    return runWithContext(ctx, async () => {
-      await next()
-    })
+    // Note: We pass next() directly (not wrapped in async) to preserve
+    // AsyncLocalStorage context propagation through the Promise chain
+    return runWithContext(ctx, () => next())
   }
 }
 
