@@ -79,16 +79,26 @@ The starter template already includes Tailwind CSS configured in `app/globals.cs
 
    This creates the database and automatically configures `wrangler.toml`.
 
-2. Create the migrations directory:
+2. Generate TypeScript types for your bindings:
 
    ```bash
-   mkdir -p migrations
+   npm run bindings generate-types
    ```
+
+   This creates type definitions so you can import `DB` from `@cloudwerk/core/bindings`.
+
+3. Create a migration file:
+
+   ```bash
+   wrangler d1 migrations create blog-db create_posts
+   ```
+
+   This creates `migrations/0001_create_posts.sql`.
 </Steps>
 
 ### Database Schema
 
-Create the posts table with seed data:
+Open the migration file and add the posts table with seed data:
 
 ```sql title="migrations/0001_create_posts.sql"
 CREATE TABLE posts (
