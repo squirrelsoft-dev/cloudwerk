@@ -26,7 +26,7 @@ The final project structure:
 - app/
   - layout.tsx
   - page.tsx
-  - styles.css
+  - globals.css
   - about/
     - page.tsx
   - posts/
@@ -61,15 +61,9 @@ The final project structure:
    ```
 </Steps>
 
-## Step 2: Configure Tailwind CSS
+## Step 2: Set Up D1 Database
 
-The starter template already includes Tailwind CSS. Create the styles file:
-
-```css title="app/styles.css"
-@import "tailwindcss";
-```
-
-## Step 3: Set Up D1 Database
+The starter template already includes Tailwind CSS configured in `app/globals.css`.
 
 <Steps>
 1. Create a D1 database:
@@ -175,7 +169,7 @@ Apply the migration locally:
 wrangler d1 migrations apply blog-db --local
 ```
 
-## Step 4: Create Database Helpers
+## Step 3: Create Database Helpers
 
 Create a module to interact with the D1 database:
 
@@ -221,7 +215,7 @@ export async function getAllSlugs(): Promise<string[]> {
 Import `DB` directly from `@cloudwerk/core/bindings` to access your D1 database. Run `pnpm bindings` to generate TypeScript types for your bindings.
 </Aside>
 
-## Step 5: Create a Markdown Renderer
+## Step 4: Create a Markdown Renderer
 
 Create a simple markdown renderer for blog posts:
 
@@ -359,13 +353,13 @@ export function renderMarkdown(source: string): string {
 }
 ```
 
-## Step 6: Create the Root Layout
+## Step 5: Update the Root Layout
 
-Create a layout that wraps all pages:
+Update the layout to set the blog title:
 
 ```tsx title="app/layout.tsx"
 import type { LayoutProps } from '@cloudwerk/core'
-import stylesUrl from './styles.css?url'
+import globals from './globals.css?url'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -374,7 +368,7 @@ export default function RootLayout({ children }: LayoutProps) {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Blog - Cloudwerk</title>
-        <link rel="stylesheet" href={stylesUrl} />
+        <link rel="stylesheet" href={globals} />
       </head>
       <body>
         {children}
@@ -388,7 +382,7 @@ export default function RootLayout({ children }: LayoutProps) {
 Use `?url` suffix to import CSS files as URLs. This enables Vite to process the CSS and return a hashed URL for cache busting.
 </Aside>
 
-## Step 7: Create the Home Page
+## Step 6: Create the Home Page
 
 The home page displays a list of all published posts:
 
@@ -439,7 +433,7 @@ export default function HomePage({ posts }: HomePageProps) {
 }
 ```
 
-## Step 8: Create the PostCard Component
+## Step 7: Create the PostCard Component
 
 Create a reusable component to display post previews:
 
@@ -473,7 +467,7 @@ export default function PostCard({ post }: PostCardProps) {
 }
 ```
 
-## Step 9: Create the Post Detail Page
+## Step 8: Create the Post Detail Page
 
 This page uses **Static Site Generation (SSG)** to pre-render posts at build time:
 
@@ -545,7 +539,7 @@ export default function PostPage({ post, html }: PostPageProps) {
 By setting `config.rendering = 'static'` and exporting `generateStaticParams()`, Cloudwerk will pre-render these pages at build time. This results in instant page loads since HTML is served directly from Cloudflare's edge network.
 </Aside>
 
-## Step 10: Create the About Page
+## Step 9: Create the About Page
 
 Add a static about page:
 
@@ -593,7 +587,7 @@ export default function AboutPage() {
 }
 ```
 
-## Step 11: Run the Development Server
+## Step 10: Run the Development Server
 
 Start the development server:
 
@@ -603,7 +597,7 @@ pnpm dev
 
 Visit `http://localhost:3000` to see your blog!
 
-## Step 12: Build and Deploy
+## Step 11: Build and Deploy
 
 <Steps>
 1. Build the application:
