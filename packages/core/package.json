@@ -28,6 +28,10 @@
     "./context": {
       "types": "./dist/context-exports.d.ts",
       "import": "./dist/context-exports.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware/index.d.ts",
+      "import": "./dist/middleware/index.js"
     }
   },
   "files": [

@@ -1,5 +1,5 @@
 /**
- * @cloudwerk/auth - Rate Limit Strategies
+ * @cloudwerk/core - Rate Limit Strategies
  *
  * Rate limiting strategy implementations.
  */
@@ -73,9 +73,9 @@ export function createFixedWindowStorage(
       // Increment count
       data.count++
 
-      // Store updated count
+      // Store updated count (KV requires minimum 60 second TTL)
       const ttl = windowEnd - now + 1 // +1 for safety
-      await kv.put(fullKey, JSON.stringify(data), { expirationTtl: Math.max(ttl, 1) })
+      await kv.put(fullKey, JSON.stringify(data), { expirationTtl: Math.max(ttl, 60) })
 
       const allowed = data.count <= limit
       const remaining = Math.max(0, limit - data.count)
@@ -191,8 +191,8 @@ export function createSlidingWindowStorage(
       // Add current timestamp
       data.timestamps.push(now)
 
-      // Store updated timestamps
-      await kv.put(fullKey, JSON.stringify(data), { expirationTtl: window + 1 })
+      // Store updated timestamps (KV requires minimum 60 second TTL)
+      await kv.put(fullKey, JSON.stringify(data), { expirationTtl: Math.max(window + 1, 60) })
 
       const count = data.timestamps.length
       const allowed = count <= limit
