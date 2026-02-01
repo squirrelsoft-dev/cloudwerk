@@ -36,6 +36,7 @@ import type {
   ResolvedCloudwerkOptions,
   PluginState,
   ClientComponentInfo,
+  CssImportInfo,
 } from './types.js'
 import {
   VIRTUAL_MODULE_IDS,
@@ -91,6 +92,98 @@ async function scanClientComponents(root: string, state: PluginState): Promise<v
 
             if (state.options.verbose) {
               console.log(`[cloudwerk] Pre-scanned client component: ${componentId}`)
+            }
+          }
+        }
+      })
+    )
+  }
+
+  await scanDir(appDir)
+}
+
+/**
+ * Regex to detect CSS imports in source files.
+ * Matches: import './file.css', import 'path/to/file.css', import styles from './file.css'
+ */
+const CSS_IMPORT_REGEX = /import\s+(?:['"]([^'"]+\.css)['"]|(?:\w+\s+from\s+)?['"]([^'"]+\.css)['"])/g
+
+/**
+ * Extract CSS import paths from source code.
+ */
+function extractCssImports(code: string): string[] {
+  const imports: string[] = []
+  let match: RegExpExecArray | null
+
+  // Reset regex state
+  CSS_IMPORT_REGEX.lastIndex = 0
+
+  while ((match = CSS_IMPORT_REGEX.exec(code)) !== null) {
+    const cssPath = match[1] || match[2]
+    if (cssPath) {
+      imports.push(cssPath)
+    }
+  }
+
+  return imports
+}
+
+/**
+ * Check if a file is a layout or page file.
+ */
+function isLayoutOrPage(filePath: string): { isLayout: boolean; isPage: boolean } {
+  const basename = path.basename(filePath)
+  const nameWithoutExt = basename.replace(/\.(ts|tsx|js|jsx)$/, '')
+
+  return {
+    isLayout: nameWithoutExt === 'layout',
+    isPage: nameWithoutExt === 'page',
+  }
+}
+
+/**
+ * Recursively scan a directory for CSS imports in layout and page files.
+ */
+async function scanCssImports(root: string, state: PluginState): Promise<void> {
+  const appDir = path.resolve(root, state.options.appDir)
+
+  try {
+    await fs.promises.access(appDir)
+  } catch {
+    return // Directory does not exist or is not accessible
+  }
+
+  async function scanDir(dir: string): Promise<void> {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true })
+
+    await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dir, entry.name)
+
+        if (entry.isDirectory()) {
+          // Skip node_modules and hidden directories
+          if (entry.name !== 'node_modules' && !entry.name.startsWith('.')) {
+            await scanDir(fullPath)
+          }
+        } else if (entry.isFile() && (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts'))) {
+          const { isLayout, isPage } = isLayoutOrPage(fullPath)
+
+          if (isLayout || isPage) {
+            const content = await fs.promises.readFile(fullPath, 'utf-8')
+            const cssImportPaths = extractCssImports(content)
+
+            if (cssImportPaths.length > 0) {
+              const cssInfos: CssImportInfo[] = cssImportPaths.map((cssPath) => ({
+                absolutePath: path.resolve(path.dirname(fullPath), cssPath),
+                importedBy: fullPath,
+                isLayout,
+              }))
+
+              state.cssImports.set(fullPath, cssInfos)
+
+              if (state.options.verbose) {
+                console.log(`[cloudwerk] Found ${cssInfos.length} CSS import(s) in ${path.relative(root, fullPath)}`)
+              }
             }
           }
         }
@@ -418,6 +511,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         serviceManifest: null,
         serviceScanResult: null,
         clientComponents: new Map(),
+        cssImports: new Map(),
         serverEntryCache: null,
         clientEntryCache: null,
       }
@@ -433,6 +527,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Pre-scan for client components (needed for production builds)
       await scanClientComponents(root, state)
+
+      // Pre-scan for CSS imports in layouts and pages (needed for production builds)
+      await scanCssImports(root, state)
     },
 
     /**
@@ -612,6 +709,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         if (!state.clientEntryCache) {
           state.clientEntryCache = generateClientEntry(
             state.clientComponents,
+            state.cssImports,
             state.options
           )
         }
@@ -717,6 +815,28 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
           return parts.join('\n')
         })
+      }
+
+      // Detect CSS imports in layout and page files
+      const { isLayout, isPage } = isLayoutOrPage(id)
+      if (isLayout || isPage) {
+        const cssImportPaths = extractCssImports(transformedCode)
+        if (cssImportPaths.length > 0) {
+          const cssInfos: CssImportInfo[] = cssImportPaths.map((cssPath) => ({
+            absolutePath: path.resolve(path.dirname(id), cssPath),
+            importedBy: id,
+            isLayout,
+          }))
+
+          state.cssImports.set(id, cssInfos)
+
+          // Invalidate client entry cache so CSS imports are picked up
+          state.clientEntryCache = null
+
+          if (state.options.verbose) {
+            console.log(`[cloudwerk] Detected ${cssInfos.length} CSS import(s) in ${path.relative(state.options.root, id)}`)
+          }
+        }
       }
 
       // Check for 'use client' directive

@@ -44,7 +44,13 @@ export function createLazyBinding<T = unknown>(name: string): T {
         return undefined
       }
       const binding = getBinding(name)
-      return Reflect.get(binding as object, prop)
+      const value = Reflect.get(binding as object, prop)
+      // Bind methods to the original binding to preserve `this` context
+      // This prevents "Illegal invocation" errors on Cloudflare bindings
+      if (typeof value === 'function') {
+        return value.bind(binding)
+      }
+      return value
     },
     set(_target, prop, value) {
       const binding = getBinding(name)

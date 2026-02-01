@@ -1,0 +1,851 @@
+---
+title: Linkly - Link Shortener
+description: Build a link shortener with D1 database, KV caching, and rate limiting.
+---
+
+import { Aside, Steps, Tabs, TabItem, FileTree, LinkCard } from '@astrojs/starlight/components';
+
+In this tutorial, you'll build a complete link shortening service with:
+
+- **D1 Database** for persistent link storage
+- **KV Cache** for fast redirects
+- **Rate Limiting** middleware to prevent abuse
+- **Analytics** tracking (click counts)
+
+<LinkCard
+  title="View Source on GitHub"
+  href="https://github.com/squirrelsoft-dev/cloudwerk/tree/main/examples/linkly"
+  description="See the complete source code for this example"
+/>
+
+<LinkCard
+  title="Try the Live Demo"
+  href="https://linkly.cloudwerk.dev"
+  description="See Linkly in action - shorten URLs and view click statistics"
+/>
+
+## Project Overview
+
+The final project structure:
+
+<FileTree>
+- app/
+  - layout.tsx
+  - page.tsx
+  - globals.css
+  - [code]/
+    - route.ts           # GET /:code - redirect handler
+  - stats/
+    - [code]/
+      - page.tsx         # Link statistics page
+  - api/
+    - middleware.ts      # Rate limiting
+    - shorten/
+      - route.ts         # POST /api/shorten
+  - lib/
+    - db.ts              # D1 database helpers
+    - cache.ts           # KV cache helpers
+  - components/
+    - shorten-form.tsx   # Client component for URL input
+- migrations/
+  - 0001_create_links.sql
+- cloudwerk.config.ts
+- wrangler.toml
+- package.json
+</FileTree>
+
+## Step 1: Create the Project
+
+<Steps>
+1. Create a new Cloudwerk app:
+
+   ```bash
+   pnpm dlx @cloudwerk/create-app linkly --renderer hono-jsx
+   cd linkly
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+</Steps>
+
+## Step 2: Set Up D1 Database
+
+<Steps>
+1. Add a D1 database binding:
+
+   ```bash
+   npm run bindings add d1
+   ```
+
+   When prompted:
+   - **Binding name**: `DB`
+   - **Database name**: `linkly-db`
+   - **Add to wrangler.toml?**: Yes
+
+2. Generate TypeScript types for your bindings:
+
+   ```bash
+   npm run bindings generate-types
+   ```
+
+   This creates type definitions so you can import `DB` from `@cloudwerk/core/bindings`.
+
+3. Create a migration file:
+
+   ```bash
+   wrangler d1 migrations create linkly-db create_links
+   ```
+
+   This creates `migrations/0001_create_links.sql`.
+</Steps>
+
+### Database Schema
+
+Open the migration file and add the links table:
+
+```sql title="migrations/0001_create_links.sql"
+CREATE TABLE links (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  code TEXT UNIQUE NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  clicks INTEGER DEFAULT 0
+);
+
+CREATE INDEX idx_links_code ON links(code);
+```
+
+Apply the migration locally:
+
+```bash
+wrangler d1 migrations apply linkly-db --local
+```
+
+## Step 3: Set Up KV Cache
+
+<Steps>
+1. Add a KV namespace for caching:
+
+   ```bash
+   npm run bindings add kv
+   ```
+
+   When prompted:
+   - **Binding name**: `LINKLY_CACHE`
+   - **Namespace name**: `linkly-cache`
+   - **Add to wrangler.toml?**: Yes
+
+2. Regenerate TypeScript types:
+
+   ```bash
+   npm run bindings generate-types
+   ```
+
+   This adds `LINKLY_CACHE` to your bindings types.
+</Steps>
+
+The KV cache will store URLs for fast redirect lookups, avoiding database queries for popular links.
+
+## Step 4: Create Database Helpers
+
+Create a module to interact with the D1 database:
+
+```typescript title="app/lib/db.ts"
+import { DB } from '@cloudwerk/core/bindings'
+
+export interface Link {
+  id: string
+  url: string
+  code: string
+  created_at: string
+  clicks: number
+}
+
+/**
+ * Generate a random 6-character alphanumeric code
+ */
+export function generateCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return code
+}
+
+/**
+ * Create a new shortened link
+ */
+export async function createLink(url: string, code: string): Promise<Link> {
+  const id = crypto.randomUUID()
+
+  await DB.prepare('INSERT INTO links (id, url, code) VALUES (?, ?, ?)')
+    .bind(id, url, code)
+    .run()
+
+  return {
+    id,
+    url,
+    code,
+    created_at: new Date().toISOString(),
+    clicks: 0,
+  }
+}
+
+/**
+ * Get a link by its short code
+ */
+export async function getLinkByCode(code: string): Promise<Link | null> {
+  const result = await DB.prepare('SELECT * FROM links WHERE code = ?')
+    .bind(code)
+    .first<Link>()
+  return result
+}
+
+/**
+ * Increment the click count for a link
+ */
+export async function incrementClicks(code: string): Promise<void> {
+  await DB.prepare('UPDATE links SET clicks = clicks + 1 WHERE code = ?')
+    .bind(code)
+    .run()
+}
+
+/**
+ * Check if a code already exists
+ */
+export async function codeExists(code: string): Promise<boolean> {
+  const link = await getLinkByCode(code)
+  return link !== null
+}
+
+/**
+ * Generate a unique code that doesn't exist in the database
+ */
+export async function generateUniqueCode(): Promise<string> {
+  let code = generateCode()
+  let attempts = 0
+  const maxAttempts = 10
+
+  while (await codeExists(code) && attempts < maxAttempts) {
+    code = generateCode()
+    attempts++
+  }
+
+  if (attempts >= maxAttempts) {
+    throw new Error('Failed to generate unique code')
+  }
+
+  return code
+}
+```
+
+<Aside type="tip">
+Import `DB` directly from `@cloudwerk/core/bindings` to access your D1 database. Run `npm run bindings generate-types` to generate TypeScript types for your bindings.
+</Aside>
+
+## Step 5: Create Cache Helpers
+
+Create a module for KV cache operations:
+
+```typescript title="app/lib/cache.ts"
+import { LINKLY_CACHE } from '@cloudwerk/core/bindings'
+
+/** Cache TTL in seconds (1 hour) */
+const CACHE_TTL = 3600
+
+/**
+ * Get a cached URL by its short code
+ */
+export async function getCachedUrl(code: string): Promise<string | null> {
+  return LINKLY_CACHE.get(`url:${code}`)
+}
+
+/**
+ * Cache a URL by its short code
+ */
+export async function cacheUrl(code: string, url: string): Promise<void> {
+  await LINKLY_CACHE.put(`url:${code}`, url, {
+    expirationTtl: CACHE_TTL,
+  })
+}
+```
+
+<Aside type="tip">
+The cache uses a 1-hour TTL. Popular links will stay cached, while infrequently accessed links will expire and be re-fetched from the database on the next access.
+</Aside>
+
+## Step 6: Create Rate Limiting Middleware
+
+Create middleware to prevent API abuse:
+
+```typescript title="app/api/middleware.ts"
+import type { Middleware } from '@cloudwerk/core'
+import { LINKLY_CACHE } from '@cloudwerk/core/bindings'
+import {
+  createRateLimiter,
+  createFixedWindowStorage,
+} from '@cloudwerk/core/middleware'
+
+// Rate limit: 10 requests per minute per IP
+const RATE_LIMIT = 10
+const RATE_WINDOW = 60 // seconds
+
+export const middleware: Middleware = async (request, next) => {
+  // Create rate limiter with KV storage
+  const storage = createFixedWindowStorage(LINKLY_CACHE, 'ratelimit:api:')
+  const rateLimiter = createRateLimiter({
+    limit: RATE_LIMIT,
+    window: RATE_WINDOW,
+    storage,
+  })
+
+  // Check rate limit
+  const { response, result } = await rateLimiter.check(request)
+
+  // If rate limited, return 429 response
+  if (response) {
+    return response
+  }
+
+  // Continue to route handler
+  const res = await next()
+
+  // Add rate limit headers to response
+  const headers = rateLimiter.headers(result)
+  for (const [key, value] of Object.entries(headers)) {
+    res.headers.set(key, String(value))
+  }
+
+  return res
+}
+```
+
+<Aside type="note">
+The middleware uses the same KV namespace as the cache, with a different key prefix (`ratelimit:api:`). This is a common pattern to consolidate KV namespaces.
+</Aside>
+
+## Step 7: Create the Shorten API Route
+
+Create the endpoint to shorten URLs:
+
+```typescript title="app/api/shorten/route.ts"
+import type { CloudwerkHandler } from '@cloudwerk/core'
+import { json, badRequest } from '@cloudwerk/core'
+import { createLink, generateUniqueCode } from '../../lib/db'
+import { cacheUrl } from '../../lib/cache'
+
+interface ShortenRequest {
+  url: string
+}
+
+interface ShortenResponse {
+  code: string
+  shortUrl: string
+  url: string
+}
+
+/**
+ * Validate that a string is a valid URL
+ */
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export const POST: CloudwerkHandler = async (request, _context) => {
+  // Parse request body
+  let body: ShortenRequest
+  try {
+    body = await request.json()
+  } catch {
+    return badRequest('Invalid JSON body')
+  }
+
+  // Validate URL
+  const { url } = body
+  if (!url) {
+    return badRequest('URL is required')
+  }
+
+  if (!isValidUrl(url)) {
+    return badRequest('Invalid URL format. Must be a valid HTTP or HTTPS URL.')
+  }
+
+  // Generate unique short code
+  const code = await generateUniqueCode()
+
+  // Store in database
+  await createLink(url, code)
+
+  // Pre-cache in KV for fast redirects
+  await cacheUrl(code, url)
+
+  // Build response
+  const origin = new URL(request.url).origin
+  const response: ShortenResponse = {
+    code,
+    shortUrl: `${origin}/${code}`,
+    url,
+  }
+
+  return json(response, 201)
+}
+```
+
+## Step 8: Create the Redirect Route
+
+Create the redirect handler for short links:
+
+```typescript title="app/[code]/route.ts"
+import type { CloudwerkHandler, CloudwerkHandlerContext } from '@cloudwerk/core'
+import { redirect, notFoundResponse, getContext } from '@cloudwerk/core'
+import { getLinkByCode, incrementClicks } from '../lib/db'
+import { getCachedUrl, cacheUrl } from '../lib/cache'
+
+interface Params {
+  code: string
+}
+
+export const GET: CloudwerkHandler<Params> = async (
+  _request,
+  { params }: CloudwerkHandlerContext<Params>
+) => {
+  const { code } = params
+  const { executionCtx } = getContext()
+
+  // Try cache first (fast path)
+  let url = await getCachedUrl(code)
+
+  if (url) {
+    // Track click in background
+    executionCtx.waitUntil(incrementClicks(code))
+    return redirect(url, 302)
+  }
+
+  // Cache miss - check database
+  const link = await getLinkByCode(code)
+
+  if (!link) {
+    return notFoundResponse('Link not found')
+  }
+
+  url = link.url
+
+  // Cache for next time and track click in background
+  executionCtx.waitUntil(
+    Promise.all([
+      cacheUrl(code, url),
+      incrementClicks(code),
+    ])
+  )
+
+  return redirect(url, 302)
+}
+```
+
+<Aside type="tip" title="Background Processing with waitUntil">
+Using `waitUntil` allows the redirect response to be sent immediately while click tracking and caching happen in the background. This improves response latency significantly.
+</Aside>
+
+## Step 9: Update the Home Page
+
+Replace the starter page with the link shortener UI:
+
+```tsx title="app/page.tsx"
+import ShortenForm from './components/shorten-form'
+
+export default function HomePage() {
+  return (
+    <main class="flex flex-col items-center justify-center min-h-screen p-8">
+      {/* Logo/Brand */}
+      <div class="mb-8">
+        <h1 class="text-5xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
+          Linkly
+        </h1>
+      </div>
+
+      {/* Tagline */}
+      <p class="text-xl text-gray-600 dark:text-gray-400 mb-8 text-center max-w-md">
+        Shorten your links, track your clicks
+      </p>
+
+      {/* Shorten Form */}
+      <div class="w-full max-w-lg">
+        <ShortenForm />
+      </div>
+
+      {/* Info */}
+      <div class="mt-12 text-sm text-gray-500 dark:text-gray-500 text-center max-w-md">
+        <p>Built with Cloudwerk using D1 for storage and KV for caching.</p>
+        <p class="mt-2">Rate limited to 10 requests per minute.</p>
+      </div>
+    </main>
+  )
+}
+```
+
+## Step 10: Create the Shorten Form Component
+
+Create a client component for the URL input form:
+
+```tsx title="app/components/shorten-form.tsx"
+'use client'
+
+import { useState } from 'hono/jsx'
+
+interface ShortenResult {
+  code: string
+  shortUrl: string
+  url: string
+}
+
+export default function ShortenForm() {
+  const [url, setUrl] = useState('')
+  const [result, setResult] = useState<ShortenResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function handleSubmit(e: Event) {
+    e.preventDefault()
+    setError(null)
+    setResult(null)
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/shorten', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to shorten URL')
+        return
+      }
+
+      setResult(data)
+      setUrl('')
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function copyToClipboard() {
+    if (!result) return
+    await navigator.clipboard.writeText(result.shortUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div class="space-y-6">
+      {/* Form */}
+      <form onSubmit={handleSubmit} class="flex gap-3">
+        <input
+          type="url"
+          value={url}
+          onInput={(e) => setUrl((e.target as HTMLInputElement).value)}
+          placeholder="https://example.com/long-url"
+          required
+          class="flex-1 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          class="px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-medium rounded-lg transition-colors"
+        >
+          {loading ? 'Shortening...' : 'Shorten'}
+        </button>
+      </form>
+
+      {/* Error */}
+      {error && (
+        <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-400">
+          {error}
+        </div>
+      )}
+
+      {/* Result */}
+      {result && (
+        <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">Your shortened link:</p>
+          <div class="flex items-center gap-3">
+            <a
+              href={result.shortUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-lg font-medium text-blue-600 dark:text-blue-400 hover:underline break-all"
+            >
+              {result.shortUrl}
+            </a>
+            <button
+              onClick={copyToClipboard}
+              class="shrink-0 px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-500 mt-2 truncate">
+            Original: {result.url}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+## Step 11: Update the Layout
+
+Update the layout with Linkly branding:
+
+```tsx title="app/layout.tsx"
+import type { LayoutProps } from '@cloudwerk/core'
+import globals from './globals.css?url'
+
+export default function RootLayout({ children }: LayoutProps) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Linkly - Link Shortener</title>
+        <link rel="stylesheet" href={globals} />
+      </head>
+      <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+## Step 12: Create the Stats Page
+
+Create a page to display link statistics:
+
+```tsx title="app/stats/[code]/page.tsx"
+import type { PageProps, LoaderArgs } from '@cloudwerk/core'
+import { NotFoundError } from '@cloudwerk/core'
+import { getLinkByCode, type Link } from '../../lib/db'
+
+interface StatsLoaderData {
+  link: Link
+  shortUrl: string
+}
+
+export async function loader({ params, request }: LoaderArgs<{ code: string }>): Promise<StatsLoaderData> {
+  const link = await getLinkByCode(params.code)
+  if (!link) throw new NotFoundError()
+
+  const origin = new URL(request.url).origin
+  return {
+    link,
+    shortUrl: `${origin}/${link.code}`,
+  }
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export default function StatsPage({ link, shortUrl }: PageProps & StatsLoaderData) {
+  return (
+    <main class="flex flex-col items-center justify-center min-h-screen p-8">
+      {/* Header */}
+      <div class="mb-8">
+        <a href="/" class="text-4xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity">
+          Linkly
+        </a>
+      </div>
+
+      <h2 class="text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-8">
+        Link Statistics
+      </h2>
+
+      {/* Stats Card */}
+      <div class="w-full max-w-lg bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 space-y-6">
+        {/* Click Count */}
+        <div class="text-center py-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg">
+          <div class="text-5xl font-bold text-blue-600 dark:text-blue-400">
+            {link.clicks.toLocaleString()}
+          </div>
+          <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            {link.clicks === 1 ? 'click' : 'clicks'}
+          </div>
+        </div>
+
+        {/* Short URL with copy button */}
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+            Short URL
+          </label>
+          <div class="flex items-center gap-2">
+            <a
+              href={shortUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex-1 text-blue-600 dark:text-blue-400 hover:underline break-all"
+            >
+              {shortUrl}
+            </a>
+            <button
+              onclick={`navigator.clipboard.writeText('${shortUrl}');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)`}
+              class="shrink-0 px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Original URL */}
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+            Original URL
+          </label>
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="block text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 break-all transition-colors"
+          >
+            {link.url}
+          </a>
+        </div>
+
+        {/* Created Date */}
+        <div>
+          <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+            Created
+          </label>
+          <div class="text-gray-700 dark:text-gray-300">
+            {formatDate(link.created_at)}
+          </div>
+        </div>
+      </div>
+
+      {/* Back Link */}
+      <a
+        href="/"
+        class="mt-8 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+      >
+        &larr; Create another link
+      </a>
+    </main>
+  )
+}
+```
+
+The stats page uses a **loader function** to fetch link data server-side before rendering. If the link doesn't exist, it throws `NotFoundError` which returns a 404 response.
+
+<Aside type="tip">
+The stats page is accessible at `/stats/{code}`. After shortening a URL, click "View Stats" to see the click count, creation date, and both URLs.
+</Aside>
+
+## Step 13: Run the Development Server
+
+Start the development server:
+
+```bash
+pnpm dev
+```
+
+Visit `http://localhost:8787` to see your link shortener!
+
+## Testing the Application
+
+<Steps>
+1. **Shorten a URL**: Enter a long URL and click "Shorten"
+2. **Copy the link**: Click "Copy" to copy the shortened URL
+3. **View statistics**: Click "View Stats" to see the stats page
+4. **Test redirect**: Open the short link in a new tab
+5. **Verify clicks**: Refresh the stats page to see the click count increase
+6. **Test rate limiting**: Submit more than 10 requests per minute
+7. **Test 404**: Visit `/stats/invalid` to see 404 handling
+</Steps>
+
+## Step 14: Build and Deploy
+
+<Steps>
+1. Build the application:
+
+   ```bash
+   pnpm build
+   ```
+
+2. Apply migrations to production:
+
+   ```bash
+   wrangler d1 migrations apply linkly-db --remote
+   ```
+
+3. Deploy to Cloudflare:
+
+   ```bash
+   pnpm deploy
+   ```
+</Steps>
+
+## Summary
+
+You've built a complete link shortener with:
+
+- **D1 Database**: Persistent storage for links and click counts
+- **KV Cache**: Fast redirect lookups with automatic TTL
+- **Rate Limiting**: Protection against API abuse using `@cloudwerk/core/middleware`
+- **Click Analytics**: Background tracking with `waitUntil`
+- **Statistics Page**: Server-side rendered stats with loader functions
+- **Client Components**: Interactive form with real-time feedback
+
+## Architecture Highlights
+
+### Caching Strategy
+
+The redirect route implements a read-through cache pattern:
+
+1. Check KV cache first (sub-millisecond latency)
+2. On cache miss, query D1 database
+3. Cache the result for future requests
+
+### Background Processing
+
+Using `executionCtx.waitUntil()` allows:
+
+- Immediate response to the user
+- Click tracking in the background
+- Cache population without blocking
+
+### Rate Limiting
+
+The API middleware protects against abuse:
+
+- 10 requests per minute per IP
+- Uses the same KV namespace with a different prefix
+- Returns standard rate limit headers
+
+## Next Steps
+
+- **[Database Guide](/guides/database/)** - Learn more about D1 patterns
+- **[Middleware](/guides/middleware/)** - Advanced middleware patterns
+- **[Authentication](/guides/authentication/)** - Add user authentication
+- **[Deployment](/guides/deployment/)** - Production deployment options

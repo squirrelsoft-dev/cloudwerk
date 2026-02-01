@@ -1,0 +1,29 @@
+name = "linkly"
+main = "dist/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
+# account_id = "<your-account-id>"
+
+[assets]
+directory = "./dist/static"
+binding = "ASSETS"
+
+[build]
+command = "npm run build"
+
+[env.preview]
+name = "linkly-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "linkly-preview-db"
+database_id = "<your-preview-database-id>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "linkly-db"
+database_id = "<your-database-id>"
+
+[[kv_namespaces]]
+binding = "LINKLY_CACHE"
+id = "<your-kv-namespace-id>"
