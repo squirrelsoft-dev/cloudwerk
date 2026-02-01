@@ -517,3 +517,57 @@ export type {
   AuthValidationWarning,
   AuthManifest,
 } from './auth-compiler.js'
+
+// ============================================================================
+// Image Scanner Exports
+// ============================================================================
+
+export {
+  // File Detection
+  isImageFile,
+
+  // Name Conversion
+  fileNameToImageName,
+  imageNameToBindingName,
+  bindingNameToImageName,
+
+  // Image Scanning
+  scanImages,
+  scanImagesSync,
+
+  // Constants
+  IMAGES_DIR,
+} from './image-scanner.js'
+
+export type { ScannedImage, ImageScanResult } from './image-scanner.js'
+
+// ============================================================================
+// Image Compiler Exports
+// ============================================================================
+
+export {
+  // Image Compilation
+  compileImage,
+  buildImageManifest,
+  updateImageEntryFromDefinition,
+  addImageWarnings,
+
+  // Formatting
+  formatImageErrors,
+  formatImageWarnings,
+
+  // Utilities
+  hasImageErrors,
+  hasImageWarnings,
+} from './image-compiler.js'
+
+export type {
+  ImageVariant,
+  EnvRef,
+  ImageConfig,
+  ImageEntry,
+  ImageValidationError,
+  ImageValidationWarning,
+  ImageManifest,
+  BuildImageManifestOptions,
+} from './image-compiler.js'

@@ -121,6 +121,7 @@ function generateBindingsDts(bindings: Binding[], includeTimestamp: boolean): st
     'ai',
     'vectorize',
     'hyperdrive',
+    'images',
     'secret',
   ]
 
@@ -192,6 +193,7 @@ function generateContextDts(bindings: Binding[], includeTimestamp: boolean): str
     'ai',
     'vectorize',
     'hyperdrive',
+    'images',
     'secret',
   ]
 
@@ -284,6 +286,8 @@ function getSectionName(type: BindingType): string {
       return 'Vectorize Indexes'
     case 'hyperdrive':
       return 'Hyperdrive'
+    case 'images':
+      return 'Images'
     default:
       return 'Other'
   }

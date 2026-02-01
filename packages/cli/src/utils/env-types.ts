@@ -26,6 +26,7 @@ const TYPE_MAPPINGS: Record<BindingType, string> = {
   ai: 'Ai',
   vectorize: 'VectorizeIndex',
   hyperdrive: 'Hyperdrive',
+  images: 'import("@cloudwerk/core/bindings").CloudflareImagesBinding',
 }
 
 /**
@@ -104,6 +105,7 @@ export function generateEnvTypes(
     'ai',
     'vectorize',
     'hyperdrive',
+    'images',
     'secret',
   ]
 
@@ -176,6 +178,8 @@ function getSectionName(type: BindingType): string {
       return 'Vectorize Indexes'
     case 'hyperdrive':
       return 'Hyperdrive'
+    case 'images':
+      return 'Images'
     default:
       return 'Other'
   }

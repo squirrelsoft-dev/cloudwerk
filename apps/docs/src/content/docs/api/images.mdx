@@ -1,0 +1,623 @@
+---
+title: Images API
+description: Complete API reference for @cloudwerk/images - Cloudflare Images integration with file-based image definitions, transform pipelines, and CDN-style resizing.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The `@cloudwerk/images` package provides integration with Cloudflare's image services: Hosted Images for storage and delivery, Image Transformer for CDN-style resizing, and the IMAGES binding for transform pipelines.
+
+## Installation
+
+```bash
+pnpm add @cloudwerk/images
+```
+
+## Cloudflare Image Products
+
+Cloudflare offers three distinct image services, each suited for different use cases:
+
+| Product | Purpose | Requirements |
+|---------|---------|--------------|
+| **Hosted Images** | Store & serve images via CDN | Account ID, API token, paid plan |
+| **Image Transformer** | Resize images via URL params | Zone-level route, paid plan |
+| **IMAGES Binding** | Transform pipeline in Worker | wrangler.toml binding, paid plan |
+
+---
+
+## Hosted Images
+
+### defineImage()
+
+Creates an image definition with named variants.
+
+```typescript
+import { defineImage } from '@cloudwerk/images'
+
+export default defineImage({
+  variants: Record<string, ImageVariant>,
+  accountId?: string | EnvRef,
+  apiToken?: string | EnvRef,
+})
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `variants` | `Record<string, ImageVariant>` | Named transformation variants |
+| `accountId` | `string \| EnvRef` | Cloudflare account ID (default: `{ env: 'CF_ACCOUNT_ID' }`) |
+| `apiToken` | `string \| EnvRef` | Cloudflare API token (default: `{ env: 'CF_IMAGES_TOKEN' }`) |
+
+#### Returns
+
+Returns an `ImageDefinition` object that Cloudwerk registers automatically.
+
+### ImageVariant
+
+Transformation options for a variant.
+
+```typescript
+interface ImageVariant {
+  width?: number              // Width in pixels
+  height?: number             // Height in pixels
+  fit?: 'cover' | 'contain' | 'scale-down' | 'crop' | 'pad'
+  format?: 'webp' | 'avif' | 'jpeg' | 'png' | 'auto'
+  quality?: number            // 1-100
+  dpr?: number                // Device pixel ratio (1-3)
+  gravity?: 'auto' | 'center' | 'top' | 'bottom' | 'left' | 'right' | 'face'
+  sharpen?: number            // 0-10
+  blur?: number               // 1-250
+  brightness?: number         // -1 to 1
+  contrast?: number           // -1 to 1
+  rotate?: 0 | 90 | 180 | 270
+  metadata?: 'keep' | 'copyright' | 'none'
+}
+```
+
+### Example
+
+```typescript
+// app/images/avatars.ts
+import { defineImage } from '@cloudwerk/images'
+
+export default defineImage({
+  variants: {
+    thumbnail: { width: 100, height: 100, fit: 'cover' },
+    profile: { width: 400, height: 400, fit: 'cover' },
+    large: { width: 800, fit: 'scale-down', quality: 90 },
+  },
+})
+```
+
+### EnvRef
+
+Reference environment variables for credentials.
+
+```typescript
+interface EnvRef {
+  env: string  // Environment variable name
+}
+
+// Example
+export default defineImage({
+  variants: { /* ... */ },
+  accountId: { env: 'CLOUDFLARE_ACCOUNT_ID' },
+  apiToken: { env: 'CLOUDFLARE_IMAGES_TOKEN' },
+})
+```
+
+---
+
+## ImageClient
+
+The image client provides methods for uploading, retrieving, and managing images.
+
+### images Proxy
+
+Access image clients via the `images` proxy.
+
+```typescript
+import { images } from '@cloudwerk/core/bindings'
+
+// Upload an image
+const result = await images.avatars.upload(file)
+
+// Get variant URL
+const url = images.avatars.url(result.id, 'thumbnail')
+```
+
+### upload()
+
+Upload an image and receive an image ID.
+
+```typescript
+const result = await images.avatars.upload(file: File | Blob | ArrayBuffer, options?: UploadOptions)
+```
+
+#### UploadOptions
+
+```typescript
+interface UploadOptions {
+  id?: string           // Custom image ID (auto-generated if not provided)
+  metadata?: Record<string, string>  // Custom metadata
+  requireSignedUrls?: boolean        // Require signed URLs
+}
+```
+
+#### Returns
+
+```typescript
+interface ImageResult {
+  id: string                         // Image ID
+  filename?: string                  // Original filename
+  metadata?: Record<string, string>  // Custom metadata
+  uploaded: Date                     // Upload timestamp
+  variants: string[]                 // Available variant names
+}
+```
+
+### url()
+
+Get the URL for an image variant.
+
+```typescript
+const url = images.avatars.url(id: string, variant: string): string
+```
+
+### Example
+
+```typescript
+import { images } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
+
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const file = formData.get('avatar') as File
+
+  const result = await images.avatars.upload(file, {
+    metadata: { userId: 'user-123' },
+  })
+
+  return json({
+    id: result.id,
+    thumbnail: images.avatars.url(result.id, 'thumbnail'),
+    profile: images.avatars.url(result.id, 'profile'),
+  })
+}
+```
+
+### getDirectUploadUrl()
+
+Generate a URL for direct browser uploads.
+
+```typescript
+const directUpload = await images.avatars.getDirectUploadUrl(options?: DirectUploadOptions)
+```
+
+#### DirectUploadOptions
+
+```typescript
+interface DirectUploadOptions {
+  id?: string                        // Custom image ID
+  metadata?: Record<string, string>  // Custom metadata
+  requireSignedUrls?: boolean        // Require signed URLs
+  expiry?: Date                      // URL expiration
+}
+```
+
+#### Returns
+
+```typescript
+interface DirectUploadResult {
+  id: string         // Image ID
+  uploadUrl: string  // URL for browser upload
+}
+```
+
+### list()
+
+List uploaded images.
+
+```typescript
+const images = await images.avatars.list(options?: ListOptions)
+```
+
+#### ListOptions
+
+```typescript
+interface ListOptions {
+  page?: number       // Page number (1-based)
+  perPage?: number    // Results per page (max 1000)
+}
+```
+
+### delete()
+
+Delete an image.
+
+```typescript
+await images.avatars.delete(id: string)
+```
+
+### get()
+
+Get image details.
+
+```typescript
+const details = await images.avatars.get(id: string)
+```
+
+---
+
+## Image Transformer
+
+### createImageTransformer()
+
+Creates a route handler for CDN-style image resizing using Cloudflare's Image Resizing service.
+
+```typescript
+import { createImageTransformer } from '@cloudwerk/images'
+
+export const GET = createImageTransformer(config?: TransformerConfig)
+```
+
+#### TransformerConfig
+
+```typescript
+interface TransformerConfig {
+  allowedOrigins?: string[]          // Allowed image source origins
+  presets?: Record<string, TransformPreset>  // Named presets
+  defaults?: TransformPreset         // Default transformations
+  maxWidth?: number                  // Max width (default: 4096)
+  maxHeight?: number                 // Max height (default: 4096)
+  cacheControl?: string              // Cache header (default: 1 year)
+  allowArbitrary?: boolean           // Allow arbitrary params (default: true)
+  validateSource?: (url: URL) => boolean | Promise<boolean>  // Custom validation
+}
+```
+
+#### TransformPreset
+
+```typescript
+interface TransformPreset {
+  width?: number
+  height?: number
+  fit?: 'cover' | 'contain' | 'scale-down' | 'crop' | 'pad'
+  format?: 'webp' | 'avif' | 'jpeg' | 'png' | 'auto'
+  quality?: number      // 1-100
+  dpr?: number          // 1-3
+  gravity?: 'auto' | 'center' | 'top' | 'bottom' | 'left' | 'right' | 'face'
+  sharpen?: number      // 0-10
+  blur?: number         // 1-250
+  brightness?: number   // -1 to 1
+  contrast?: number     // -1 to 1
+  rotate?: 0 | 90 | 180 | 270
+  metadata?: 'keep' | 'copyright' | 'none'
+  background?: string   // Hex or RGB for padding
+}
+```
+
+### Example
+
+```typescript
+// app/cdn/images/[...path]/route.ts
+import { createImageTransformer } from '@cloudwerk/images'
+
+export const GET = createImageTransformer({
+  allowedOrigins: ['https://images.mysite.com'],
+  presets: {
+    thumbnail: { width: 100, height: 100, fit: 'cover' },
+    hero: { width: 1920, height: 1080, fit: 'cover' },
+  },
+  defaults: {
+    format: 'auto',
+    quality: 85,
+  },
+})
+```
+
+### URL Format
+
+The transformer parses the source URL from the path and options from query params:
+
+```
+/cdn/images/https://images.mysite.com/photo.jpg?preset=thumbnail
+/cdn/images/https://images.mysite.com/photo.jpg?w=800&h=600&fit=cover
+```
+
+#### Query Parameters
+
+| Parameter | Alias | Description |
+|-----------|-------|-------------|
+| `preset` | - | Named preset from config |
+| `width` | `w` | Width in pixels |
+| `height` | `h` | Height in pixels |
+| `fit` | - | Fit mode |
+| `format` | `f` | Output format |
+| `quality` | `q` | Quality (1-100) |
+| `dpr` | - | Device pixel ratio |
+| `gravity` | - | Crop gravity |
+| `blur` | - | Blur amount |
+| `sharpen` | - | Sharpen amount |
+| `brightness` | - | Brightness adjustment |
+| `contrast` | - | Contrast adjustment |
+| `rotate` | - | Rotation degrees |
+
+### variantToPreset()
+
+Convert an ImageVariant to a TransformPreset for reusing hosted image variants.
+
+```typescript
+import { variantToPreset, createImageTransformer } from '@cloudwerk/images'
+import avatars from '../images/avatars'
+
+const presets = Object.fromEntries(
+  Object.entries(avatars.variants).map(([name, variant]) => [
+    name,
+    variantToPreset(variant),
+  ])
+)
+
+export const GET = createImageTransformer({ presets })
+```
+
+---
+
+## IMAGES Binding
+
+The IMAGES binding provides in-Worker image transformation without uploading to Cloudflare Images.
+
+### Configuration
+
+Add the binding to `wrangler.toml`:
+
+```toml
+[[images]]
+binding = "MY_IMAGES"
+```
+
+### CloudflareImagesBinding
+
+```typescript
+interface CloudflareImagesBinding {
+  input(source: Blob | ArrayBuffer | ReadableStream<Uint8Array>): CloudflareImagesTransformBuilder
+  info(source: Blob | ArrayBuffer | ReadableStream<Uint8Array>): Promise<CloudflareImageInfo>
+}
+
+interface CloudflareImageInfo {
+  width: number
+  height: number
+  format: string
+  fileSize: number
+}
+```
+
+### CloudflareImagesTransformBuilder
+
+Fluent API for chaining transformations.
+
+```typescript
+interface CloudflareImagesTransformBuilder {
+  transform(options: CloudflareImageTransformOptions): CloudflareImagesTransformBuilder
+  output(options: CloudflareImageOutputOptions): CloudflareImagesTransformBuilder
+  response(): Promise<Response>
+  blob(): Promise<Blob>
+  arrayBuffer(): Promise<ArrayBuffer>
+  stream(): ReadableStream<Uint8Array>
+}
+```
+
+### Example
+
+```typescript
+import { getBinding } from '@cloudwerk/core/bindings'
+import type { CloudflareImagesBinding } from '@cloudwerk/images'
+
+export async function POST(request: Request) {
+  const IMAGES = getBinding<CloudflareImagesBinding>('MY_IMAGES')
+
+  const formData = await request.formData()
+  const file = formData.get('image') as File
+
+  // Transform the image
+  const response = await IMAGES
+    .input(await file.arrayBuffer())
+    .transform({ width: 800, rotate: 90 })
+    .output({ format: 'image/webp', quality: 85 })
+    .response()
+
+  return response
+}
+```
+
+### CloudflareImageTransformOptions
+
+```typescript
+interface CloudflareImageTransformOptions {
+  width?: number
+  height?: number
+  fit?: 'scale-down' | 'contain' | 'cover' | 'crop' | 'pad'
+  gravity?: 'auto' | 'left' | 'right' | 'top' | 'bottom' | 'center' | 'face'
+  quality?: number      // 1-100
+  dpr?: number          // 1-3
+  rotate?: 0 | 90 | 180 | 270
+  sharpen?: number      // 0-10
+  blur?: number         // 1-250
+  brightness?: number   // -1 to 1
+  contrast?: number     // -1 to 1
+  background?: string   // Hex or RGB
+  border?: { color: string; width: number }
+  trim?: { top?: number; right?: number; bottom?: number; left?: number }
+}
+```
+
+### CloudflareImageOutputOptions
+
+```typescript
+interface CloudflareImageOutputOptions {
+  format?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif' | 'image/gif'
+  quality?: number      // 1-100
+  metadata?: 'keep' | 'copyright' | 'none'
+}
+```
+
+### IMAGE_PRESETS
+
+Built-in presets for common use cases.
+
+```typescript
+import { IMAGE_PRESETS } from '@cloudwerk/images'
+
+// Available presets
+IMAGE_PRESETS.thumbnail  // 100x100 cover
+IMAGE_PRESETS.preview    // 400x400 contain
+IMAGE_PRESETS.large      // 1200px wide
+IMAGE_PRESETS.hero       // 1920x1080 cover
+IMAGE_PRESETS.social     // 1200x630 (Open Graph)
+IMAGE_PRESETS.mobile     // 640px wide, WebP
+```
+
+---
+
+## Error Classes
+
+### ImageError
+
+Base error class for image operations.
+
+```typescript
+import { ImageError } from '@cloudwerk/images'
+
+class ImageError extends Error {
+  readonly code: string
+}
+```
+
+### ImageConfigError
+
+Invalid image configuration.
+
+```typescript
+class ImageConfigError extends ImageError {
+  readonly code: 'IMAGE_CONFIG_ERROR'
+}
+```
+
+### ImageUploadError
+
+Image upload failed.
+
+```typescript
+class ImageUploadError extends ImageError {
+  readonly code: 'IMAGE_UPLOAD_ERROR'
+  readonly status?: number
+}
+```
+
+### ImageNotFoundError
+
+Image not found.
+
+```typescript
+class ImageNotFoundError extends ImageError {
+  readonly code: 'IMAGE_NOT_FOUND'
+  readonly imageId: string
+}
+```
+
+### ImageVariantError
+
+Invalid variant name.
+
+```typescript
+class ImageVariantError extends ImageError {
+  readonly code: 'IMAGE_VARIANT_ERROR'
+  readonly variantName: string
+  readonly availableVariants: string[]
+}
+```
+
+### ImageTransformError
+
+Image transformation failed.
+
+```typescript
+class ImageTransformError extends ImageError {
+  readonly code: string
+  readonly status: number
+}
+```
+
+---
+
+## Image Utilities
+
+### getImages()
+
+Get a typed image client by name.
+
+```typescript
+import { getImages } from '@cloudwerk/core/bindings'
+
+const avatars = getImages('avatars')
+await avatars.upload(file)
+```
+
+### hasImages()
+
+Check if an image definition exists.
+
+```typescript
+import { hasImages } from '@cloudwerk/core/bindings'
+
+if (hasImages('avatars')) {
+  await images.avatars.upload(file)
+}
+```
+
+### getImagesNames()
+
+List all available image definition names.
+
+```typescript
+import { getImagesNames } from '@cloudwerk/core/bindings'
+
+const available = getImagesNames()
+// ['avatars', 'products', 'banners']
+```
+
+---
+
+## Type Definitions
+
+### ImageDefinition
+
+```typescript
+interface ImageDefinition<V extends Record<string, ImageVariant>> {
+  variants: V
+  accountId?: string | EnvRef
+  apiToken?: string | EnvRef
+}
+```
+
+### ImageClientInterface
+
+```typescript
+interface ImageClientInterface<V extends string = string> {
+  upload(source: File | Blob | ArrayBuffer, options?: UploadOptions): Promise<ImageResult>
+  url(id: string, variant: V): string
+  get(id: string): Promise<ImageResult>
+  delete(id: string): Promise<void>
+  list(options?: ListOptions): Promise<ImageResult[]>
+  getDirectUploadUrl(options?: DirectUploadOptions): Promise<DirectUploadResult>
+}
+```
+
+---
+
+## Next Steps
+
+- **[Images Guide](/guides/images/)** - Patterns and best practices
+- **[Bindings API](/api/bindings/)** - Core binding utilities
+- **[File Conventions](/reference/file-conventions/)** - `app/images/` structure

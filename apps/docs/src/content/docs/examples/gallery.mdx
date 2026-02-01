@@ -1,0 +1,645 @@
+---
+title: Gallery - Image Uploads
+description: Build an image gallery with Cloudflare Images (hosted) and R2 with IMAGES binding for on-the-fly transformations.
+---
+
+import { Aside, Steps, Tabs, TabItem, FileTree, LinkCard } from '@astrojs/starlight/components';
+
+In this tutorial, you'll build an image gallery that demonstrates two approaches to image handling:
+
+- **Hosted Images** - Upload to Cloudflare Images with pre-defined variants
+- **R2 + IMAGES Binding** - Store in R2 with on-the-fly transformations
+
+<LinkCard
+  title="View Source on GitHub"
+  href="https://github.com/squirrelsoft-dev/cloudwerk/tree/main/examples/gallery"
+  description="See the complete source code for this example"
+/>
+
+## Project Overview
+
+The final project structure:
+
+<FileTree>
+- app/
+  - layout.tsx
+  - page.tsx                  # Home with links to both demos
+  - globals.css
+  - images/
+    - gallery.ts              # Image variants definition
+  - components/
+    - image-grid.tsx          # Thumbnail grid with click handling
+    - image-dialog.tsx        # Modal for full-size preview
+  - hosted/
+    - page.tsx                # Hosted Images demo
+    - route.ts                # Upload/list/delete API
+    - variants/
+      - page.tsx              # Variant setup helper
+      - route.ts              # Variant management API
+  - r2/
+    - page.tsx                # R2 + IMAGES demo
+    - route.ts                # Upload/list/delete API
+    - [id]/
+      - route.ts              # Transform and serve images
+- cloudwerk.config.ts
+- wrangler.toml
+- package.json
+</FileTree>
+
+## Step 1: Create the Project
+
+<Steps>
+1. Create a new Cloudwerk app:
+
+   ```bash
+   pnpm dlx @cloudwerk/create-app gallery --renderer hono-jsx
+   cd gallery
+   ```
+
+2. Install the images package:
+
+   ```bash
+   pnpm add @cloudwerk/images
+   ```
+</Steps>
+
+## Step 2: Configure Bindings
+
+Update `wrangler.toml` with R2 and IMAGES bindings:
+
+```toml title="wrangler.toml"
+name = "gallery"
+main = "dist/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist/static"
+binding = "ASSETS"
+
+# R2 bucket for storing images
+[[r2_buckets]]
+binding = "GALLERY_BUCKET"
+bucket_name = "gallery-images"
+
+# IMAGES binding for on-the-fly transforms
+[images]
+binding = "IMAGES"
+
+[vars]
+CF_ACCOUNT_ID = "your-account-id"
+CF_ACCOUNT_HASH = "your-account-hash"
+# CF_IMAGES_TOKEN should be set as a secret, not here
+```
+
+<Aside type="caution">
+Set `CF_IMAGES_TOKEN` as a secret using `wrangler secret put CF_IMAGES_TOKEN` rather than in `wrangler.toml`.
+</Aside>
+
+Generate TypeScript types for your bindings:
+
+```bash
+npm run bindings generate-types
+```
+
+## Step 3: Define Image Variants
+
+Create an image definition with variants for thumbnails and display:
+
+```typescript title="app/images/gallery.ts"
+import { defineImage } from '@cloudwerk/images'
+
+export default defineImage({
+  variants: {
+    thumbnail: { width: 128, height: 128, fit: 'cover' },
+    display: { width: 1280, height: 720, fit: 'contain' },
+  },
+})
+```
+
+<Aside type="tip">
+Variants define how images are transformed when served. The `thumbnail` variant creates 128x128 square crops, while `display` fits images within 1280x720 while preserving aspect ratio.
+</Aside>
+
+## Step 4: Create Shared Components
+
+### Image Grid Component
+
+Create a client component that displays images in a grid and handles click events:
+
+```tsx title="app/components/image-grid.tsx"
+'use client'
+
+import { useState } from 'hono/jsx'
+import ImageDialog from './image-dialog'
+
+interface ImageItem {
+  id: string
+  thumbnailUrl: string
+  displayUrl: string
+  filename?: string
+}
+
+interface ImageGridProps {
+  images: ImageItem[]
+}
+
+export default function ImageGrid({ images = [] }: ImageGridProps) {
+  const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null)
+
+  if (images.length === 0) {
+    return (
+      <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+        No images yet. Upload one above!
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {images.map((image) => (
+          <button
+            key={image.id}
+            onClick={() => setSelectedImage(image)}
+            class="aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 hover:ring-2 hover:ring-orange-500 transition-all"
+          >
+            <img
+              src={image.thumbnailUrl}
+              alt={image.filename || image.id}
+              class="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </button>
+        ))}
+      </div>
+
+      <ImageDialog
+        src={selectedImage?.displayUrl || ''}
+        alt={selectedImage?.filename || selectedImage?.id || ''}
+        isOpen={selectedImage !== null}
+        onClose={() => setSelectedImage(null)}
+      />
+    </>
+  )
+}
+```
+
+### Image Dialog Component
+
+Create a modal component for full-size image preview:
+
+```tsx title="app/components/image-dialog.tsx"
+'use client'
+
+import { useState, useEffect } from 'hono/jsx'
+
+interface ImageDialogProps {
+  src: string
+  alt: string
+  isOpen: boolean
+  onClose: () => void
+}
+
+export default function ImageDialog({ src, alt, isOpen, onClose }: ImageDialogProps) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div class="relative max-w-[90vw] max-h-[90vh]">
+        <button
+          onClick={onClose}
+          class="absolute -top-12 right-0 text-white hover:text-gray-300 text-2xl font-bold"
+          aria-label="Close"
+        >
+          &times;
+        </button>
+        <img
+          src={src}
+          alt={alt}
+          class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          onClick={(e: MouseEvent) => e.stopPropagation()}
+        />
+      </div>
+    </div>
+  )
+}
+```
+
+## Step 5: Hosted Images Demo
+
+The hosted images demo uploads images to Cloudflare Images and serves them via imagedelivery.net URLs.
+
+### Hosted Images Page
+
+```tsx title="app/hosted/page.tsx"
+import type { PageProps, LoaderArgs } from '@cloudwerk/core'
+import { createImageClient } from '@cloudwerk/images'
+import ImageGrid from '../components/image-grid'
+
+interface ImageItem {
+  id: string
+  thumbnailUrl: string
+  displayUrl: string
+  filename?: string
+}
+
+interface LoaderData {
+  images: ImageItem[]
+  error?: string
+}
+
+function buildImageUrl(accountHash: string, imageId: string, variant: string): string {
+  return `https://imagedelivery.net/${accountHash}/${imageId}/${variant}`
+}
+
+export async function loader({ context }: LoaderArgs): Promise<LoaderData> {
+  const env = context.env as Record<string, string>
+  const accountId = env.CF_ACCOUNT_ID
+  const accountHash = env.CF_ACCOUNT_HASH
+  const token = env.CF_IMAGES_TOKEN
+
+  if (!accountId || !token || !accountHash) {
+    return {
+      images: [],
+      error: 'Missing CF_ACCOUNT_ID, CF_ACCOUNT_HASH, or CF_IMAGES_TOKEN.',
+    }
+  }
+
+  const client = createImageClient(accountId, token)
+
+  try {
+    const result = await client.list({ perPage: 50 })
+    return {
+      images: result.map((img) => ({
+        id: img.id,
+        thumbnailUrl: buildImageUrl(accountHash, img.id, 'thumbnail'),
+        displayUrl: buildImageUrl(accountHash, img.id, 'display'),
+        filename: img.filename,
+      })),
+    }
+  } catch (err) {
+    return {
+      images: [],
+      error: err instanceof Error ? err.message : 'Failed to load images',
+    }
+  }
+}
+
+export default function HostedPage(props: PageProps & LoaderData) {
+  const images = Array.isArray(props.images) ? props.images : []
+
+  return (
+    <main class="min-h-screen p-8 max-w-6xl mx-auto">
+      <h1 class="text-3xl font-bold mb-4">Hosted Images</h1>
+      <p class="text-gray-600 dark:text-gray-400 mb-8">
+        Upload images to Cloudflare Images with pre-defined variants.
+      </p>
+
+      {props.error && (
+        <div class="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p class="text-sm text-yellow-800">{props.error}</p>
+        </div>
+      )}
+
+      <form method="post" action="/hosted" enctype="multipart/form-data" class="mb-8">
+        <input type="file" name="image" accept="image/*" required />
+        <button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">
+          Upload
+        </button>
+      </form>
+
+      <ImageGrid images={images} />
+    </main>
+  )
+}
+```
+
+### Hosted Images API Route
+
+```typescript title="app/hosted/route.ts"
+import type { CloudwerkHandlerContext } from '@cloudwerk/core'
+import { json } from '@cloudwerk/core'
+import { getBinding } from '@cloudwerk/core/bindings'
+import { createImageClient } from '@cloudwerk/images'
+
+export async function POST(request: Request, _context: CloudwerkHandlerContext) {
+  const accountId = getBinding<string>('CF_ACCOUNT_ID')
+  const token = getBinding<string>('CF_IMAGES_TOKEN')
+
+  if (!accountId || !token) {
+    return json({ error: 'Missing configuration' }, 500)
+  }
+
+  const client = createImageClient(accountId, token)
+  const formData = await request.formData()
+  const file = formData.get('image') as File | null
+
+  if (!file) {
+    return json({ error: 'No image provided' }, 400)
+  }
+
+  await client.upload(file)
+
+  return new Response(null, {
+    status: 303,
+    headers: { Location: '/hosted' },
+  })
+}
+```
+
+<Aside type="note">
+Hosted Images requires creating variants in the Cloudflare dashboard. Create `thumbnail` and `display` variants matching your `defineImage` configuration.
+</Aside>
+
+## Step 6: R2 + IMAGES Binding Demo
+
+The R2 demo stores images in R2 and uses the IMAGES binding for on-the-fly transformations.
+
+### R2 Page
+
+```tsx title="app/r2/page.tsx"
+import type { PageProps } from '@cloudwerk/core'
+import { GALLERY_BUCKET } from '@cloudwerk/core/bindings'
+import ImageGrid from '../components/image-grid'
+
+interface LoaderData {
+  images: Array<{
+    id: string
+    thumbnailUrl: string
+    displayUrl: string
+    filename?: string
+  }>
+  error?: string
+}
+
+export async function loader(): Promise<LoaderData> {
+  if (!GALLERY_BUCKET) {
+    return {
+      images: [],
+      error: 'GALLERY_BUCKET binding not configured.',
+    }
+  }
+
+  const result = await GALLERY_BUCKET.list()
+  const imageExtensions = ['.webp', '.jpg', '.jpeg', '.png', '.gif']
+
+  const images = result.objects
+    .filter((obj) => imageExtensions.some((ext) => obj.key.endsWith(ext)))
+    .map((obj) => ({
+      id: obj.key,
+      thumbnailUrl: `/r2/${encodeURIComponent(obj.key)}?type=thumbnail`,
+      displayUrl: `/r2/${encodeURIComponent(obj.key)}?type=display`,
+      filename: obj.customMetadata?.originalName,
+    }))
+
+  return { images }
+}
+
+export default function R2Page(props: PageProps & LoaderData) {
+  const images = Array.isArray(props.images) ? props.images : []
+
+  return (
+    <main class="min-h-screen p-8 max-w-6xl mx-auto">
+      <h1 class="text-3xl font-bold mb-4">R2 + IMAGES Binding</h1>
+      <p class="text-gray-600 dark:text-gray-400 mb-8">
+        Upload images to R2 and serve with on-the-fly transformations.
+      </p>
+
+      <div class="mb-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 class="font-medium text-blue-800 mb-1">How it works:</h3>
+        <ol class="text-sm text-blue-700 list-decimal list-inside space-y-1">
+          <li>Upload: Image is converted to WebP and stored in R2</li>
+          <li>Thumbnail: Resized to 128x128 on-the-fly via IMAGES binding</li>
+          <li>Display: Resized to 1280x720 on-the-fly via IMAGES binding</li>
+        </ol>
+      </div>
+
+      <form method="post" action="/r2" enctype="multipart/form-data" class="mb-8">
+        <input type="file" name="image" accept="image/*" required />
+        <button type="submit" class="px-4 py-2 bg-orange-500 text-white rounded">
+          Upload
+        </button>
+      </form>
+
+      <ImageGrid images={images} />
+    </main>
+  )
+}
+```
+
+### R2 Upload Route
+
+```typescript title="app/r2/route.ts"
+import type { CloudwerkHandlerContext } from '@cloudwerk/core'
+import { json } from '@cloudwerk/core'
+import { getBinding } from '@cloudwerk/core/bindings'
+import type { CloudflareImagesBinding } from '@cloudwerk/images'
+
+interface R2Bucket {
+  put(key: string, value: ArrayBuffer, options?: {
+    httpMetadata?: { contentType?: string }
+    customMetadata?: Record<string, string>
+  }): Promise<unknown>
+}
+
+export async function POST(request: Request, _context: CloudwerkHandlerContext) {
+  const IMAGES = getBinding<CloudflareImagesBinding>('IMAGES')
+  const BUCKET = getBinding<R2Bucket>('GALLERY_BUCKET')
+
+  const formData = await request.formData()
+  const file = formData.get('image') as File | null
+
+  if (!file) {
+    return json({ error: 'No image provided' }, 400)
+  }
+
+  const id = crypto.randomUUID()
+  const fileBuffer = await file.arrayBuffer()
+
+  let imageData: ArrayBuffer
+  let contentType: string
+  let extension: string
+
+  // Convert to WebP using IMAGES binding if available
+  if (IMAGES && typeof IMAGES.input === 'function') {
+    try {
+      const transformed = await IMAGES
+        .input(fileBuffer)
+        .output({ format: 'image/webp' })
+
+      imageData = await transformed.response().arrayBuffer()
+      contentType = 'image/webp'
+      extension = 'webp'
+    } catch {
+      // Fallback to original format
+      imageData = fileBuffer
+      contentType = file.type || 'image/jpeg'
+      extension = file.name.split('.').pop() || 'jpg'
+    }
+  } else {
+    imageData = fileBuffer
+    contentType = file.type || 'image/jpeg'
+    extension = file.name.split('.').pop() || 'jpg'
+  }
+
+  const key = `${id}.${extension}`
+  await BUCKET.put(key, imageData, {
+    httpMetadata: { contentType },
+    customMetadata: { originalName: file.name },
+  })
+
+  return new Response(null, {
+    status: 303,
+    headers: { Location: '/r2' },
+  })
+}
+```
+
+### R2 Transform Route
+
+```typescript title="app/r2/[id]/route.ts"
+import type { CloudwerkHandlerContext } from '@cloudwerk/core'
+import { getBinding } from '@cloudwerk/core/bindings'
+import type { CloudflareImagesBinding } from '@cloudwerk/images'
+
+interface R2Bucket {
+  get(key: string): Promise<{
+    body: ReadableStream
+    httpMetadata?: { contentType?: string }
+  } | null>
+}
+
+export async function GET(
+  request: Request,
+  { params }: CloudwerkHandlerContext<{ id: string }>
+) {
+  const url = new URL(request.url)
+  const type = url.searchParams.get('type') || 'display'
+  const key = decodeURIComponent(params.id)
+
+  const BUCKET = getBinding<R2Bucket>('GALLERY_BUCKET')
+  const object = await BUCKET.get(key)
+
+  if (!object) {
+    return new Response('Not found', { status: 404 })
+  }
+
+  // Transform with IMAGES binding if available
+  try {
+    const IMAGES = getBinding<CloudflareImagesBinding>('IMAGES')
+
+    if (IMAGES && typeof IMAGES.input === 'function') {
+      const transform = type === 'thumbnail'
+        ? { width: 128, height: 128, fit: 'cover' as const }
+        : { width: 1280, height: 720, fit: 'contain' as const }
+
+      const transformed = await IMAGES
+        .input(object.body)
+        .transform(transform)
+        .output({ format: 'image/webp' })
+
+      return transformed.response()
+    }
+  } catch {
+    // Fall through to serve original
+  }
+
+  // Fallback: serve original image
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType || 'image/jpeg',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
+}
+```
+
+<Aside type="tip" title="On-the-fly vs Hosted">
+**Hosted Images** stores multiple variant copies and is best for fixed sizes. **R2 + IMAGES** stores one copy and transforms on request, offering more flexibility but using compute on each request.
+</Aside>
+
+## Step 7: Run the Development Server
+
+Start the development server:
+
+```bash
+pnpm dev
+```
+
+Visit `http://localhost:8787` to see your gallery!
+
+## Testing the Application
+
+<Steps>
+1. **Test R2 uploads**: Navigate to `/r2` and upload an image
+2. **View thumbnails**: See the thumbnail grid populate
+3. **Preview images**: Click a thumbnail to open the full-size dialog
+4. **Test Hosted Images**: Configure credentials and navigate to `/hosted`
+5. **Compare approaches**: Note that R2 transforms on-the-fly while Hosted serves pre-generated variants
+</Steps>
+
+## Step 8: Build and Deploy
+
+<Steps>
+1. Create the R2 bucket:
+
+   ```bash
+   wrangler r2 bucket create gallery-images
+   ```
+
+2. Build the application:
+
+   ```bash
+   pnpm build
+   ```
+
+3. Deploy to Cloudflare:
+
+   ```bash
+   pnpm deploy
+   ```
+</Steps>
+
+## Summary
+
+You've built an image gallery demonstrating two Cloudflare image approaches:
+
+- **Hosted Images**: Upload to Cloudflare's image CDN with pre-defined variants
+- **R2 + IMAGES Binding**: Store in R2 with on-the-fly transformations
+
+### Key Differences
+
+| Feature | Hosted Images | R2 + IMAGES |
+|---------|---------------|-------------|
+| Storage | Cloudflare Images CDN | R2 bucket |
+| Variants | Pre-defined, created in dashboard | On-the-fly, any size |
+| Cost | Per-image stored + delivery | R2 storage + compute |
+| Flexibility | Fixed variants | Dynamic transforms |
+
+## Next Steps
+
+- **[Images Guide](/guides/images/)** - Learn more about image handling
+- **[R2 Storage](/guides/storage/)** - Deep dive into R2 patterns
+- **[Deployment](/guides/deployment/)** - Production deployment options

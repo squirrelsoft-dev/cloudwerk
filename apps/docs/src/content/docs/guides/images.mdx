@@ -1,0 +1,550 @@
+---
+title: Images
+description: Work with Cloudflare's image services - Hosted Images for storage, Image Transformer for CDN resizing, and IMAGES binding for transform pipelines.
+---
+
+import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
+
+Cloudwerk provides integration with Cloudflare's image services through `@cloudwerk/images`. Choose the right service for your needs: Hosted Images for storing and serving user uploads, Image Transformer for CDN-style resizing, or the IMAGES binding for in-Worker transform pipelines.
+
+## When to Use Which
+
+| Use Case | Recommended Service |
+|----------|---------------------|
+| User avatars, product photos | Hosted Images |
+| Resizing images from external URLs | Image Transformer |
+| Processing uploads before storing to R2 | IMAGES Binding |
+| Thumbnail generation on upload | Hosted Images or IMAGES Binding |
+| CDN-style image optimization | Image Transformer |
+
+---
+
+## Hosted Images
+
+Store and serve images through Cloudflare's global CDN with automatic variant generation.
+
+### Quick Start
+
+<Steps>
+1. Create an image definition:
+
+   ```typescript
+   // app/images/avatars.ts
+   import { defineImage } from '@cloudwerk/images'
+
+   export default defineImage({
+     variants: {
+       thumbnail: { width: 100, height: 100, fit: 'cover' },
+       profile: { width: 400, height: 400, fit: 'cover' },
+       large: { width: 800, fit: 'scale-down', quality: 90 },
+     },
+   })
+   ```
+
+2. Configure environment variables:
+
+   ```bash
+   # .dev.vars (local development)
+   CF_ACCOUNT_ID=your-account-id
+   CF_IMAGES_TOKEN=your-api-token
+   ```
+
+3. Use from your routes:
+
+   ```typescript
+   // app/api/avatar/route.ts
+   import { images } from '@cloudwerk/core/bindings'
+   import { json } from '@cloudwerk/core'
+
+   export async function POST(request: Request) {
+     const formData = await request.formData()
+     const file = formData.get('avatar') as File
+
+     const result = await images.avatars.upload(file)
+
+     return json({
+       id: result.id,
+       thumbnail: images.avatars.url(result.id, 'thumbnail'),
+       profile: images.avatars.url(result.id, 'profile'),
+     })
+   }
+   ```
+</Steps>
+
+### Convention Structure
+
+Image definitions live in the `app/images/` directory:
+
+<FileTree>
+- app/images/
+  - avatars.ts       # → images.avatars
+  - products.ts      # → images.products
+  - banners.ts       # → images.banners
+</FileTree>
+
+**Naming Convention:**
+- Filenames become image client names
+- `avatars.ts` → `images.avatars`
+- `product-photos.ts` → `images.productPhotos`
+
+### Setting Up Credentials
+
+Hosted Images requires a Cloudflare account with Images enabled:
+
+<Steps>
+1. Get your Account ID from the Cloudflare dashboard URL or Overview page
+2. Create an API token with `Cloudflare Images:Edit` permission
+3. Add to environment:
+
+   <Tabs>
+   <TabItem label="Development">
+   ```bash
+   # .dev.vars
+   CF_ACCOUNT_ID=abc123
+   CF_IMAGES_TOKEN=your-token
+   ```
+   </TabItem>
+   <TabItem label="Production">
+   ```bash
+   # Set via wrangler
+   wrangler secret put CF_ACCOUNT_ID
+   wrangler secret put CF_IMAGES_TOKEN
+   ```
+   </TabItem>
+   </Tabs>
+</Steps>
+
+### Defining Variants
+
+Variants define how images are transformed when served:
+
+```typescript
+export default defineImage({
+  variants: {
+    // Square thumbnail
+    thumbnail: {
+      width: 100,
+      height: 100,
+      fit: 'cover',
+    },
+
+    // Maintain aspect ratio, max width
+    medium: {
+      width: 600,
+      fit: 'scale-down',
+      quality: 85,
+    },
+
+    // Optimized for retina displays
+    retina: {
+      width: 800,
+      dpr: 2,
+      format: 'webp',
+    },
+
+    // Face-centered crop for profiles
+    profile: {
+      width: 400,
+      height: 400,
+      fit: 'cover',
+      gravity: 'face',
+    },
+  },
+})
+```
+
+### Fit Modes
+
+| Mode | Description |
+|------|-------------|
+| `cover` | Fill dimensions, cropping if needed |
+| `contain` | Fit within dimensions, may add letterboxing |
+| `scale-down` | Shrink to fit, never enlarge |
+| `crop` | Crop to exact dimensions from center |
+| `pad` | Fit within dimensions, padding if needed |
+
+### Uploading Images
+
+```typescript
+import { images } from '@cloudwerk/core/bindings'
+
+// Basic upload
+const result = await images.avatars.upload(file)
+
+// With custom ID
+const result = await images.avatars.upload(file, {
+  id: `user-${userId}-avatar`,
+})
+
+// With metadata
+const result = await images.avatars.upload(file, {
+  metadata: {
+    userId: '123',
+    uploadedAt: new Date().toISOString(),
+  },
+})
+```
+
+### Direct Browser Uploads
+
+For large files, use direct uploads to bypass your Worker:
+
+```typescript
+// Server: Generate upload URL
+export async function POST(request: Request) {
+  const directUpload = await images.avatars.getDirectUploadUrl({
+    id: `user-${userId}-${Date.now()}`,
+    metadata: { userId },
+  })
+
+  return json({
+    uploadUrl: directUpload.uploadUrl,
+    imageId: directUpload.id,
+  })
+}
+```
+
+```typescript
+// Client: Upload directly to Cloudflare
+const { uploadUrl, imageId } = await fetch('/api/upload-url', {
+  method: 'POST',
+}).then(r => r.json())
+
+await fetch(uploadUrl, {
+  method: 'POST',
+  body: formData,
+})
+
+// Image is now available at: images.avatars.url(imageId, 'thumbnail')
+```
+
+---
+
+## Image Transformer
+
+Use Cloudflare's Image Resizing to transform images from any URL via query parameters.
+
+### Quick Start
+
+<Steps>
+1. Create a transformer route:
+
+   ```typescript
+   // app/cdn/images/[...path]/route.ts
+   import { createImageTransformer } from '@cloudwerk/images'
+
+   export const GET = createImageTransformer({
+     allowedOrigins: ['https://images.mysite.com'],
+     presets: {
+       thumbnail: { width: 100, height: 100, fit: 'cover' },
+       hero: { width: 1920, height: 1080, fit: 'cover' },
+     },
+     defaults: {
+       format: 'auto',
+       quality: 85,
+     },
+   })
+   ```
+
+2. Transform images via URL:
+
+   ```
+   /cdn/images/https://images.mysite.com/photo.jpg?preset=thumbnail
+   /cdn/images/https://images.mysite.com/photo.jpg?w=800&h=600
+   ```
+</Steps>
+
+<Aside type="caution">
+Image Resizing requires a paid Cloudflare plan and must be enabled for your zone.
+</Aside>
+
+### Origin Security
+
+Always restrict allowed origins in production:
+
+```typescript
+export const GET = createImageTransformer({
+  // Only allow images from these origins
+  allowedOrigins: [
+    'https://images.mysite.com',
+    'https://cdn.mysite.com',
+  ],
+
+  // Or use custom validation
+  validateSource: async (url) => {
+    // Check against database, etc.
+    return allowedDomains.has(url.hostname)
+  },
+})
+```
+
+### Preset-Only Mode
+
+Disable arbitrary parameters for tighter control:
+
+```typescript
+export const GET = createImageTransformer({
+  allowArbitrary: false,  // Only allow named presets
+  presets: {
+    sm: { width: 320 },
+    md: { width: 768 },
+    lg: { width: 1200 },
+    xl: { width: 1920 },
+  },
+})
+```
+
+### Caching
+
+Transformed images are cached at the edge:
+
+```typescript
+export const GET = createImageTransformer({
+  // Cache for 1 year (default)
+  cacheControl: 'public, max-age=31536000',
+
+  // Or shorter for frequently changing images
+  cacheControl: 'public, max-age=86400',  // 1 day
+})
+```
+
+---
+
+## IMAGES Binding
+
+Process images directly in your Worker with the IMAGES binding. Ideal for transforming uploads before storing to R2.
+
+### Setup
+
+<Steps>
+1. Add binding to `wrangler.toml`:
+
+   ```toml
+   [[images]]
+   binding = "IMAGES"
+   ```
+
+2. Use in your routes:
+
+   ```typescript
+   import { getBinding } from '@cloudwerk/core/bindings'
+   import type { CloudflareImagesBinding } from '@cloudwerk/images'
+
+   export async function POST(request: Request) {
+     const IMAGES = getBinding<CloudflareImagesBinding>('IMAGES')
+
+     const formData = await request.formData()
+     const file = formData.get('image') as File
+
+     const response = await IMAGES
+       .input(await file.arrayBuffer())
+       .transform({ width: 800, quality: 85 })
+       .output({ format: 'image/webp' })
+       .response()
+
+     return response
+   }
+   ```
+</Steps>
+
+### Transform Pipeline
+
+Chain multiple transformations:
+
+```typescript
+const result = await IMAGES
+  .input(imageData)
+  .transform({ width: 1200 })           // Resize
+  .transform({ rotate: 90 })            // Rotate
+  .transform({ brightness: 0.1 })       // Brighten
+  .output({ format: 'image/webp', quality: 85 })
+  .response()
+```
+
+### Get Image Info
+
+Check image dimensions before processing:
+
+```typescript
+const info = await IMAGES.info(imageData)
+
+console.log(info.width, info.height)  // e.g., 1920, 1080
+console.log(info.format)              // e.g., 'image/jpeg'
+console.log(info.fileSize)            // e.g., 245760
+```
+
+### Save to R2
+
+Process uploads and store to R2:
+
+```typescript
+import { getBinding } from '@cloudwerk/core/bindings'
+import type { CloudflareImagesBinding } from '@cloudwerk/images'
+
+export async function POST(request: Request) {
+  const IMAGES = getBinding<CloudflareImagesBinding>('IMAGES')
+  const BUCKET = getBinding<R2Bucket>('IMAGES_BUCKET')
+
+  const formData = await request.formData()
+  const file = formData.get('image') as File
+  const id = crypto.randomUUID()
+
+  // Generate multiple sizes
+  const sizes = [
+    { name: 'thumb', width: 100, height: 100 },
+    { name: 'medium', width: 600 },
+    { name: 'large', width: 1200 },
+  ]
+
+  await Promise.all(sizes.map(async (size) => {
+    const transformed = await IMAGES
+      .input(await file.arrayBuffer())
+      .transform({ width: size.width, height: size.height, fit: 'cover' })
+      .output({ format: 'image/webp', quality: 85 })
+      .arrayBuffer()
+
+    await BUCKET.put(`${id}/${size.name}.webp`, transformed, {
+      httpMetadata: { contentType: 'image/webp' },
+    })
+  }))
+
+  return json({
+    id,
+    variants: sizes.map(s => `${id}/${s.name}.webp`),
+  })
+}
+```
+
+---
+
+## Common Patterns
+
+### Avatar Upload with Validation
+
+```typescript
+import { images } from '@cloudwerk/core/bindings'
+import { json } from '@cloudwerk/core'
+
+const MAX_SIZE = 5 * 1024 * 1024  // 5MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+export async function POST(request: Request) {
+  const formData = await request.formData()
+  const file = formData.get('avatar') as File
+
+  // Validate file type
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return json({ error: 'Invalid file type' }, { status: 400 })
+  }
+
+  // Validate file size
+  if (file.size > MAX_SIZE) {
+    return json({ error: 'File too large' }, { status: 400 })
+  }
+
+  const result = await images.avatars.upload(file)
+
+  return json({
+    id: result.id,
+    url: images.avatars.url(result.id, 'profile'),
+  })
+}
+```
+
+### Responsive Image URLs
+
+```typescript
+// Generate srcset for responsive images
+function getResponsiveSrcSet(imageId: string) {
+  const sizes = ['thumbnail', 'medium', 'large']
+  return sizes
+    .map(size => `${images.products.url(imageId, size)} ${getWidth(size)}w`)
+    .join(', ')
+}
+
+// In your component
+export default function ProductImage({ imageId }) {
+  return (
+    <img
+      src={images.products.url(imageId, 'medium')}
+      srcSet={getResponsiveSrcSet(imageId)}
+      sizes="(max-width: 600px) 100vw, 600px"
+      loading="lazy"
+    />
+  )
+}
+```
+
+### Delete on User Delete
+
+```typescript
+export async function DELETE(request: Request, { params }) {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, params.id),
+  })
+
+  if (user?.avatarId) {
+    await images.avatars.delete(user.avatarId)
+  }
+
+  await db.delete(users).where(eq(users.id, params.id))
+
+  return json({ success: true })
+}
+```
+
+---
+
+## Error Handling
+
+```typescript
+import {
+  ImageUploadError,
+  ImageNotFoundError,
+  ImageVariantError,
+} from '@cloudwerk/images'
+
+try {
+  const result = await images.avatars.upload(file)
+  return json({ id: result.id })
+} catch (error) {
+  if (error instanceof ImageUploadError) {
+    return json({ error: 'Upload failed' }, { status: 500 })
+  }
+  throw error
+}
+
+try {
+  const url = images.avatars.url(id, 'unknown-variant')
+} catch (error) {
+  if (error instanceof ImageVariantError) {
+    console.log('Available:', error.availableVariants)
+  }
+}
+```
+
+---
+
+## Best Practices
+
+<Aside type="tip" title="Performance Tips">
+- Use `format: 'auto'` to serve WebP/AVIF where supported
+- Set appropriate `quality` values (80-85 is usually good)
+- Use `fit: 'scale-down'` to avoid upscaling small images
+- Consider `dpr` for retina displays
+</Aside>
+
+<Aside type="caution" title="Security">
+- Always validate file types and sizes before upload
+- Restrict transformer origins in production
+- Use signed URLs for private images
+- Don't expose API tokens in client code
+</Aside>
+
+---
+
+## Next Steps
+
+- **[Images API Reference](/api/images/)** - Complete API documentation
+- **[File Conventions](/reference/file-conventions/)** - `app/images/` structure
+- **[Bindings API](/api/bindings/)** - Core binding utilities

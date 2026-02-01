@@ -107,6 +107,40 @@ importers:
         specifier: ^4.0.0
         version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
 
+  examples/gallery:
+    dependencies:
+      '@cloudwerk/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cloudwerk/images':
+        specifier: workspace:*
+        version: link:../../packages/images
+      '@cloudwerk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
+
   examples/linkly:
     dependencies:
       '@cloudwerk/cli':
@@ -297,6 +331,22 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20241022.0
         version: 4.20260130.0
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.11)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.30)(lightningcss@1.30.2)
+
+  packages/images:
+    dependencies:
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(@swc/core@1.15.11)(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)

@@ -5,7 +5,7 @@
  * This wrapper is used by the esbuild plugin to transform imports of client components.
  */
 
-import { serializeProps, escapeHtmlAttribute } from '@cloudwerk/utils'
+import { serializeProps } from '@cloudwerk/utils'
 
 /**
  * Metadata for a wrapped client component.
@@ -59,15 +59,15 @@ export function createClientComponentWrapper<P extends Record<string, unknown>>(
     const rendered = Component(props)
 
     // Serialize props for client-side hydration
+    // Note: JSX automatically escapes attribute values, so we pass the raw JSON
     const serializedProps = serializeProps(props as Record<string, unknown>)
-    const escapedProps = escapeHtmlAttribute(serializedProps)
 
     // Return JSX with hydration wrapper
     // Note: We use raw JSX here which will be transformed by the JSX runtime
     return (
       <div
         data-hydrate-id={componentId}
-        data-hydrate-props={escapedProps}
+        data-hydrate-props={serializedProps}
         data-hydrate-bundle={bundlePath}
       >
         {rendered}
