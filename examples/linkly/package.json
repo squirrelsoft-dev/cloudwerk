@@ -12,9 +12,9 @@
         "bindings": "cloudwerk bindings"
     },
     "dependencies": {
-        "@cloudwerk/core": "^0.15.0",
-        "@cloudwerk/cli": "^0.14.0",
-        "@cloudwerk/ui": "^0.14.0",
+        "@cloudwerk/core": "workspace:*",
+        "@cloudwerk/cli": "workspace:*",
+        "@cloudwerk/ui": "workspace:*",
         "hono": "^4.0.0"
     },
     "devDependencies": {

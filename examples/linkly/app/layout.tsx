@@ -1,5 +1,5 @@
 import type { LayoutProps } from '@cloudwerk/core'
-import globals from './globals.css?url'
+import './globals.css'
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
@@ -8,7 +8,7 @@ export default function RootLayout({ children }: LayoutProps) {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Linkly - Link Shortener</title>
-        <link rel="stylesheet" href={globals} />
+        {/* CSS auto-injected from globals.css import */}
       </head>
       <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
         {children}

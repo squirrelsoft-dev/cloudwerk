@@ -110,14 +110,14 @@ importers:
   examples/linkly:
     dependencies:
       '@cloudwerk/cli':
-        specifier: ^0.14.0
-        version: 0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+        specifier: workspace:*
+        version: link:../../packages/cli
       '@cloudwerk/core':
-        specifier: ^0.15.0
-        version: 0.15.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+        specifier: workspace:*
+        version: link:../../packages/core
       '@cloudwerk/ui':
-        specifier: ^0.14.0
-        version: 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+        specifier: workspace:*
+        version: link:../../packages/ui
       hono:
         specifier: ^4.0.0
         version: 4.11.5
@@ -622,49 +622,6 @@ packages:
 
   '@cloudflare/workers-types@4.20260130.0':
     resolution: {integrity: sha512-eVJZjA4o0ANE/RX5g6mBs5MKRQxcSJYDPsFj8SPul7FDSFv682UzwXK3i0CSdIy/rtDNrMRmwJZ8KxANg2bY8A==}
-
-  '@cloudwerk/cli@0.14.0':
-    resolution: {integrity: sha512-2FCO8Pjdr3xbZWoHuA9H90RWz4PCzrGrVIQgmVsHJVljdgZfAp57wHYPXoHasqhSJxSUpsq+WYyue8/eeT4Dwg==}
-    hasBin: true
-    peerDependencies:
-      typescript: ^5.0.0
-
-  '@cloudwerk/core@0.14.0':
-    resolution: {integrity: sha512-IF6vDELTJXkRLw4ah3+KbrEB2iezTojQq1tdH9/MdDPiJJ/A074AAE6uJO07dTRovUpZ4d9mf7VivbQzdrjXlQ==}
-    peerDependencies:
-      typescript: ^5.0.0
-      vite: ^5.0.0 || ^6.0.0
-
-  '@cloudwerk/core@0.15.0':
-    resolution: {integrity: sha512-j+sxO/CHZpy4IiT2pUjlwTyuCAKKQGO31L6/n50jKiaD1b1Gb4NeQvWnxjZVvoCfkRJTWFHKQVSKzHecjSczNg==}
-    peerDependencies:
-      typescript: ^5.0.0
-      vite: ^5.0.0 || ^6.0.0
-
-  '@cloudwerk/ui@0.14.0':
-    resolution: {integrity: sha512-yVXE/9jWEi0dN5lGJskMxzNmkE5PR0VFoke/UhWtBisMJY535Yfil1wMr+yHy4F/qhnwSR+PpRrlxRwf6rfxmA==}
-    peerDependencies:
-      hono: ^4.0.0
-      react: ^19.0.0
-      react-dom: ^19.0.0
-    peerDependenciesMeta:
-      react:
-        optional: true
-      react-dom:
-        optional: true
-
-  '@cloudwerk/utils@0.6.1':
-    resolution: {integrity: sha512-i38vj6cLNNZ0Acsq88JOlVl5Drfzyl8vW+fT7waa6YcMU+m3m7EXMdzhsaQuQibDv9hQBLo7QkngjquxEsFI8g==}
-
-  '@cloudwerk/vite-plugin@0.6.1':
-    resolution: {integrity: sha512-qf4+nStwLVnlLWu0lzhcKNwdj8iQEVo0UnqTxyDmV0gjgmgEudkXxnABtXZchbSGqYWcPaJFnMDG+mMlaH95Ag==}
-    peerDependencies:
-      '@hono/vite-dev-server': '>=0.18.0'
-      hono: ^4.0.0
-      vite: ^5.0.0 || ^6.0.0
-    peerDependenciesMeta:
-      '@hono/vite-dev-server':
-        optional: true
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -4803,90 +4760,6 @@ snapshots:
     optional: true
 
   '@cloudflare/workers-types@4.20260130.0': {}
-
-  '@cloudwerk/cli@0.14.0(@cloudflare/workers-types@4.20260130.0)(@types/node@20.19.30)(hono@4.11.5)(jiti@2.6.1)(lightningcss@1.30.2)(miniflare@4.20260128.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)':
-    dependencies:
-      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@cloudwerk/ui': 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@cloudwerk/vite-plugin': 0.6.1(@hono/vite-dev-server@0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0)))(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@hono/node-server': 1.19.9(hono@4.11.5)
-      '@hono/vite-build': 1.9.2(hono@4.11.5)
-      '@hono/vite-dev-server': 0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0))
-      '@iarna/toml': 2.2.5
-      '@inquirer/prompts': 8.2.0(@types/node@20.19.30)
-      commander: 12.1.0
-      esbuild: 0.25.12
-      picocolors: 1.1.1
-      typescript: 5.9.3
-      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
-      wrangler: 4.61.1(@cloudflare/workers-types@4.20260130.0)
-    transitivePeerDependencies:
-      - '@cloudflare/workers-types'
-      - '@swc/helpers'
-      - '@types/node'
-      - bufferutil
-      - hono
-      - jiti
-      - less
-      - lightningcss
-      - miniflare
-      - react
-      - react-dom
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - terser
-      - tsx
-      - utf-8-validate
-      - yaml
-
-  '@cloudwerk/core@0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
-    dependencies:
-      '@cloudwerk/utils': 0.6.1
-      esbuild: 0.25.12
-      fast-glob: 3.3.3
-      hono: 4.11.5
-      typescript: 5.9.3
-      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
-
-  '@cloudwerk/core@0.15.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
-    dependencies:
-      '@cloudwerk/utils': 0.6.1
-      esbuild: 0.25.12
-      fast-glob: 3.3.3
-      hono: 4.11.5
-      typescript: 5.9.3
-      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
-
-  '@cloudwerk/ui@0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
-    dependencies:
-      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@cloudwerk/utils': 0.6.1
-      hono: 4.11.5
-    optionalDependencies:
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
-    transitivePeerDependencies:
-      - typescript
-      - vite
-
-  '@cloudwerk/utils@0.6.1': {}
-
-  '@cloudwerk/vite-plugin@0.6.1(@hono/vite-dev-server@0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0)))(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))':
-    dependencies:
-      '@cloudwerk/core': 0.14.0(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@cloudwerk/ui': 0.14.0(hono@4.11.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
-      '@swc/core': 1.15.11
-      hono: 4.11.5
-      vite: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
-    optionalDependencies:
-      '@hono/vite-dev-server': 0.18.3(hono@4.11.5)(miniflare@4.20260128.0)(wrangler@4.61.1(@cloudflare/workers-types@4.20260130.0))
-    transitivePeerDependencies:
-      - '@swc/helpers'
-      - react
-      - react-dom
-      - typescript
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
