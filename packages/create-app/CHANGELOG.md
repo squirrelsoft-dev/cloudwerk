@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.2.1
+
+### Patch Changes
+
+- [#230](https://github.com/squirrelsoft-dev/cloudwerk/pull/230) [`1d67142`](https://github.com/squirrelsoft-dev/cloudwerk/commit/1d671423126b17f735679a45517cce437d30269a) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fixed CSS imports on hono-jsx template
+
 ## 0.2.0
 
 ### Minor Changes
