@@ -1,5 +1,13 @@
 # @cloudwerk/core
 
+## 0.15.1
+
+### Patch Changes
+
+- [#227](https://github.com/squirrelsoft-dev/cloudwerk/pull/227) [`30285a8`](https://github.com/squirrelsoft-dev/cloudwerk/commit/30285a8468f670bb0c57386c3a470f19bba2ee49) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix "Illegal invocation" error when using bindings in production
+  - **@cloudwerk/core**: Fixed `createLazyBinding` to bind methods to the original binding object, preventing "Illegal invocation" errors when calling methods like `DB.prepare()` or `KV.get()` on Cloudflare bindings
+  - **@cloudwerk/vite-plugin**: Fixed static assets middleware to only intercept GET/HEAD requests, preventing request body consumption that caused "Invalid JSON body" errors on POST/PUT/PATCH requests
+
 ## 0.15.0
 
 ### Minor Changes

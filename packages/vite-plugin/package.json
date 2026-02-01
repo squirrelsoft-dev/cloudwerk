@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/vite-plugin",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Vite plugin for Cloudwerk file-based routing with virtual entry generation",
   "repository": {
     "type": "git",
