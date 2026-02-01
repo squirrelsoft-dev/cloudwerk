@@ -104,16 +104,14 @@ export async function build(
     logger.info(`Building to ${outputDir}...`)
 
     // ========================================================================
-    // Generate temporary entry file
+    // Load configuration and scan routes
     // ========================================================================
-    // @hono/vite-build needs a real file path with actual code, not a virtual module
-    // So we generate the server entry content directly
     tempDir = path.join(cwd, BUILD_TEMP_DIR)
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true })
     }
 
-    // Load config and scan routes to generate server entry
+    // Load config and scan routes
     const cloudwerkConfig = await loadConfig(cwd)
     const appDir = cloudwerkConfig.appDir
     const routesDir = cloudwerkConfig.routesDir ?? 'routes'
@@ -162,31 +160,8 @@ export async function build(
       }
     }
 
-    // Generate the server entry code
-    const renderer = (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx'
-    const serverEntryCode = generateServerEntry(manifest, scanResult, {
-      appDir,
-      routesDir,
-      config: cloudwerkConfig,
-      serverEntry: null,
-      clientEntry: null,
-      verbose,
-      hydrationEndpoint: '/__cloudwerk',
-      renderer,
-      publicDir: cloudwerkConfig.publicDir ?? 'public',
-      root: cwd,
-      isProduction: true,
-    }, {
-      queueManifest,
-      serviceManifest,
-    })
-
-    const tempEntryPath = path.join(tempDir, '_server-entry.ts')
-    fs.writeFileSync(tempEntryPath, serverEntryCode)
-    logger.debug(`Generated temp entry: ${tempEntryPath}`)
-
     // ========================================================================
-    // Phase 1: Build client assets (optional)
+    // Phase 1: Build client assets (must run first to generate asset manifest)
     // ========================================================================
     logger.debug(`Building client assets...`)
 
@@ -202,11 +177,13 @@ export async function build(
         emptyOutDir: true,
         minify: minify ? 'esbuild' : false,
         sourcemap,
+        manifest: true, // Generate manifest.json for asset mapping
         rollupOptions: {
           input: 'virtual:cloudwerk/client-entry',
           output: {
             entryFileNames: '__cloudwerk/client.js',
             chunkFileNames: '__cloudwerk/[name]-[hash].js',
+            // Use hashed names for CSS to enable caching
             assetFileNames: '__cloudwerk/[name]-[hash][extname]',
           },
         },
@@ -228,9 +205,19 @@ export async function build(
       }
     }
 
+    // Asset manifest for mapping source to hashed output files
+    let assetManifest: Record<string, { file: string; css?: string[] }> | null = null
+
     try {
       await viteBuild(clientConfig)
       logger.debug(`Client assets built successfully`)
+
+      // Read the Vite manifest to get hashed asset names
+      const manifestPath = path.join(outputDir, 'static', '.vite', 'manifest.json')
+      if (fs.existsSync(manifestPath)) {
+        assetManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+        logger.debug(`Loaded asset manifest with ${Object.keys(assetManifest!).length} entries`)
+      }
     } catch (error) {
       // Client build might fail if there are no client components
       // That's ok - we'll continue with server build
@@ -238,6 +225,32 @@ export async function build(
         logger.debug(`Client build skipped or failed: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
+
+    // ========================================================================
+    // Generate server entry (after client build to include asset manifest)
+    // ========================================================================
+    const renderer = (cloudwerkConfig.ui?.renderer as 'hono-jsx' | 'react') ?? 'hono-jsx'
+    const serverEntryCode = generateServerEntry(manifest, scanResult, {
+      appDir,
+      routesDir,
+      config: cloudwerkConfig,
+      serverEntry: null,
+      clientEntry: null,
+      verbose,
+      hydrationEndpoint: '/__cloudwerk',
+      renderer,
+      publicDir: cloudwerkConfig.publicDir ?? 'public',
+      root: cwd,
+      isProduction: true,
+    }, {
+      queueManifest,
+      serviceManifest,
+      assetManifest,
+    })
+
+    const tempEntryPath = path.join(tempDir, '_server-entry.ts')
+    fs.writeFileSync(tempEntryPath, serverEntryCode)
+    logger.debug(`Generated temp entry: ${tempEntryPath}`)
 
     // ========================================================================
     // Phase 2: Build server for Cloudflare Workers
@@ -261,12 +274,16 @@ export async function build(
         minify: minify ? 'esbuild' : false,
         sourcemap,
         ssr: true,
+        // Emit CSS and other assets from SSR build (CSS imported in layouts, etc.)
+        ssrEmitAssets: true,
         rollupOptions: {
           input: tempEntryPath,
           // Externalize Node.js builtins (polyfilled by nodejs_compat in Workers)
           external: [...builtinModules, /^node:/],
           output: {
             entryFileNames: 'index.js',
+            // Put assets in static directory to be served by Cloudflare
+            assetFileNames: 'static/assets/[name]-[hash][extname]',
           },
         },
       },

@@ -122,6 +122,8 @@ export interface PluginState {
   serviceScanResult: ServiceScanResult | null
   /** Map of client component paths to their info */
   clientComponents: Map<string, ClientComponentInfo>
+  /** Map of file paths to their CSS imports */
+  cssImports: Map<string, CssImportInfo[]>
   /** Cached server entry code */
   serverEntryCache: string | null
   /** Cached client entry code */
@@ -138,6 +140,18 @@ export interface ClientComponentInfo {
   bundlePath: string
   /** Absolute file path */
   absolutePath: string
+}
+
+/**
+ * Information about a CSS import detected in a layout or page.
+ */
+export interface CssImportInfo {
+  /** Absolute path to the CSS file */
+  absolutePath: string
+  /** File that imports the CSS */
+  importedBy: string
+  /** Whether the importing file is a layout */
+  isLayout: boolean
 }
 
 /**
