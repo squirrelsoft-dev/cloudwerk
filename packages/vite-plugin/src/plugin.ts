@@ -29,6 +29,10 @@ import {
   buildServiceManifest,
   SERVICES_DIR,
   SERVICE_FILE_NAME,
+  // Image scanning
+  scanImages,
+  buildImageManifest,
+  IMAGES_DIR,
   type CloudwerkConfig,
 } from '@cloudwerk/core/build'
 import type {
@@ -333,6 +337,42 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
   }
 
   /**
+   * Build or rebuild the image manifest.
+   */
+  async function buildImageManifestIfExists(root: string): Promise<void> {
+    if (!state) {
+      throw new Error('Plugin state not initialized')
+    }
+
+    // Check if images directory exists
+    const imagesPath = path.resolve(root, state.options.appDir, IMAGES_DIR)
+    try {
+      await fs.promises.access(imagesPath)
+    } catch {
+      // No images directory, skip
+      state.imageScanResult = null
+      state.imageManifest = null
+      return
+    }
+
+    // Scan images
+    state.imageScanResult = await scanImages(
+      path.resolve(root, state.options.appDir),
+      { extensions: state.options.config.extensions }
+    )
+
+    // Build image manifest
+    state.imageManifest = buildImageManifest(
+      state.imageScanResult,
+      root
+    )
+
+    if (state.options.verbose && state.imageManifest.images.length > 0) {
+      console.log(`[cloudwerk] Found ${state.imageManifest.images.length} image(s)`)
+    }
+  }
+
+  /**
    * Check if a file is a route file that should trigger rebuild.
    */
   function isRouteFile(filePath: string): boolean {
@@ -383,6 +423,25 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
     if (nameWithoutExt !== SERVICE_FILE_NAME) return false
 
     // Must be a supported extension
+    return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
+  }
+
+  /**
+   * Check if a file is an image definition file that should trigger rebuild.
+   * Images are in app/images/<name>.ts
+   */
+  function isImageFile(filePath: string): boolean {
+    if (!state) return false
+
+    const imagesDir = path.resolve(state.options.root, state.options.appDir, IMAGES_DIR)
+    if (!filePath.startsWith(imagesDir)) return false
+
+    // Image files are direct children of the images directory
+    const relativePath = path.relative(imagesDir, filePath)
+    if (relativePath.includes(path.sep)) return false
+
+    // Must be a supported extension
+    const ext = path.extname(filePath)
     return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
   }
 
@@ -510,6 +569,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         queueScanResult: null,
         serviceManifest: null,
         serviceScanResult: null,
+        imageManifest: null,
+        imageScanResult: null,
         clientComponents: new Map(),
         cssImports: new Map(),
         serverEntryCache: null,
@@ -524,6 +585,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Build service manifest if services directory exists
       await buildServiceManifestIfExists(root)
+
+      // Build image manifest if images directory exists
+      await buildImageManifestIfExists(root)
 
       // Pre-scan for client components (needed for production builds)
       await scanClientComponents(root, state)
@@ -573,6 +637,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildServiceManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for image file additions
+        if (isImageFile(filePath)) {
+          const imagesDir = path.resolve(root, state!.options.appDir, IMAGES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Image added: ${path.relative(imagesDir, filePath)}`)
+          }
+          await buildImageManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('unlink', async (filePath: string) => {
@@ -603,6 +677,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildServiceManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for image file removals
+        if (isImageFile(filePath)) {
+          const imagesDir = path.resolve(root, state!.options.appDir, IMAGES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Image removed: ${path.relative(imagesDir, filePath)}`)
+          }
+          await buildImageManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('change', async (filePath: string) => {
@@ -631,6 +715,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             console.log(`[cloudwerk] Service changed: ${path.relative(servicesDir, filePath)}`)
           }
           await buildServiceManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
+
+        // Watch for image file changes
+        if (isImageFile(filePath)) {
+          const imagesDir = path.resolve(root, state!.options.appDir, IMAGES_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Image changed: ${path.relative(imagesDir, filePath)}`)
+          }
+          await buildImageManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
 
@@ -769,6 +863,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             'services', 'getService', 'hasService', 'getServiceNames',
             'registerLocalService', 'unregisterLocalService', 'clearLocalServices',
             'durableObjects', 'getDurableObject', 'hasDurableObject', 'getDurableObjectNames',
+            'images', 'getImages', 'hasImages', 'getImagesNames',
+            'registerLocalImages', 'unregisterLocalImages', 'clearLocalImages',
             'createLazyBinding']
 
           const runtimeImports: string[] = []

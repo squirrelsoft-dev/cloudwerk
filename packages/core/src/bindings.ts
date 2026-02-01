@@ -1533,3 +1533,674 @@ export function getDurableObjectNames(): string[] {
   const doBindings = getDurableObjectBindingNames(env)
   return doBindings.map(doBindingNameToObjectName)
 }
+
+// ============================================================================
+// Images Types
+// ============================================================================
+
+/**
+ * Image variant configuration.
+ */
+export interface ImageVariant {
+  width?: number
+  height?: number
+  fit?: 'cover' | 'contain' | 'scale-down' | 'crop' | 'pad'
+  blur?: number
+  quality?: number
+  format?: 'webp' | 'avif' | 'json' | 'jpeg' | 'png'
+}
+
+/**
+ * Options for uploading an image.
+ */
+export interface ImageUploadOptions {
+  metadata?: Record<string, string>
+  requireSignedURLs?: boolean
+  id?: string
+}
+
+/**
+ * Options for generating a direct upload URL.
+ */
+export interface ImageDirectUploadOptions {
+  metadata?: Record<string, string>
+  requireSignedURLs?: boolean
+  expiry?: string | number
+}
+
+/**
+ * Result of an image upload operation.
+ */
+export interface ImageResult {
+  id: string
+  filename?: string
+  uploaded: Date
+  variants: string[]
+  metadata?: Record<string, string>
+}
+
+/**
+ * Result of generating a direct upload URL.
+ */
+export interface ImageDirectUploadResult {
+  uploadUrl: string
+  id: string
+}
+
+/**
+ * Image client interface for interacting with Cloudflare Images.
+ *
+ * @typeParam T - Variant names type for this image configuration
+ */
+export interface ImagesClient<T extends string = string> {
+  /**
+   * Upload an image file.
+   */
+  upload(
+    file: File | Blob | ReadableStream,
+    options?: ImageUploadOptions
+  ): Promise<ImageResult>
+
+  /**
+   * Generate a direct upload URL for client-side uploads.
+   */
+  getDirectUploadUrl(options?: ImageDirectUploadOptions): Promise<ImageDirectUploadResult>
+
+  /**
+   * Delete an image.
+   */
+  delete(imageId: string): Promise<void>
+
+  /**
+   * Get image details.
+   */
+  get(imageId: string): Promise<ImageResult | null>
+
+  /**
+   * List images with pagination.
+   */
+  list(options?: { page?: number; perPage?: number }): Promise<ImageResult[]>
+
+  /**
+   * Generate URL for an image with optional variant.
+   */
+  url(imageId: string, variant?: T): string
+}
+
+// ============================================================================
+// Images Error Messages
+// ============================================================================
+
+const IMAGES_OUTSIDE_CONTEXT_ERROR = `Images accessed outside of request handler.
+
+This can happen when:
+1. Accessing images at module-load time (top-level code)
+2. Accessing images in a setTimeout/setInterval callback
+3. The request context was not properly initialized
+
+Images can only be accessed during request handling within a Cloudwerk application.
+
+Example of correct usage:
+  import { images } from '@cloudwerk/core/bindings'
+
+  export async function POST(request: Request) {
+    const formData = await request.formData()
+    const file = formData.get('image') as File
+    const result = await images.avatars.upload(file)
+    return json(result)
+  }
+`
+
+function createMissingImagesError(name: string, availableImages: string[]): string {
+  const available =
+    availableImages.length > 0
+      ? `Available images: ${availableImages.join(', ')}`
+      : 'No images are configured'
+
+  return `Image '${name}' not found in current environment.
+
+${available}
+
+To add this image, create a file at app/images/${name}.ts with:
+  import { defineImage } from '@cloudwerk/images'
+  export default defineImage({
+    variants: {
+      thumbnail: { width: 100, height: 100, fit: 'cover' },
+    },
+  })
+`
+}
+
+// ============================================================================
+// Images Helper Functions
+// ============================================================================
+
+/**
+ * Get all image binding names from the environment.
+ * Image bindings end with _IMAGES by convention.
+ */
+function getImagesBindingNames(env: Record<string, unknown>): string[] {
+  return Object.keys(env).filter(
+    (key) => key.endsWith('_IMAGES') && env[key] !== undefined
+  )
+}
+
+/**
+ * Convert an image name (camelCase) to binding name (SCREAMING_SNAKE_CASE_IMAGES).
+ */
+function imageNameToBindingName(imageName: string): string {
+  const screaming = imageName
+    .replace(/([A-Z])/g, '_$1')
+    .toUpperCase()
+    .replace(/^_/, '')
+
+  return `${screaming}_IMAGES`
+}
+
+/**
+ * Convert a binding name (SCREAMING_SNAKE_CASE_IMAGES) to image name (camelCase).
+ */
+function bindingNameToImageName(bindingName: string): string {
+  // Remove _IMAGES suffix and convert to camelCase
+  const withoutSuffix = bindingName.replace(/_IMAGES$/, '')
+  return withoutSuffix.toLowerCase().replace(/_([a-z])/g, (_, letter) =>
+    letter.toUpperCase()
+  )
+}
+
+// ============================================================================
+// Local Images Registry
+// ============================================================================
+
+/**
+ * Registry for local image client implementations.
+ * Used when images are running in 'local' mode (dev server).
+ */
+const localImages = new Map<string, ImagesClient>()
+
+/**
+ * Register a local image client implementation.
+ * Called by the Vite plugin during dev/build.
+ *
+ * @param name - Image name (camelCase)
+ * @param client - Image client instance
+ */
+export function registerLocalImages(
+  name: string,
+  client: ImagesClient
+): void {
+  localImages.set(name, client)
+}
+
+/**
+ * Unregister a local image client.
+ *
+ * @param name - Image name to remove
+ */
+export function unregisterLocalImages(name: string): void {
+  localImages.delete(name)
+}
+
+/**
+ * Clear all local image registrations.
+ */
+export function clearLocalImages(): void {
+  localImages.clear()
+}
+
+// ============================================================================
+// Images Proxy
+// ============================================================================
+
+/**
+ * Proxy object that provides typed access to image clients.
+ *
+ * Access images by name (camelCase), which will resolve from the current
+ * request's environment at access time.
+ *
+ * @example
+ * ```typescript
+ * import { images } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request) {
+ *   const formData = await request.formData()
+ *   const file = formData.get('image') as File
+ *
+ *   // Upload an image
+ *   const result = await images.avatars.upload(file)
+ *
+ *   // Get URLs for different variants
+ *   const thumbnail = images.avatars.url(result.id, 'thumbnail')
+ *   const profile = images.avatars.url(result.id, 'profile')
+ *
+ *   return json({
+ *     id: result.id,
+ *     thumbnail,
+ *     profile,
+ *   })
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Generate direct upload URL for client-side uploads
+ * import { images } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET() {
+ *   const { uploadUrl, id } = await images.avatars.getDirectUploadUrl({
+ *     expiry: '1h',
+ *     metadata: { userId: '123' },
+ *   })
+ *
+ *   return json({ uploadUrl, id })
+ * }
+ * ```
+ */
+export const images: Record<string, ImagesClient> = new Proxy(
+  {} as Record<string, ImagesClient>,
+  {
+    get(_target, prop) {
+      // Ignore symbol access
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      // Check local images first (dev server)
+      const localClient = localImages.get(prop)
+      if (localClient) {
+        return localClient
+      }
+
+      // Get current context
+      let ctx
+      try {
+        ctx = getContext()
+      } catch {
+        throw new Error(IMAGES_OUTSIDE_CONTEXT_ERROR)
+      }
+
+      const env = ctx.env as Record<string, unknown>
+
+      // Convert image name to binding name
+      const bindingName = imageNameToBindingName(prop)
+      const binding = env[bindingName]
+
+      if (binding === undefined) {
+        // Get available image names for error message
+        const imagesBindings = getImagesBindingNames(env)
+        const availableImages = [
+          ...Array.from(localImages.keys()),
+          ...imagesBindings.map(bindingNameToImageName),
+        ]
+        throw new Error(createMissingImagesError(prop, availableImages))
+      }
+
+      // Return the binding (should be an ImagesClient-compatible object)
+      return binding as ImagesClient
+    },
+
+    has(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return false
+      }
+
+      // Check local images
+      if (localImages.has(prop)) {
+        return true
+      }
+
+      // Check env bindings
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = imageNameToBindingName(prop)
+        return bindingName in env && env[bindingName] !== undefined
+      } catch {
+        return false
+      }
+    },
+
+    ownKeys() {
+      const localImageNames = Array.from(localImages.keys())
+
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const imagesBindings = getImagesBindingNames(env)
+        const envNames = imagesBindings.map(bindingNameToImageName)
+
+        // Combine unique names
+        return [...new Set([...localImageNames, ...envNames])]
+      } catch {
+        return localImageNames
+      }
+    },
+
+    getOwnPropertyDescriptor(_target, prop) {
+      if (typeof prop === 'symbol') {
+        return undefined
+      }
+
+      // Check local images
+      const localClient = localImages.get(prop)
+      if (localClient) {
+        return {
+          enumerable: true,
+          configurable: true,
+          value: localClient,
+        }
+      }
+
+      // Check env bindings
+      try {
+        const ctx = getContext()
+        const env = ctx.env as Record<string, unknown>
+        const bindingName = imageNameToBindingName(prop)
+        if (bindingName in env && env[bindingName] !== undefined) {
+          return {
+            enumerable: true,
+            configurable: true,
+            value: env[bindingName],
+          }
+        }
+      } catch {
+        // Outside context
+      }
+      return undefined
+    },
+  }
+)
+
+/**
+ * Get a specific image client with type safety.
+ *
+ * @param name - The image name (camelCase)
+ * @returns The typed image client
+ * @throws Error if called outside request context
+ * @throws Error if image is not found
+ *
+ * @example
+ * ```typescript
+ * import { getImages } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request) {
+ *   const avatars = getImages<'thumbnail' | 'profile'>('avatars')
+ *
+ *   const formData = await request.formData()
+ *   const file = formData.get('image') as File
+ *
+ *   const result = await avatars.upload(file)
+ *   const thumbnail = avatars.url(result.id, 'thumbnail')
+ *
+ *   return json({ id: result.id, thumbnail })
+ * }
+ * ```
+ */
+export function getImages<T extends string = string>(name: string): ImagesClient<T> {
+  // Check local images first
+  const localClient = localImages.get(name)
+  if (localClient) {
+    return localClient as ImagesClient<T>
+  }
+
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    throw new Error(IMAGES_OUTSIDE_CONTEXT_ERROR)
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = imageNameToBindingName(name)
+  const binding = env[bindingName]
+
+  if (binding === undefined) {
+    const imagesBindings = getImagesBindingNames(env)
+    const availableImages = [
+      ...Array.from(localImages.keys()),
+      ...imagesBindings.map(bindingNameToImageName),
+    ]
+    throw new Error(createMissingImagesError(name, availableImages))
+  }
+
+  return binding as ImagesClient<T>
+}
+
+/**
+ * Check if an image configuration exists in the current environment.
+ *
+ * @param name - The image name (camelCase) to check
+ * @returns true if the image exists, false otherwise
+ * @throws Error if called outside request context (for env bindings)
+ *
+ * @example
+ * ```typescript
+ * import { hasImages, getImages } from '@cloudwerk/core/bindings'
+ *
+ * export async function POST(request: Request) {
+ *   if (hasImages('avatars')) {
+ *     const avatars = getImages('avatars')
+ *     // Use avatars
+ *   } else {
+ *     // Fallback behavior
+ *   }
+ * }
+ * ```
+ */
+export function hasImages(name: string): boolean {
+  // Check local images first
+  if (localImages.has(name)) {
+    return true
+  }
+
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    // Outside context, can only check local images
+    return false
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const bindingName = imageNameToBindingName(name)
+  return bindingName in env && env[bindingName] !== undefined
+}
+
+/**
+ * Get all available image names in the current environment.
+ *
+ * @returns Array of image names (camelCase)
+ * @throws Error if called outside request context (only returns local images outside context)
+ *
+ * @example
+ * ```typescript
+ * import { getImagesNames } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET() {
+ *   const names = getImagesNames()
+ *   return json({ availableImages: names })
+ * }
+ * ```
+ */
+export function getImagesNames(): string[] {
+  const localImageNames = Array.from(localImages.keys())
+
+  let ctx
+  try {
+    ctx = getContext()
+  } catch {
+    // Outside context, only return local images
+    return localImageNames
+  }
+
+  const env = ctx.env as Record<string, unknown>
+  const imagesBindings = getImagesBindingNames(env)
+  const envNames = imagesBindings.map(bindingNameToImageName)
+
+  // Return unique names
+  return [...new Set([...localImageNames, ...envNames])]
+}
+
+// ============================================================================
+// Cloudflare IMAGES Binding Types
+// ============================================================================
+
+/**
+ * Image information returned by the IMAGES binding.
+ */
+export interface CloudflareImageInfo {
+  /** Width of the image in pixels */
+  width: number
+  /** Height of the image in pixels */
+  height: number
+  /** Format of the image (e.g., 'image/jpeg', 'image/png') */
+  format: string
+  /** File size in bytes */
+  fileSize: number
+}
+
+/**
+ * Transform options for the IMAGES binding.
+ */
+export interface CloudflareImageTransformOptions {
+  /** Width in pixels */
+  width?: number
+  /** Height in pixels */
+  height?: number
+  /** Fit mode for resizing */
+  fit?: 'scale-down' | 'contain' | 'cover' | 'crop' | 'pad'
+  /** Gravity for cropping */
+  gravity?: 'auto' | 'left' | 'right' | 'top' | 'bottom' | 'center' | 'face'
+  /** Quality for lossy formats (1-100) */
+  quality?: number
+  /** Device pixel ratio (1-3) */
+  dpr?: number
+  /** Rotation in degrees (0, 90, 180, 270) */
+  rotate?: 0 | 90 | 180 | 270
+  /** Sharpen amount (0-10) */
+  sharpen?: number
+  /** Blur radius (1-250) */
+  blur?: number
+  /** Brightness adjustment (-1 to 1) */
+  brightness?: number
+  /** Contrast adjustment (-1 to 1) */
+  contrast?: number
+  /** Background color for padding (hex or rgb) */
+  background?: string
+  /** Border configuration */
+  border?: {
+    color: string
+    width: number
+  }
+  /** Trim whitespace from edges */
+  trim?: {
+    top?: number
+    right?: number
+    bottom?: number
+    left?: number
+  }
+}
+
+/**
+ * Output options for the IMAGES binding.
+ */
+export interface CloudflareImageOutputOptions {
+  /** Output format */
+  format?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif' | 'image/gif'
+  /** Quality for lossy formats (1-100) */
+  quality?: number
+  /** Metadata handling */
+  metadata?: 'keep' | 'copyright' | 'none'
+}
+
+/**
+ * Transform builder interface for the IMAGES binding.
+ * Provides a fluent API for chaining transformations.
+ */
+export interface CloudflareImagesTransformBuilder {
+  /**
+   * Apply transformation options to the image.
+   * @param options - Transformation options
+   * @returns The builder for chaining
+   */
+  transform(options: CloudflareImageTransformOptions): CloudflareImagesTransformBuilder
+
+  /**
+   * Set output format and options.
+   * @param options - Output options
+   * @returns The builder for chaining
+   */
+  output(options: CloudflareImageOutputOptions): CloudflareImagesTransformBuilder
+
+  /**
+   * Get the transformed image as a Response.
+   * @returns Response containing the transformed image
+   */
+  response(): Promise<Response>
+
+  /**
+   * Get the transformed image as a Blob.
+   * @returns Blob containing the transformed image
+   */
+  blob(): Promise<Blob>
+
+  /**
+   * Get the transformed image as an ArrayBuffer.
+   * @returns ArrayBuffer containing the transformed image
+   */
+  arrayBuffer(): Promise<ArrayBuffer>
+
+  /**
+   * Get the transformed image as a ReadableStream.
+   * @returns ReadableStream containing the transformed image
+   */
+  stream(): ReadableStream<Uint8Array>
+}
+
+/**
+ * Cloudflare IMAGES binding interface.
+ *
+ * This binding provides access to Cloudflare's image transformation pipeline
+ * for on-the-fly image processing without uploading to Cloudflare Images.
+ *
+ * @example
+ * ```typescript
+ * import { getBinding } from '@cloudwerk/core/bindings'
+ * import type { CloudflareImagesBinding } from '@cloudwerk/core/bindings'
+ *
+ * export async function GET(request: Request) {
+ *   const IMAGES = getBinding<CloudflareImagesBinding>('MY_IMAGES')
+ *
+ *   // Transform an image from a stream
+ *   const response = await IMAGES
+ *     .input(imageStream)
+ *     .transform({ width: 800, rotate: 90 })
+ *     .output({ format: 'image/webp' })
+ *     .response()
+ *
+ *   return response
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Get image information
+ * const info = await IMAGES.info(imageStream)
+ * console.log(`Image size: ${info.width}x${info.height}`)
+ * ```
+ */
+export interface CloudflareImagesBinding {
+  /**
+   * Start a transformation pipeline with an input image.
+   * @param source - Image source as Blob, ArrayBuffer, or ReadableStream
+   * @returns Transform builder for chaining operations
+   */
+  input(source: Blob | ArrayBuffer | ReadableStream<Uint8Array>): CloudflareImagesTransformBuilder
+
+  /**
+   * Get information about an image without transforming it.
+   * @param source - Image source as Blob, ArrayBuffer, or ReadableStream
+   * @returns Image information including dimensions and format
+   */
+  info(source: Blob | ArrayBuffer | ReadableStream<Uint8Array>): Promise<CloudflareImageInfo>
+}

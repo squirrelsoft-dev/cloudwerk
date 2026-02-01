@@ -206,6 +206,101 @@ export default function Loading() {
 **Exports:**
 - `default` (required) - React component
 
+---
+
+## Feature Directories
+
+In addition to routes, Cloudwerk recognizes special directories for background jobs, services, and image handling.
+
+### app/queues/
+
+Queue consumer definitions for processing background jobs.
+
+<FileTree>
+- app/queues/
+  - email.ts         # → queues.email
+  - analytics.ts     # → queues.analytics
+  - orders-dlq.ts    # → queues.ordersDlq (dead letter queue)
+</FileTree>
+
+```typescript
+// app/queues/email.ts
+import { defineQueue } from '@cloudwerk/queue'
+
+export default defineQueue<EmailMessage>({
+  async process(message) {
+    await sendEmail(message.body)
+    message.ack()
+  },
+})
+```
+
+**Naming:** Filename becomes queue name (`email.ts` → `queues.email`)
+
+### app/services/
+
+Reusable service definitions with RPC support.
+
+<FileTree>
+- app/services/
+  - email/
+    - service.ts     # Required: → services.email
+    - utils.ts       # Optional helpers
+  - payments/
+    - service.ts     # → services.payments
+</FileTree>
+
+```typescript
+// app/services/email/service.ts
+import { defineService } from '@cloudwerk/service'
+
+export default defineService({
+  methods: {
+    async send({ to, subject, body }) {
+      // Implementation
+    },
+  },
+})
+```
+
+**Naming:** Directory name becomes service name (`email/` → `services.email`)
+
+### app/images/
+
+Image definitions for Cloudflare Hosted Images.
+
+<FileTree>
+- app/images/
+  - avatars.ts       # → images.avatars
+  - products.ts      # → images.products
+  - banners.ts       # → images.banners
+</FileTree>
+
+```typescript
+// app/images/avatars.ts
+import { defineImage } from '@cloudwerk/images'
+
+export default defineImage({
+  variants: {
+    thumbnail: { width: 100, height: 100, fit: 'cover' },
+    profile: { width: 400, height: 400, fit: 'cover' },
+  },
+})
+```
+
+**Naming:** Filename becomes image client name (`avatars.ts` → `images.avatars`)
+
+**Usage:**
+
+```typescript
+import { images } from '@cloudwerk/core/bindings'
+
+const result = await images.avatars.upload(file)
+const url = images.avatars.url(result.id, 'thumbnail')
+```
+
+---
+
 ## Dynamic Segments
 
 ### `[param]` - Single Dynamic Segment

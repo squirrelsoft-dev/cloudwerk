@@ -1,0 +1,28 @@
+name = "gallery"
+main = "dist/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "your_account_id"
+
+[assets]
+directory = "./dist/static"
+binding = "ASSETS"
+
+[build]
+command = "npm run build"
+
+# R2 bucket for storing images
+[[r2_buckets]]
+binding = "GALLERY_BUCKET"
+bucket_name = "gallery-images"
+
+# IMAGES binding for transform pipeline
+[images]
+binding = "IMAGES"
+
+[vars]
+CF_ACCOUNT_ID = "your_account_id"
+CF_ACCOUNT_HASH = "your_account_hash"
+
+[env.preview]
+name = "gallery-preview"

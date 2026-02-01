@@ -12,6 +12,8 @@ import type {
   QueueScanResult,
   ServiceManifest,
   ServiceScanResult,
+  ImageManifest,
+  ImageScanResult,
 } from '@cloudwerk/core/build'
 
 /**
@@ -120,6 +122,10 @@ export interface PluginState {
   serviceManifest: ServiceManifest | null
   /** Service scan result (if services are enabled) */
   serviceScanResult: ServiceScanResult | null
+  /** Image manifest (if images are enabled) */
+  imageManifest: ImageManifest | null
+  /** Image scan result (if images are enabled) */
+  imageScanResult: ImageScanResult | null
   /** Map of client component paths to their info */
   clientComponents: Map<string, ClientComponentInfo>
   /** Map of file paths to their CSS imports */

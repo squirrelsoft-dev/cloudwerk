@@ -26,6 +26,7 @@ export type BindingType =
   | 'ai'
   | 'vectorize'
   | 'hyperdrive'
+  | 'images'
 
 /**
  * A binding configuration parsed from wrangler.toml.
@@ -54,6 +55,7 @@ export interface WranglerConfig {
   ai?: AIBinding
   vectorize?: VectorizeBinding[]
   hyperdrive?: HyperdriveBinding[]
+  images?: ImagesBinding
   env?: Record<string, WranglerConfig>
 }
 
@@ -120,6 +122,12 @@ export interface VectorizeBinding {
 export interface HyperdriveBinding {
   binding: string
   id: string
+}
+
+export interface ImagesBinding {
+  binding: string
+  // Images bindings don't have additional config in wrangler.toml
+  // The account ID and API token are configured via environment variables
 }
 
 // ============================================================================
@@ -422,6 +430,32 @@ export function addSecretBinding(
 }
 
 /**
+ * Add an images binding to wrangler.toml.
+ * Note: Images binding is a single object, not an array.
+ */
+export function addImagesBinding(
+  cwd: string,
+  bindingName: string,
+  env?: string
+): void {
+  const config = readWranglerToml(cwd)
+
+  const newBinding: ImagesBinding = {
+    binding: bindingName,
+  }
+
+  if (env) {
+    if (!config.env) config.env = {}
+    if (!config.env[env]) config.env[env] = {}
+    config.env[env].images = newBinding
+  } else {
+    config.images = newBinding
+  }
+
+  writeWranglerToml(cwd, config)
+}
+
+/**
  * Remove a binding from wrangler.toml by name.
  */
 export function removeBinding(
@@ -532,6 +566,12 @@ export function removeBinding(
         if (cfg.hyperdrive.length === 0) delete cfg.hyperdrive
         found = true
       }
+    }
+
+    // Images (single object, not array)
+    if (cfg.images && cfg.images.binding === bindingName) {
+      delete cfg.images
+      found = true
     }
 
     return found
@@ -704,6 +744,14 @@ function extractBindingsFromConfig(config: WranglerConfig): Binding[] {
     }
   }
 
+  // Images (single object, not array)
+  if (config.images) {
+    bindings.push({
+      type: 'images',
+      name: config.images.binding,
+    })
+  }
+
   return bindings
 }
 
@@ -736,6 +784,8 @@ export function getBindingTypeName(type: BindingType): string {
       return 'Vectorize'
     case 'hyperdrive':
       return 'Hyperdrive'
+    case 'images':
+      return 'Images'
     default:
       return type
   }
