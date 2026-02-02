@@ -1,5 +1,17 @@
 # @cloudwerk/cli
 
+## 0.15.2
+
+### Patch Changes
+
+- [#233](https://github.com/squirrelsoft-dev/cloudwerk/pull/233) [`dbdf87a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/dbdf87af77cbedd9178defc96b733fa62c0fc74c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - fix(cli): add content hash to client entry filename for cache busting
+
+  Changed client entry output from `client.js` to `client-[hash].js` to enable
+  proper browser caching with cache invalidation on content changes.
+
+- Updated dependencies [[`dbdf87a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/dbdf87af77cbedd9178defc96b733fa62c0fc74c)]:
+  - @cloudwerk/vite-plugin@0.6.4
+
 ## 0.15.0
 
 ### Patch Changes
