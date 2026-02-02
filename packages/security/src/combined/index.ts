@@ -2,4 +2,4 @@
  * @cloudwerk/security - Combined Middleware Module
  */
 
-export { securityMiddleware } from './security-middleware.js'
+export { securityMiddleware, composeMiddleware } from './security-middleware.js'

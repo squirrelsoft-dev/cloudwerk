@@ -13,7 +13,6 @@ import type {
   SignInResult,
 } from '../types.js'
 import type { StateStorage } from './signin.js'
-import { verifyCSRFToken, extractCSRFToken } from './csrf.js'
 import { exchangeCodeForTokens } from '../../providers/oauth/tokens.js'
 import { rotateCsrfToken } from '@cloudwerk/security'
 
@@ -306,13 +305,7 @@ export async function handleCredentialsCallback(
 
   const credentialsProvider = provider as CredentialsProvider
 
-  // Verify CSRF token
-  if (config.csrf?.enabled !== false) {
-    const csrfToken = await extractCSRFToken(request)
-    if (!csrfToken || !verifyCSRFToken(request, csrfToken)) {
-      return redirectWithError(ctx, 'InvalidCSRF', 'Invalid CSRF token')
-    }
-  }
+  // Note: CSRF is now handled globally by @cloudwerk/security middleware
 
   // Parse credentials from form data
   let credentials: Record<string, string> = {}

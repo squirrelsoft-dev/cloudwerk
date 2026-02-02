@@ -27,7 +27,6 @@ export default defineAuthConfig({
   session?: SessionConfig,
   cookies?: CookieConfig,
   pages?: PagesConfig,
-  csrf?: CsrfConfig,
   secret?: string,
 })
 ```
@@ -40,7 +39,6 @@ export default defineAuthConfig({
 | `session` | `SessionConfig` | See below | Session configuration |
 | `cookies` | `CookieConfig` | See below | Cookie configuration |
 | `pages` | `PagesConfig` | See below | Custom page paths |
-| `csrf` | `CsrfConfig` | See below | CSRF protection config |
 | `secret` | `string` | Required for JWT | Secret for signing tokens |
 
 #### SessionConfig
@@ -60,10 +58,6 @@ interface CookieConfig {
   sessionToken?: {
     name?: string               // Cookie name (default: 'cloudwerk.session-token')
     options?: CookieOptions     // Cookie options
-  }
-  csrfToken?: {
-    name?: string               // CSRF cookie name
-    options?: CookieOptions
   }
 }
 
@@ -85,16 +79,6 @@ interface PagesConfig {
   error?: string                // Error page (default: '/auth/error')
   verifyRequest?: string        // Email verification page
   newUser?: string              // New user redirect
-}
-```
-
-#### CsrfConfig
-
-```typescript
-interface CsrfConfig {
-  enabled?: boolean             // Enable CSRF protection (default: true)
-  cookieName?: string           // CSRF cookie name
-  methods?: HttpMethod[]        // Methods requiring CSRF (default: ['POST', 'PUT', 'PATCH', 'DELETE'])
 }
 ```
 
@@ -781,17 +765,6 @@ const session = await getSession()
 if (session) {
   console.log('Logged in as', session.user.email)
 }
-```
-
-### getCsrfToken()
-
-Get the CSRF token for forms.
-
-```typescript
-import { getCsrfToken } from '@cloudwerk/auth/client'
-
-const token = getCsrfToken()
-// Use in form: <input type="hidden" name="csrf_token" value={token} />
 ```
 
 ### createAuthStore()

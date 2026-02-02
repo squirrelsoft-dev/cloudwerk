@@ -5,7 +5,7 @@
  */
 
 import type { AuthRouteContext } from '../types.js'
-import { verifyCSRFToken, extractCSRFToken } from './csrf.js'
+import { rotateCsrfToken } from '@cloudwerk/security'
 
 /**
  * Handle GET /auth/signout request.
@@ -52,7 +52,12 @@ export async function handleSignOutGet(
     'cloudwerk.session-token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax'
   )
 
-  return new Response(null, { status: 302, headers })
+  let response = new Response(null, { status: 302, headers })
+
+  // Rotate CSRF token after sign-out to prevent session fixation
+  response = rotateCsrfToken(response, { secure: url.protocol === 'https:' })
+
+  return response
 }
 
 /**
@@ -66,16 +71,7 @@ export async function handleSignOutPost(
 ): Promise<Response> {
   const { config, request, session, sessionManager } = ctx
 
-  // Verify CSRF token for POST requests
-  if (config.csrf?.enabled !== false) {
-    const csrfToken = await extractCSRFToken(request)
-    if (!csrfToken || !verifyCSRFToken(request, csrfToken)) {
-      return new Response(JSON.stringify({ error: 'Invalid CSRF token' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-  }
+  // Note: CSRF is now handled globally by @cloudwerk/security middleware
 
   // Get callback URL from body
   let callbackUrl = '/'
@@ -116,15 +112,22 @@ export async function handleSignOutPost(
 
   // Check if JSON response is expected
   const accept = request.headers.get('Accept') ?? ''
+
+  let response: Response
   if (accept.includes('application/json')) {
-    return new Response(JSON.stringify({ success: true }), {
+    response = new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Set-Cookie': headers.get('Set-Cookie')!,
       },
     })
+  } else {
+    response = new Response(null, { status: 302, headers })
   }
 
-  return new Response(null, { status: 302, headers })
+  // Rotate CSRF token after sign-out to prevent session fixation
+  response = rotateCsrfToken(response, { secure: ctx.url.protocol === 'https:' })
+
+  return response
 }

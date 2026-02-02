@@ -704,46 +704,6 @@ export default defineAuthCallbacks({
 })
 ```
 
-## CSRF Protection
-
-CSRF protection is enabled by default:
-
-```typescript
-// app/auth/config.ts
-export default defineAuthConfig({
-  csrf: {
-    enabled: true,
-    cookieName: 'cloudwerk.csrf-token',
-    methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
-  },
-})
-```
-
-### How CSRF Protection Works
-
-When you enable CSRF protection, Cloudwerk automatically:
-
-1. **Generates a token** for each session and stores it in a secure cookie
-2. **Validates the token** on all POST/PUT/PATCH/DELETE requests
-3. **Rejects requests** that don't include a valid token
-
-You don't need to add CSRF middleware manually—it's applied automatically when `csrf.enabled: true` in your auth config. Your only responsibility is embedding the token in forms using `getCsrfToken()`.
-
-In forms, include the CSRF token:
-
-```tsx
-import { getCsrfToken } from '@cloudwerk/auth/client'
-
-function LoginForm() {
-  return (
-    <form method="POST" action="/auth/signin/credentials">
-      <input type="hidden" name="csrf_token" value={getCsrfToken()} />
-      {/* form fields */}
-    </form>
-  )
-}
-```
-
 ## Password Utilities
 
 ```typescript
@@ -789,7 +749,7 @@ try {
 - Always use HTTPS in production
 - Set `httpOnly` and `secure` flags on session cookies
 - Use `sameSite: 'lax'` or `'strict'` for cookies
-- Enable CSRF protection for form submissions
+- Use `@cloudwerk/security` middleware for CSRF protection (see [Security Guide](/guides/security/))
 - Implement rate limiting on auth endpoints
 - Store password hashes, never plain text
 - Use strong secrets (32+ characters)

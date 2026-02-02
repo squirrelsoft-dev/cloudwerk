@@ -87,7 +87,7 @@ export { requestedWithMiddleware } from './request/index.js'
 // Combined Middleware
 // ============================================================================
 
-export { securityMiddleware } from './combined/index.js'
+export { securityMiddleware, composeMiddleware } from './combined/index.js'
 
 // ============================================================================
 // Types
