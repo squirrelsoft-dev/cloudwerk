@@ -1,5 +1,18 @@
 # @cloudwerk/vite-plugin
 
+## 0.6.5
+
+### Patch Changes
+
+- [#236](https://github.com/squirrelsoft-dev/cloudwerk/pull/236) [`d59696d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/d59696d1d4d64131f025769daeda7986b0e9da30) Thanks [@sbeardsley](https://github.com/sbeardsley)! - fix(auth,vite-plugin): Address PR review comments for CSRF refactoring
+
+  **@cloudwerk/vite-plugin:**
+  - Fix `/auth/signin/:provider` route to call `handleSignInProvider` instead of incorrectly redirecting to login page for all providers
+  - Use auth config session strategy instead of hardcoding `'database'` in `buildAuthContext` and `buildPasskeyAuthContext`
+
+  **@cloudwerk/auth:**
+  - Refactor `handleSignOutPost` to deduplicate CSRF token rotation logic for JSON and redirect responses
+
 ## 0.6.4
 
 ### Patch Changes
