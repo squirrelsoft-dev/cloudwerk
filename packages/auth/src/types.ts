@@ -926,6 +926,12 @@ export interface PasskeyProvider extends Provider {
 
   /** Supported cryptographic algorithms (COSE algorithm identifiers) */
   supportedAlgorithms?: number[]
+
+  /** Name of the KV namespace binding for challenge storage */
+  kvBinding?: string
+
+  /** Name of the D1 database binding for credential/user storage */
+  d1Binding?: string
 }
 
 // ============================================================================

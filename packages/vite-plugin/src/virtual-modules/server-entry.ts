@@ -5,7 +5,7 @@
  * a Hono app with all routes registered from the file-based routing manifest.
  */
 
-import type { RouteManifest, ScanResult, QueueManifest, ServiceManifest } from '@cloudwerk/core/build'
+import type { RouteManifest, ScanResult, QueueManifest, ServiceManifest, AuthManifest } from '@cloudwerk/core/build'
 import type { ResolvedCloudwerkOptions } from '../types.js'
 import * as path from 'node:path'
 
@@ -35,6 +35,8 @@ export interface GenerateServerEntryOptions {
   serviceManifest?: ServiceManifest | null
   /** Asset manifest from Vite build for CSS injection */
   assetManifest?: AssetManifest | null
+  /** Auth manifest if auth providers are configured */
+  authManifest?: AuthManifest | null
 }
 
 /**
@@ -61,6 +63,7 @@ export function generateServerEntry(
   const queueManifest = entryOptions?.queueManifest
   const serviceManifest = entryOptions?.serviceManifest
   const assetManifest = entryOptions?.assetManifest
+  const authManifest = entryOptions?.authManifest
   const imports: string[] = []
   const pageRegistrations: string[] = []
   const routeRegistrations: string[] = []
@@ -596,9 +599,27 @@ app.use('*', async (c, next) => {
   // Try to serve the request as a static asset
   const response = await c.env.ASSETS.fetch(c.req.raw)
 
-  // If asset found (not 404), return it
+  // If asset found (not 404), return it with cache headers
   if (response.status !== 404) {
-    return response
+    const path = new URL(c.req.url).pathname
+
+    // Check if this is a hashed asset (Vite adds content hash to filename)
+    // Hashed assets are immutable and can be cached forever
+    const isHashedAsset = path.startsWith('/__cloudwerk/') ||
+      /-[a-zA-Z0-9]{8,}\\.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|webp|avif|ico)$/.test(path)
+
+    const cacheControl = isHashedAsset
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=3600'
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: {
+        ...Object.fromEntries(response.headers.entries()),
+        'Cache-Control': cacheControl,
+      },
+    })
   }
 
   // Asset not found, continue to routes
@@ -608,6 +629,9 @@ app.use('*', async (c, next) => {
 // Register all routes
 ${pageRegistrations.join('\n')}
 ${routeRegistrations.join('\n')}
+
+// Register auth routes
+${generateAuthRouteRegistrations(authManifest)}
 
 // SSG routes endpoint - returns all static routes for build-time generation
 app.get('/__ssg/routes', async (c) => {
@@ -884,6 +908,188 @@ function generateServiceRegistration(serviceManifest: ServiceManifest | null | u
     for (const reg of registrations) {
       lines.push(reg)
     }
+  }
+
+  return lines.join('\n')
+}
+
+/**
+ * Generate auth route registrations for passkey and other auth providers.
+ */
+function generateAuthRouteRegistrations(authManifest: AuthManifest | null | undefined): string {
+  if (!authManifest || authManifest.providers.length === 0) {
+    return ''
+  }
+
+  // Check if there are any passkey providers
+  const passkeyProviders = authManifest.providers.filter(p => p.type === 'passkey' && !p.disabled)
+  if (passkeyProviders.length === 0) {
+    return ''
+  }
+
+  const lines: string[] = []
+  const imports: string[] = []
+
+  lines.push('')
+  lines.push('// ============================================================================')
+  lines.push('// Auth Route Registration')
+  lines.push('// ============================================================================')
+  lines.push('')
+
+  // Import passkey handlers and storage factories
+  imports.push(`import {
+  handlePasskeyRegisterOptions,
+  handlePasskeyRegisterVerify,
+  handlePasskeyAuthenticateOptions,
+  handlePasskeyAuthenticateVerify,
+} from '@cloudwerk/auth/routes'`)
+
+  imports.push(`import {
+  createKVChallengeStorage,
+  createD1CredentialStorage,
+} from '@cloudwerk/auth/providers'`)
+
+  imports.push(`import { createSessionManager, createKVSessionAdapter } from '@cloudwerk/auth/session'`)
+
+  // Import each passkey provider definition
+  for (let i = 0; i < passkeyProviders.length; i++) {
+    const provider = passkeyProviders[i]
+    imports.push(`import passkeyProviderDef_${i} from '${provider.filePath}'`)
+  }
+
+  lines.push(imports.join('\n'))
+  lines.push('')
+
+  // Generate helper function to build auth context
+  lines.push(`
+/**
+ * Build auth context for passkey handlers.
+ */
+function buildPasskeyAuthContext(c, passkeyProvider) {
+  const env = c.env || {}
+
+  // Get KV binding for challenges - use provider config or fall back to common names
+  const kvBindingName = passkeyProvider.kvBinding
+  let kvBinding = kvBindingName ? env[kvBindingName] : undefined
+  if (!kvBinding) {
+    // Fall back to common binding names
+    for (const name of ['AUTH_KV', 'AUTH_SESSIONS', 'KV']) {
+      const binding = env[name]
+      if (binding && typeof binding.get === 'function') {
+        kvBinding = binding
+        break
+      }
+    }
+  }
+  const challengeStorage = kvBinding ? createKVChallengeStorage(kvBinding, 'auth:challenge:') : undefined
+
+  // Get D1 binding for credentials - use provider config or fall back to common names
+  const d1BindingName = passkeyProvider.d1Binding
+  const d1Binding = d1BindingName ? env[d1BindingName] : (env.DB || env.D1 || env.DATABASE)
+  const credentialStorage = d1Binding ? createD1CredentialStorage(d1Binding, 'webauthn_credentials') : undefined
+
+  // Create user adapter from D1
+  const userAdapter = d1Binding ? {
+    async getUserByEmail(email) {
+      const user = await d1Binding.prepare(
+        'SELECT id, email, email_verified, name, image, created_at, updated_at FROM users WHERE email = ?'
+      ).bind(email).first()
+      if (!user) return null
+      return {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+        name: user.name,
+        image: user.image,
+        createdAt: new Date(user.created_at),
+        updatedAt: new Date(user.updated_at),
+      }
+    },
+    async createUser(userData) {
+      const id = crypto.randomUUID()
+      const now = new Date().toISOString()
+      await d1Binding.prepare(
+        'INSERT INTO users (id, email, email_verified, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(id, userData.email, userData.emailVerified?.toISOString() ?? null, userData.name ?? null, now, now).run()
+      return { id, email: userData.email, emailVerified: userData.emailVerified, name: userData.name ?? null, image: null, createdAt: new Date(now), updatedAt: new Date(now) }
+    },
+    async getUser(id) {
+      const user = await d1Binding.prepare(
+        'SELECT id, email, email_verified, name, image, created_at, updated_at FROM users WHERE id = ?'
+      ).bind(id).first()
+      if (!user) return null
+      return {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+        name: user.name,
+        image: user.image,
+        createdAt: new Date(user.created_at),
+        updatedAt: new Date(user.updated_at),
+      }
+    },
+  } : undefined
+
+  // Create session manager from KV
+  const sessionAdapter = kvBinding ? createKVSessionAdapter({ binding: kvBinding, enableUserIndex: true }) : undefined
+  const sessionManager = sessionAdapter ? createSessionManager({ adapter: sessionAdapter }) : undefined
+
+  // Build providers map
+  const providers = new Map()
+  providers.set(passkeyProvider.id, passkeyProvider)
+
+  return {
+    request: c.req.raw,
+    env,
+    config: { basePath: '/auth', session: { strategy: 'database' } },
+    sessionManager,
+    providers,
+    user: null,
+    session: null,
+    url: new URL(c.req.url),
+    responseHeaders: new Headers(),
+    challengeStorage,
+    credentialStorage,
+    userAdapter,
+  }
+}
+`)
+
+  // Generate route registrations for each passkey provider
+  const basePath = authManifest.config?.basePath || '/auth'
+
+  for (let i = 0; i < passkeyProviders.length; i++) {
+    const provider = passkeyProviders[i]
+
+    // Build the provider from the definition
+    lines.push(`
+// Get provider from definition
+const passkeyProvider_${i} = passkeyProviderDef_${i}.provider || passkeyProviderDef_${i}
+`)
+
+    // Register passkey routes
+    lines.push(`
+// Passkey registration routes
+app.post('${basePath}/passkey/register/options', async (c) => {
+  const ctx = buildPasskeyAuthContext(c, passkeyProvider_${i})
+  return handlePasskeyRegisterOptions(ctx, '${provider.id}')
+})
+
+app.post('${basePath}/passkey/register/verify', async (c) => {
+  const ctx = buildPasskeyAuthContext(c, passkeyProvider_${i})
+  return handlePasskeyRegisterVerify(ctx, '${provider.id}')
+})
+
+app.post('${basePath}/passkey/authenticate/options', async (c) => {
+  const ctx = buildPasskeyAuthContext(c, passkeyProvider_${i})
+  return handlePasskeyAuthenticateOptions(ctx, '${provider.id}')
+})
+
+app.post('${basePath}/passkey/authenticate/verify', async (c) => {
+  const ctx = buildPasskeyAuthContext(c, passkeyProvider_${i})
+  return handlePasskeyAuthenticateVerify(ctx, '${provider.id}')
+})
+`)
   }
 
   return lines.join('\n')

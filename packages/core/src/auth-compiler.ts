@@ -14,11 +14,11 @@ import type { ScannedAuthFile, AuthScanResult } from './auth-scanner.js'
  * Compiled provider entry in the auth manifest.
  */
 export interface AuthProviderEntry {
-  /** Provider ID (e.g., 'github', 'google', 'credentials') */
+  /** Provider ID (e.g., 'github', 'google', 'credentials', 'passkey') */
   id: string
 
   /** Provider type */
-  type: 'oauth' | 'oidc' | 'credentials' | 'email'
+  type: 'oauth' | 'oidc' | 'credentials' | 'email' | 'passkey'
 
   /** Source file path */
   filePath: string
@@ -49,6 +49,10 @@ export interface AuthRouteEntry {
     | 'session'
     | 'csrf'
     | 'providers'
+    | 'passkey-register-options'
+    | 'passkey-register-verify'
+    | 'passkey-authenticate-options'
+    | 'passkey-authenticate-verify'
 
   /** Provider ID (for provider-specific routes) */
   providerId?: string
@@ -245,6 +249,35 @@ export function generateAuthRoutes(
           path: `${basePath}/callback/${provider.id}`,
           method: 'GET',
           handler: 'callback',
+          providerId: provider.id,
+        }
+      )
+    } else if (provider.type === 'passkey') {
+      // Registration routes
+      routes.push(
+        {
+          path: `${basePath}/passkey/register/options`,
+          method: 'POST',
+          handler: 'passkey-register-options',
+          providerId: provider.id,
+        },
+        {
+          path: `${basePath}/passkey/register/verify`,
+          method: 'POST',
+          handler: 'passkey-register-verify',
+          providerId: provider.id,
+        },
+        // Authentication routes
+        {
+          path: `${basePath}/passkey/authenticate/options`,
+          method: 'POST',
+          handler: 'passkey-authenticate-options',
+          providerId: provider.id,
+        },
+        {
+          path: `${basePath}/passkey/authenticate/verify`,
+          method: 'POST',
+          handler: 'passkey-authenticate-verify',
           providerId: provider.id,
         }
       )

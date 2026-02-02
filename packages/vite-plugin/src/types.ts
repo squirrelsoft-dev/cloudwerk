@@ -14,6 +14,8 @@ import type {
   ServiceScanResult,
   ImageManifest,
   ImageScanResult,
+  AuthManifest,
+  AuthScanResult,
 } from '@cloudwerk/core/build'
 
 /**
@@ -126,6 +128,10 @@ export interface PluginState {
   imageManifest: ImageManifest | null
   /** Image scan result (if images are enabled) */
   imageScanResult: ImageScanResult | null
+  /** Auth manifest (if auth is enabled) */
+  authManifest: AuthManifest | null
+  /** Auth scan result (if auth is enabled) */
+  authScanResult: AuthScanResult | null
   /** Map of client component paths to their info */
   clientComponents: Map<string, ClientComponentInfo>
   /** Map of file paths to their CSS imports */

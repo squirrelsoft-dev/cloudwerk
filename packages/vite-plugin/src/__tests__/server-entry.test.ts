@@ -22,7 +22,17 @@ function createScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
 }
 
 // Helper to create resolved options
-function createOptions() {
+interface TestOptions {
+  renderer: 'hono-jsx'
+  routesDir: string
+  appDir: string
+  publicDir: string
+  viteConfig: Record<string, unknown>
+  root: string
+  isProduction?: boolean
+}
+
+function createOptions(overrides: Partial<TestOptions> = {}): TestOptions {
   return {
     renderer: 'hono-jsx' as const,
     routesDir: 'app',
@@ -30,6 +40,7 @@ function createOptions() {
     publicDir: 'public',
     viteConfig: {},
     root: '/project',
+    ...overrides,
   }
 }
 
@@ -354,6 +365,60 @@ describe('generateServerEntry', () => {
       expect(code).toContain("import { middleware as middleware_0 } from '/project/app/middleware.ts'")
       expect(code).toContain("import { middleware as middleware_1 } from '/project/app/admin/middleware.ts'")
       expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1], null, null)")
+    })
+  })
+
+  describe('production static assets', () => {
+    it('should not include static asset middleware in development', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(manifest, createScanResult(), createOptions())
+
+      expect(code).not.toContain('c.env.ASSETS')
+      expect(code).not.toContain('Cache-Control')
+    })
+
+    it('should include static asset middleware in production', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: true })
+      )
+
+      expect(code).toContain('c.env.ASSETS')
+      expect(code).toContain('Serve static assets using Workers Static Assets binding')
+    })
+
+    it('should add cache headers for static assets in production', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: true })
+      )
+
+      // Check for cache header logic
+      expect(code).toContain('Cache-Control')
+      expect(code).toContain('public, max-age=31536000, immutable')
+      expect(code).toContain('public, max-age=3600')
+    })
+
+    it('should detect hashed assets by path pattern', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: true })
+      )
+
+      // Check for /__cloudwerk/ path detection (where Vite builds client assets)
+      expect(code).toContain("path.startsWith('/__cloudwerk/')")
+      // Check for content hash pattern in filenames (e.g., client-entry-CNk2GSip.css)
+      expect(code).toContain('[a-zA-Z0-9]{8,}')
     })
   })
 })

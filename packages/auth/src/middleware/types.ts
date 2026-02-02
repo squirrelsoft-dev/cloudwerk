@@ -46,16 +46,32 @@ import type {
 export interface CoreAuthMiddlewareConfig {
   /**
    * Session strategy to use.
-   * - `'database'`: Server-side sessions stored in KV/D1 (requires sessionAdapter)
+   * - `'database'`: Server-side sessions stored in KV/D1 (requires sessionAdapter or kvBinding)
    * - `'jwt'`: Stateless JWT sessions stored in cookies (requires cookieStore)
    */
   strategy: 'database' | 'jwt'
 
   /**
    * Session storage adapter for 'database' strategy.
-   * Required when strategy is 'database'.
+   * Required when strategy is 'database' (unless kvBinding is provided).
    */
   sessionAdapter?: SessionAdapter
+
+  /**
+   * Name of the KV namespace binding for session storage.
+   * Alternative to sessionAdapter for 'database' strategy.
+   * The binding is resolved at request time using getBinding().
+   *
+   * @example
+   * ```typescript
+   * createCoreAuthMiddleware({
+   *   strategy: 'database',
+   *   kvBinding: 'AUTH_SESSIONS',
+   *   pages: { signIn: '/login' },
+   * })
+   * ```
+   */
+  kvBinding?: string
 
   /**
    * Cookie session store for 'jwt' strategy.

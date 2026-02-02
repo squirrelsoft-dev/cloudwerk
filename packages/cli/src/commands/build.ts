@@ -316,6 +316,16 @@ export async function build(
     logger.debug(`Server bundle built successfully`)
 
     // ========================================================================
+    // Generate _headers file for Cloudflare static asset caching
+    // ========================================================================
+    const headersContent = `/__cloudwerk/*
+  Cache-Control: public, max-age=31536000, immutable
+`
+    const headersPath = path.join(outputDir, 'static', '_headers')
+    fs.writeFileSync(headersPath, headersContent)
+    logger.debug(`Generated _headers file for static asset caching`)
+
+    // ========================================================================
     // Phase 3: Static Site Generation (optional)
     // ========================================================================
     let ssgPaths: string[] = []

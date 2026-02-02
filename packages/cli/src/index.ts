@@ -39,6 +39,8 @@ import {
   servicesDeploy,
   servicesStatus,
 } from './commands/services/index.js'
+import { auth } from './commands/auth.js'
+import { authMigrations } from './commands/auth/index.js'
 import { VERSION } from './version.js'
 import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
@@ -288,6 +290,26 @@ servicesCmd
   .option('--json', 'Output as JSON')
   .option('--verbose', 'Enable verbose logging')
   .action(servicesStatus)
+
+// ============================================================================
+// Auth Command
+// ============================================================================
+
+const authCmd = program
+  .command('auth')
+  .description('Manage Cloudwerk authentication')
+  .enablePositionalOptions()
+  .passThroughOptions()
+  .option('--verbose', 'Enable verbose logging')
+  .action(auth)
+
+authCmd
+  .command('migrations')
+  .description('Generate D1 migration files for auth tables')
+  .option('-o, --output <dir>', 'Output directory for migrations')
+  .option('--dry-run', 'Preview migration without writing')
+  .option('--verbose', 'Enable verbose logging')
+  .action(authMigrations)
 
 // ============================================================================
 // Parse Arguments

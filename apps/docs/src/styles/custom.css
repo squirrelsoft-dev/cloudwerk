@@ -577,3 +577,20 @@ a:focus-visible {
     margin-bottom: 2rem;
   }
 }
+
+/* Style Overview links distinctly in sidebar */
+.sidebar a[href$="/getting-started/"],
+.sidebar a[href$="/guides/"],
+.sidebar a[href$="/api/"],
+.sidebar a[href$="/examples/"] {
+  font-weight: 500;
+}
+
+/* Push search box to the right in header */
+.header .title-wrapper {
+  flex: 1;
+}
+
+.header .title-wrapper + div {
+  justify-content: flex-end;
+}

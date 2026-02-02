@@ -54,4 +54,11 @@ describe('Static Assets', () => {
       expect(html).toContain('data-testid="home"')
     })
   })
+
+  // Note: Cache headers are only added in production builds via the
+  // ASSETS binding static asset middleware. Testing would require a
+  // production build with Workers Static Assets binding.
+  // The cache strategy is:
+  // - Hashed assets (/__cloudwerk/* or files with content hash): immutable, 1 year
+  // - Other static files (robots.txt, favicon.ico, etc.): 1 hour
 })

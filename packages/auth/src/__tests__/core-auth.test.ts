@@ -92,12 +92,12 @@ describe('Core Auth Middleware', () => {
   })
 
   describe('configuration validation', () => {
-    it('should throw if database strategy without sessionAdapter', () => {
+    it('should throw if database strategy without sessionAdapter or kvBinding', () => {
       expect(() =>
         createCoreAuthMiddleware({
           strategy: 'database',
         })
-      ).toThrow('sessionAdapter is required for database strategy')
+      ).toThrow('sessionAdapter or kvBinding is required for database strategy')
     })
 
     it('should throw if jwt strategy without cookieStore', () => {
