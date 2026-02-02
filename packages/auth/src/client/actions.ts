@@ -341,7 +341,7 @@ export interface PasskeyAuthenticateResult {
 export async function registerPasskey(
   options: PasskeyRegisterOptions
 ): Promise<PasskeyRegisterResult> {
-  const { email, name, providerId = 'passkey', callbackUrl = '/', redirect = true } = options
+  const { email, name, providerId: _providerId = 'passkey', callbackUrl = '/', redirect = true } = options
 
   try {
     // Step 1: Get registration options from server
@@ -474,7 +474,7 @@ export async function registerPasskey(
 export async function authenticateWithPasskey(
   options: PasskeyAuthenticateOptions = {}
 ): Promise<PasskeyAuthenticateResult> {
-  const { email, providerId = 'passkey', callbackUrl = '/', redirect = true } = options
+  const { email, providerId: _providerId = 'passkey', callbackUrl = '/', redirect = true } = options
 
   try {
     // Step 1: Get authentication options from server

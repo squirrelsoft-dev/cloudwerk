@@ -167,7 +167,8 @@ export function cspMiddleware(options: CSPOptions = {}): Middleware {
     directives = {},
     reportOnly = false,
     useNonce = false,
-    nonceContextKey = 'cspNonce',
+    // TODO: Use context to store nonce instead of custom header
+    nonceContextKey: _nonceContextKey = 'cspNonce',
   } = options
 
   const headerName = reportOnly

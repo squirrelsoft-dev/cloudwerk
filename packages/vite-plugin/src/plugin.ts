@@ -37,7 +37,6 @@ import {
   scanAuth,
   buildAuthManifestWithModules,
   AUTH_DIR,
-  PROVIDERS_DIR,
   type CloudwerkConfig,
 } from '@cloudwerk/core/build'
 import type {
