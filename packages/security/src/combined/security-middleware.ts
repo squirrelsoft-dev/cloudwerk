@@ -17,8 +17,20 @@ import { requestedWithMiddleware } from '../request/middleware.js'
  * Compose multiple middleware functions into one.
  *
  * Executes middleware in order, passing the response through each.
+ *
+ * @example
+ * ```typescript
+ * import { composeMiddleware } from '@cloudwerk/security'
+ * import { securityMiddleware } from '@cloudwerk/security/middleware'
+ * import { authMiddleware } from '@cloudwerk/auth/middleware'
+ *
+ * export const middleware = composeMiddleware([
+ *   securityMiddleware(),
+ *   authMiddleware(),
+ * ])
+ * ```
  */
-function composeMiddleware(middlewares: Middleware[]): Middleware {
+export function composeMiddleware(middlewares: Middleware[]): Middleware {
   return async (request, next) => {
     // Build the middleware chain in reverse order
     let handler: () => Promise<Response> = next

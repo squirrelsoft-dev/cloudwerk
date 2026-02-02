@@ -88,6 +88,12 @@ export function generateServerEntry(
   let errorIndex = 0
   let notFoundIndex = 0
 
+  // Find root middleware (app/middleware.ts) for global application
+  const rootMiddleware = scanResult.middleware.find(
+    (m) => m.relativePath === 'middleware.ts' || m.relativePath === 'middleware.tsx'
+  )
+  let rootMiddlewareVarName: string | null = null
+
   // Track page info for SSG endpoint generation
   const ssgPageInfo: Array<{
     varName: string
@@ -131,6 +137,14 @@ export function generateServerEntry(
     const normalizedDir = dir === '.' ? '' : dir
     const varName = notFoundModules.get(nf.absolutePath)
     notFoundBoundaryMapEntries.push(`  ['${normalizedDir}', ${varName}]`)
+  }
+
+  // Import root middleware for global application (if exists)
+  if (rootMiddleware) {
+    rootMiddlewareVarName = `middleware_${middlewareIndex++}`
+    middlewareImports.push(`import { middleware as ${rootMiddlewareVarName} } from '${rootMiddleware.absolutePath}'`)
+    middlewareModules.set(rootMiddleware.absolutePath, rootMiddlewareVarName)
+    importedModules.add(rootMiddleware.absolutePath)
   }
 
   // Process each route
@@ -605,7 +619,10 @@ const app = new Hono({ strict: false })
 
 // Add context middleware
 app.use('*', contextMiddleware())
-${options.isProduction ? `
+${rootMiddlewareVarName ? `
+// Apply root middleware globally (for all routes including auth)
+app.use('*', createMiddlewareAdapter(${rootMiddlewareVarName}))
+` : ''}${options.isProduction ? `
 // Serve static assets using Workers Static Assets binding (production only)
 app.use('*', async (c, next) => {
   // Check if ASSETS binding is available
@@ -941,21 +958,16 @@ function generateServiceRegistration(serviceManifest: ServiceManifest | null | u
 }
 
 /**
- * Generate auth route registrations for passkey and other auth providers.
+ * Generate auth route registrations for standard auth routes and providers.
  */
 function generateAuthRouteRegistrations(authManifest: AuthManifest | null | undefined): string {
-  if (!authManifest || authManifest.providers.length === 0) {
-    return ''
-  }
-
-  // Check if there are any passkey providers
-  const passkeyProviders = authManifest.providers.filter(p => p.type === 'passkey' && !p.disabled)
-  if (passkeyProviders.length === 0) {
+  if (!authManifest) {
     return ''
   }
 
   const lines: string[] = []
   const imports: string[] = []
+  const basePath = authManifest.config?.basePath || '/auth'
 
   lines.push('')
   lines.push('// ============================================================================')
@@ -963,32 +975,126 @@ function generateAuthRouteRegistrations(authManifest: AuthManifest | null | unde
   lines.push('// ============================================================================')
   lines.push('')
 
-  // Import passkey handlers and storage factories
+  // Import standard auth handlers
   imports.push(`import {
+  handleSession,
+  handleProviders,
+  handleSignIn,
+  handleSignInProvider,
+  handleSignOutGet,
+  handleSignOutPost,
+} from '@cloudwerk/auth/routes'`)
+
+  // Import session management
+  imports.push(`import { createSessionManager, createKVSessionAdapter } from '@cloudwerk/auth/session'`)
+
+  // Check if there are any passkey providers
+  const passkeyProviders = authManifest.providers.filter(p => p.type === 'passkey' && !p.disabled)
+
+  if (passkeyProviders.length > 0) {
+    // Import passkey handlers and storage factories
+    imports.push(`import {
   handlePasskeyRegisterOptions,
   handlePasskeyRegisterVerify,
   handlePasskeyAuthenticateOptions,
   handlePasskeyAuthenticateVerify,
 } from '@cloudwerk/auth/routes'`)
 
-  imports.push(`import {
+    imports.push(`import {
   createKVChallengeStorage,
   createD1CredentialStorage,
 } from '@cloudwerk/auth/providers'`)
 
-  imports.push(`import { createSessionManager, createKVSessionAdapter } from '@cloudwerk/auth/session'`)
-
-  // Import each passkey provider definition
-  for (let i = 0; i < passkeyProviders.length; i++) {
-    const provider = passkeyProviders[i]
-    imports.push(`import passkeyProviderDef_${i} from '${provider.filePath}'`)
+    // Import each passkey provider definition
+    for (let i = 0; i < passkeyProviders.length; i++) {
+      const provider = passkeyProviders[i]
+      imports.push(`import passkeyProviderDef_${i} from '${provider.filePath}'`)
+    }
   }
 
   lines.push(imports.join('\n'))
   lines.push('')
 
-  // Generate helper function to build auth context
+  // Generate helper function to build auth context for standard routes
   lines.push(`
+/**
+ * Build auth context for standard auth routes.
+ */
+function buildAuthContext(c) {
+  const env = c.env || {}
+
+  // Get KV binding - fall back to common binding names
+  let kvBinding = undefined
+  for (const name of ['FLAGSHIP_AUTH_SESSIONS', 'AUTH_KV', 'AUTH_SESSIONS', 'KV']) {
+    const binding = env[name]
+    if (binding && typeof binding.get === 'function') {
+      kvBinding = binding
+      break
+    }
+  }
+
+  // Create session manager from KV
+  const sessionAdapter = kvBinding ? createKVSessionAdapter({ binding: kvBinding, enableUserIndex: true }) : undefined
+  const sessionManager = sessionAdapter ? createSessionManager({ adapter: sessionAdapter }) : undefined
+
+  // Build providers map
+  const providers = new Map()
+
+  return {
+    request: c.req.raw,
+    env,
+    config: { basePath: '${basePath}', session: { strategy: 'database' } },
+    sessionManager,
+    providers,
+    user: c.get?.('user') ?? null,
+    session: c.get?.('session') ?? null,
+    url: new URL(c.req.url),
+    responseHeaders: new Headers(),
+  }
+}
+`)
+
+  // Register standard auth routes
+  lines.push(`
+// Standard auth routes
+app.get('${basePath}/session', async (c) => {
+  const ctx = buildAuthContext(c)
+  return handleSession(ctx)
+})
+
+app.get('${basePath}/providers', async (c) => {
+  const ctx = buildAuthContext(c)
+  return handleProviders(ctx)
+})
+
+app.get('${basePath}/signin', async (c) => {
+  const ctx = buildAuthContext(c)
+  return handleSignIn(ctx)
+})
+
+app.get('${basePath}/signin/:provider', async (c) => {
+  const ctx = buildAuthContext(c)
+  const providerId = c.req.param('provider')
+  // For OAuth providers, this would initiate the OAuth flow
+  // For now, redirect to login page
+  return c.redirect('${authManifest.pages?.signIn || '/login'}')
+})
+
+app.get('${basePath}/signout', async (c) => {
+  const ctx = buildAuthContext(c)
+  return handleSignOutGet(ctx)
+})
+
+app.post('${basePath}/signout', async (c) => {
+  const ctx = buildAuthContext(c)
+  return handleSignOutPost(ctx)
+})
+`)
+
+  // Generate passkey-specific routes if there are passkey providers
+  if (passkeyProviders.length > 0) {
+    // Generate helper function to build auth context for passkey handlers
+    lines.push(`
 /**
  * Build auth context for passkey handlers.
  */
@@ -1068,7 +1174,7 @@ function buildPasskeyAuthContext(c, passkeyProvider) {
   return {
     request: c.req.raw,
     env,
-    config: { basePath: '/auth', session: { strategy: 'database' } },
+    config: { basePath: '${basePath}', session: { strategy: 'database' } },
     sessionManager,
     providers,
     user: null,
@@ -1082,20 +1188,18 @@ function buildPasskeyAuthContext(c, passkeyProvider) {
 }
 `)
 
-  // Generate route registrations for each passkey provider
-  const basePath = authManifest.config?.basePath || '/auth'
+    // Generate route registrations for each passkey provider
+    for (let i = 0; i < passkeyProviders.length; i++) {
+      const provider = passkeyProviders[i]
 
-  for (let i = 0; i < passkeyProviders.length; i++) {
-    const provider = passkeyProviders[i]
-
-    // Build the provider from the definition
-    lines.push(`
+      // Build the provider from the definition
+      lines.push(`
 // Get provider from definition
 const passkeyProvider_${i} = passkeyProviderDef_${i}.provider || passkeyProviderDef_${i}
 `)
 
-    // Register passkey routes
-    lines.push(`
+      // Register passkey routes
+      lines.push(`
 // Passkey registration routes
 app.post('${basePath}/passkey/register/options', async (c) => {
   const ctx = buildPasskeyAuthContext(c, passkeyProvider_${i})
@@ -1117,6 +1221,7 @@ app.post('${basePath}/passkey/authenticate/verify', async (c) => {
   return handlePasskeyAuthenticateVerify(ctx, '${provider.id}')
 })
 `)
+    }
   }
 
   return lines.join('\n')

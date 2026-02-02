@@ -10,9 +10,9 @@ import type {
   SignInResult,
   SignOutResult,
   SessionResponse,
-  CSRFResponse,
   ClientProvider,
 } from './types.js'
+import { secureFetch } from '@cloudwerk/security/client'
 
 // ============================================================================
 // Configuration
@@ -72,27 +72,6 @@ export async function getSession(): Promise<SessionResponse | null> {
   }
 }
 
-/**
- * Get CSRF token.
- *
- * @returns CSRF token or null
- */
-export async function getCsrfToken(): Promise<string | null> {
-  try {
-    const response = await fetch(`${config.basePath}/csrf`, {
-      credentials: 'include',
-    })
-
-    if (!response.ok) {
-      return null
-    }
-
-    const data: CSRFResponse = await response.json()
-    return data.csrfToken
-  } catch {
-    return null
-  }
-}
 
 /**
  * Get available providers.
@@ -166,9 +145,7 @@ export async function signIn(
 
   // For credentials provider, POST to callback
   try {
-    const csrfToken = await getCsrfToken()
-
-    const response = await fetch(`${config.basePath}/callback/${provider}`, {
+    const response = await secureFetch(`${config.basePath}/callback/${provider}`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -177,7 +154,6 @@ export async function signIn(
       },
       body: JSON.stringify({
         ...credentials,
-        csrfToken,
         callbackUrl,
       }),
     })
@@ -230,9 +206,7 @@ export async function signOut(options: SignOutOptions = {}): Promise<SignOutResu
   const { callbackUrl = '/', redirect = true } = options
 
   try {
-    const csrfToken = await getCsrfToken()
-
-    const response = await fetch(`${config.basePath}/signout`, {
+    const response = await secureFetch(`${config.basePath}/signout`, {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -240,7 +214,6 @@ export async function signOut(options: SignOutOptions = {}): Promise<SignOutResu
         Accept: 'application/json',
       },
       body: JSON.stringify({
-        csrfToken,
         callbackUrl,
       }),
     })
@@ -345,7 +318,7 @@ export async function registerPasskey(
 
   try {
     // Step 1: Get registration options from server
-    const optionsResponse = await fetch(
+    const optionsResponse = await secureFetch(
       `${config.basePath}/passkey/register/options`,
       {
         method: 'POST',
@@ -392,7 +365,7 @@ export async function registerPasskey(
     const response = credential.response as AuthenticatorAttestationResponse
 
     // Step 4: Send credential to server for verification
-    const verifyResponse = await fetch(
+    const verifyResponse = await secureFetch(
       `${config.basePath}/passkey/register/verify`,
       {
         method: 'POST',
@@ -478,7 +451,7 @@ export async function authenticateWithPasskey(
 
   try {
     // Step 1: Get authentication options from server
-    const optionsResponse = await fetch(
+    const optionsResponse = await secureFetch(
       `${config.basePath}/passkey/authenticate/options`,
       {
         method: 'POST',
@@ -521,7 +494,7 @@ export async function authenticateWithPasskey(
     const response = credential.response as AuthenticatorAssertionResponse
 
     // Step 4: Send credential to server for verification
-    const verifyResponse = await fetch(
+    const verifyResponse = await secureFetch(
       `${config.basePath}/passkey/authenticate/verify`,
       {
         method: 'POST',

@@ -96,9 +96,6 @@ export interface CredentialsCallbackParams {
   /** Submitted credentials */
   credentials: Record<string, string>
 
-  /** CSRF token */
-  csrfToken?: string
-
   /** Redirect URL after sign-in */
   callbackUrl?: string
 }
@@ -114,9 +111,6 @@ export interface SignInProps {
     type: Provider['type']
     callbackUrl: string
   }>
-
-  /** CSRF token for forms */
-  csrfToken: string
 
   /** Callback URL after sign-in */
   callbackUrl: string
@@ -142,14 +136,6 @@ export interface SessionResponse {
 
   /** Session expiration */
   expires: string | null
-}
-
-/**
- * CSRF response data.
- */
-export interface CSRFResponse {
-  /** CSRF token */
-  csrfToken: string
 }
 
 /**

@@ -31,7 +31,6 @@ export type {
   CredentialsCallbackParams,
   SignInProps,
   SessionResponse,
-  CSRFResponse,
   ProvidersResponse,
   AuthHandler,
   StoredOAuthState,
@@ -40,13 +39,6 @@ export type {
 
 // Session handler
 export { handleSession } from './handlers/session.js'
-
-// CSRF handler
-export {
-  handleCSRF,
-  verifyCSRFToken,
-  extractCSRFToken,
-} from './handlers/csrf.js'
 
 // Providers handler
 export { handleProviders } from './handlers/providers.js'

@@ -54,12 +54,11 @@ export async function handleSignIn(
     })
   }
 
-  // Generate CSRF token for forms
-  const csrfToken = generateState()
+  // Note: CSRF is now handled globally by @cloudwerk/security middleware
+  // Clients should use secureFetch or getCsrfToken from @cloudwerk/security/client
 
   const props: SignInProps = {
     providers: providerList,
-    csrfToken,
     callbackUrl,
     error: error ?? undefined,
   }

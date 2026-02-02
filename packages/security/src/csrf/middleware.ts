@@ -11,10 +11,12 @@ import {
   DEFAULT_CSRF_COOKIE_NAME,
   DEFAULT_CSRF_HEADER_NAME,
   DEFAULT_CSRF_FORM_FIELD_NAME,
+  generateCsrfToken,
   getCsrfTokenFromCookie,
   getCsrfTokenFromHeader,
   getCsrfTokenFromFormBody,
   verifyCsrfToken,
+  setCsrfCookie,
 } from './token.js'
 
 /** Default methods requiring CSRF validation */
@@ -60,10 +62,24 @@ export function csrfMiddleware(options: CSRFMiddlewareOptions = {}): Middleware 
   } = options
 
   return async (request, next) => {
-    // Skip if method doesn't require CSRF validation
-    if (!methods.includes(request.method)) {
-      return next()
+    const existingToken = getCsrfTokenFromCookie(request, cookieName)
+    const isMutationMethod = methods.includes(request.method)
+
+    // For safe methods (GET, HEAD, OPTIONS), set the cookie if missing
+    if (!isMutationMethod) {
+      const response = await next()
+
+      // If no CSRF cookie exists, set one on the response
+      // This ensures users get a token on their first request
+      if (!existingToken) {
+        const newToken = generateCsrfToken()
+        return setCsrfCookie(response, newToken, { cookieName })
+      }
+
+      return response
     }
+
+    // For mutation methods, we need to validate the CSRF token
 
     // Skip excluded paths
     const url = new URL(request.url)
@@ -71,19 +87,17 @@ export function csrfMiddleware(options: CSRFMiddlewareOptions = {}): Middleware 
       return next()
     }
 
-    // Get token from cookie
-    const cookieToken = getCsrfTokenFromCookie(request, cookieName)
-    if (!cookieToken) {
+    // Reject if no CSRF cookie (client never received a token)
+    if (!existingToken) {
       return Response.json(
         { error: 'Missing CSRF token cookie' },
         { status: 403 }
       )
     }
 
-    // Get token from header or form body
+    // Get token from header first, then fall back to form body
     let requestToken = getCsrfTokenFromHeader(request, headerName)
 
-    // If not in header, check form body
     if (!requestToken) {
       requestToken = await getCsrfTokenFromFormBody(request, formFieldName)
     }
@@ -96,7 +110,7 @@ export function csrfMiddleware(options: CSRFMiddlewareOptions = {}): Middleware 
     }
 
     // Compare tokens using timing-safe comparison
-    if (!verifyCsrfToken(cookieToken, requestToken)) {
+    if (!verifyCsrfToken(existingToken, requestToken)) {
       return Response.json(
         { error: 'Invalid CSRF token' },
         { status: 403 }

@@ -45,7 +45,6 @@ export type {
   UseSessionOptions,
   UseAuthOptions,
   SessionResponse,
-  CSRFResponse,
   ProvidersResponse,
 } from './types.js'
 
@@ -53,7 +52,6 @@ export type {
 export {
   configureAuth,
   getSession,
-  getCsrfToken,
   getProviders,
   signIn,
   signOut,

@@ -203,13 +203,6 @@ export interface SessionResponse {
 }
 
 /**
- * CSRF token response.
- */
-export interface CSRFResponse {
-  csrfToken: string
-}
-
-/**
  * Providers response.
  */
 export interface ProvidersResponse {

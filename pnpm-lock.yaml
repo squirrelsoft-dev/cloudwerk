@@ -121,6 +121,9 @@ importers:
       '@cloudwerk/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cloudwerk/security':
+        specifier: workspace:*
+        version: link:../../packages/security
       '@cloudwerk/ui':
         specifier: workspace:*
         version: link:../../packages/ui
