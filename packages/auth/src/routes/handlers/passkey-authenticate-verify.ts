@@ -12,6 +12,7 @@ import type {
   AuthenticationResponse,
 } from '../../providers/webauthn/types.js'
 import { verifyAuthentication } from '../../providers/webauthn/authentication.js'
+import { rotateCsrfToken } from '@cloudwerk/security'
 
 /**
  * Request body for authentication verification.
@@ -234,11 +235,16 @@ export async function handlePasskeyAuthenticateVerify(
     }
   }
 
-  return new Response(
+  let response = new Response(
     JSON.stringify({
       verified: true,
       userId: storedCredential.userId,
     }),
     { status: 200, headers }
   )
+
+  // Rotate CSRF token after successful authentication to prevent session fixation
+  response = rotateCsrfToken(response, { secure: url.protocol === 'https:' })
+
+  return response
 }

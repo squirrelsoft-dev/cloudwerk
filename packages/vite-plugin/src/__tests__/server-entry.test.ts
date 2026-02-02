@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateServerEntry } from '../virtual-modules/server-entry.js'
 import type { RouteManifest, ScanResult } from '@cloudwerk/core/build'
+import type { CssImportInfo } from '../types.js'
 
 // Helper to create minimal scan result
 function createScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
@@ -365,6 +366,104 @@ describe('generateServerEntry', () => {
       expect(code).toContain("import { middleware as middleware_0 } from '/project/app/middleware.ts'")
       expect(code).toContain("import { middleware as middleware_1 } from '/project/app/admin/middleware.ts'")
       expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1], null, null)")
+    })
+  })
+
+  describe('CSS injection', () => {
+    it('should inject CSS links in dev mode from cssImports', () => {
+      const manifest = createManifest()
+      const cssImports = new Map<string, CssImportInfo[]>()
+      cssImports.set('/project/app/layout.tsx', [
+        {
+          absolutePath: '/project/app/globals.css',
+          importedBy: '/project/app/layout.tsx',
+          isLayout: true,
+        },
+      ])
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: false }),
+        { cssImports }
+      )
+
+      // Should include CSS link with /@fs prefix for Vite serving
+      expect(code).toContain("const CSS_LINKS = '<link rel=\"stylesheet\" href=\"/@fs/project/app/globals.css\" />'")
+    })
+
+    it('should deduplicate CSS imports from multiple files', () => {
+      const manifest = createManifest()
+      const cssImports = new Map<string, CssImportInfo[]>()
+      cssImports.set('/project/app/layout.tsx', [
+        {
+          absolutePath: '/project/app/globals.css',
+          importedBy: '/project/app/layout.tsx',
+          isLayout: true,
+        },
+      ])
+      cssImports.set('/project/app/page.tsx', [
+        {
+          absolutePath: '/project/app/globals.css',
+          importedBy: '/project/app/page.tsx',
+          isLayout: false,
+        },
+        {
+          absolutePath: '/project/app/page.css',
+          importedBy: '/project/app/page.tsx',
+          isLayout: false,
+        },
+      ])
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: false }),
+        { cssImports }
+      )
+
+      // Should include both CSS files but globals.css only once
+      expect(code).toContain('/@fs/project/app/globals.css')
+      expect(code).toContain('/@fs/project/app/page.css')
+      // Count occurrences of globals.css - should be exactly 1
+      const matches = code.match(/globals\.css/g)
+      expect(matches?.length).toBe(1)
+    })
+
+    it('should not inject CSS links in dev mode when cssImports is empty', () => {
+      const manifest = createManifest()
+      const cssImports = new Map<string, CssImportInfo[]>()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: false }),
+        { cssImports }
+      )
+
+      expect(code).toContain("const CSS_LINKS = ''")
+    })
+
+    it('should not inject dev CSS links in production mode', () => {
+      const manifest = createManifest()
+      const cssImports = new Map<string, CssImportInfo[]>()
+      cssImports.set('/project/app/layout.tsx', [
+        {
+          absolutePath: '/project/app/globals.css',
+          importedBy: '/project/app/layout.tsx',
+          isLayout: true,
+        },
+      ])
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ isProduction: true }),
+        { cssImports }
+      )
+
+      // In production, cssImports should be ignored - CSS comes from asset manifest
+      expect(code).not.toContain('/@fs/')
     })
   })
 

@@ -6,7 +6,7 @@
  */
 
 import type { RouteManifest, ScanResult, QueueManifest, ServiceManifest, AuthManifest } from '@cloudwerk/core/build'
-import type { ResolvedCloudwerkOptions } from '../types.js'
+import type { ResolvedCloudwerkOptions, CssImportInfo } from '../types.js'
 import * as path from 'node:path'
 
 /**
@@ -37,6 +37,8 @@ export interface GenerateServerEntryOptions {
   assetManifest?: AssetManifest | null
   /** Auth manifest if auth providers are configured */
   authManifest?: AuthManifest | null
+  /** CSS imports from layouts/pages (for dev mode injection) */
+  cssImports?: Map<string, CssImportInfo[]>
 }
 
 /**
@@ -206,20 +208,45 @@ export function generateServerEntry(
 
   // Client entry path differs between dev and production
   // Dev: Vite virtual module path that Vite resolves
-  // Production: Built asset path
-  const clientEntryPath = options.isProduction
-    ? `${options.hydrationEndpoint}/client.js`
-    : '/@id/__x00__virtual:cloudwerk/client-entry'
+  // Production: Built asset path from asset manifest (includes content hash)
+  let clientEntryPath = '/@id/__x00__virtual:cloudwerk/client-entry'
+  if (options.isProduction && assetManifest) {
+    const clientEntry = assetManifest['virtual:cloudwerk/client-entry']
+    if (clientEntry?.file) {
+      clientEntryPath = `/${clientEntry.file}`
+    } else {
+      // Fallback if manifest doesn't have the entry
+      clientEntryPath = `${options.hydrationEndpoint}/client.js`
+    }
+  } else if (options.isProduction) {
+    // Fallback for production without manifest
+    clientEntryPath = `${options.hydrationEndpoint}/client.js`
+  }
 
-  // Generate CSS links for production (from asset manifest)
-  // In dev mode, CSS is served by Vite with HMR
+  // Generate CSS links for production (from asset manifest) OR dev (from cssImports)
+  // This prevents flash of unstyled content (FOUC) by injecting CSS links server-side
   let cssLinksCode = ''
   if (options.isProduction && assetManifest) {
-    // Find the client entry in the manifest
+    // Production: Find the client entry in the manifest
     const clientEntry = assetManifest['virtual:cloudwerk/client-entry']
     if (clientEntry?.css && clientEntry.css.length > 0) {
       const cssLinks = clientEntry.css
         .map((css: string) => `<link rel="stylesheet" href="/${css}" />`)
+        .join('')
+      cssLinksCode = `const CSS_LINKS = '${cssLinks}'`
+    }
+  } else if (!options.isProduction && entryOptions?.cssImports) {
+    // Dev mode: Generate links from cssImports to prevent FOUC
+    // Use /@fs prefix so Vite serves the CSS with HMR support
+    const allCss = new Set<string>()
+    for (const imports of entryOptions.cssImports.values()) {
+      for (const info of imports) {
+        allCss.add(info.absolutePath)
+      }
+    }
+    if (allCss.size > 0) {
+      const cssLinks = Array.from(allCss)
+        .map(css => `<link rel="stylesheet" href="/@fs${css}" />`)
         .join('')
       cssLinksCode = `const CSS_LINKS = '${cssLinks}'`
     }

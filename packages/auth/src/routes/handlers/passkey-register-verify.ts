@@ -13,6 +13,7 @@ import type {
 } from '../../providers/webauthn/types.js'
 import { verifyRegistration } from '../../providers/webauthn/registration.js'
 import { base64UrlDecode } from '../../providers/oauth/pkce.js'
+import { rotateCsrfToken } from '@cloudwerk/security'
 
 /**
  * Request body for registration verification.
@@ -217,11 +218,16 @@ export async function handlePasskeyRegisterVerify(
     }
   }
 
-  return new Response(
+  let response = new Response(
     JSON.stringify({
       verified: true,
       credentialId: result.registrationInfo.credentialID,
     }),
     { status: 200, headers }
   )
+
+  // Rotate CSRF token after successful registration to prevent session fixation
+  response = rotateCsrfToken(response, { secure: url.protocol === 'https:' })
+
+  return response
 }

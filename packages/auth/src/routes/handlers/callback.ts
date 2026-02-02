@@ -15,6 +15,7 @@ import type {
 import type { StateStorage } from './signin.js'
 import { verifyCSRFToken, extractCSRFToken } from './csrf.js'
 import { exchangeCodeForTokens } from '../../providers/oauth/tokens.js'
+import { rotateCsrfToken } from '@cloudwerk/security'
 
 /**
  * Handle GET /auth/callback/:provider request (OAuth callback).
@@ -208,7 +209,12 @@ export async function handleOAuthCallback(
   }
   headers.set('Set-Cookie', cookieParts.join('; '))
 
-  return new Response(null, { status: 302, headers })
+  let response = new Response(null, { status: 302, headers })
+
+  // Rotate CSRF token after successful authentication to prevent session fixation
+  response = rotateCsrfToken(response, { secure: url.protocol === 'https:' })
+
+  return response
 }
 
 /**
@@ -396,7 +402,12 @@ export async function handleCredentialsCallback(
   }
   headers.set('Set-Cookie', cookieParts.join('; '))
 
-  return new Response(null, { status: 302, headers })
+  let response = new Response(null, { status: 302, headers })
+
+  // Rotate CSRF token after successful authentication to prevent session fixation
+  response = rotateCsrfToken(response, { secure: url.protocol === 'https:' })
+
+  return response
 }
 
 /**

@@ -1,0 +1,44 @@
+{
+  "name": "@cloudwerk/security",
+  "version": "0.1.0",
+  "description": "Security middleware for Cloudwerk - CSRF, CSP, security headers, origin validation",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/squirrelsoft-dev/cloudwerk.git",
+    "directory": "packages/security"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest --run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cloudwerk/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0",
+    "tsup": "^8.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

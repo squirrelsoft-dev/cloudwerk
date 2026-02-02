@@ -181,7 +181,7 @@ export async function build(
         rollupOptions: {
           input: 'virtual:cloudwerk/client-entry',
           output: {
-            entryFileNames: '__cloudwerk/client.js',
+            entryFileNames: '__cloudwerk/client-[hash].js',
             chunkFileNames: '__cloudwerk/[name]-[hash].js',
             // Use hashed names for CSS to enable caching
             assetFileNames: '__cloudwerk/[name]-[hash][extname]',

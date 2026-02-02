@@ -68,6 +68,7 @@
   },
   "dependencies": {
     "@cloudwerk/core": "workspace:*",
+    "@cloudwerk/security": "workspace:*",
     "jose": "^5.2.0"
   },
   "devDependencies": {

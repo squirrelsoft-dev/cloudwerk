@@ -880,6 +880,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
               queueManifest: state.queueManifest,
               serviceManifest: state.serviceManifest,
               authManifest: state.authManifest,
+              cssImports: state.cssImports,
             }
           )
         }

@@ -1,0 +1,290 @@
+---
+title: Security
+description: Learn how to secure your Cloudwerk application with CSRF protection, security headers, and more.
+---
+
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+Cloudwerk provides comprehensive security middleware to protect your application from common web vulnerabilities. This guide covers security best practices and how to implement them.
+
+## Quick Start
+
+The fastest way to secure your app is with the combined security middleware:
+
+```typescript
+// app/middleware.ts
+import { securityMiddleware } from '@cloudwerk/security/middleware'
+
+export const middleware = securityMiddleware({
+  allowedOrigins: ['https://myapp.com'],
+})
+```
+
+This enables:
+- **CSRF protection** - Validates tokens on mutation requests
+- **X-Requested-With validation** - Forces CORS preflight
+- **Security headers** - Sets protective HTTP headers
+
+## Understanding the Protections
+
+### CSRF Protection
+
+Cross-Site Request Forgery (CSRF) attacks trick authenticated users into making unwanted requests. Cloudwerk uses the **double-submit cookie pattern**:
+
+1. Server sets a CSRF token in a cookie
+2. Client sends the same token in a header
+3. Server validates they match
+
+```typescript
+// Server validates on mutation requests (POST, PUT, PATCH, DELETE)
+// Cookie: cloudwerk.csrf-token=abc123
+// Header: X-CSRF-Token: abc123
+```
+
+<Aside type="tip" title="Why double-submit?">
+Attackers can't read cookies from other domains due to the Same-Origin Policy. By requiring the token in both a cookie and a header, we ensure the request originated from your domain.
+</Aside>
+
+### X-Requested-With Header
+
+The `X-Requested-With: XMLHttpRequest` header provides defense-in-depth:
+
+- Custom headers trigger CORS preflight requests
+- Cross-origin attackers can't set custom headers without preflight approval
+- Acts as an additional layer even if CSRF is somehow bypassed
+
+### Security Headers
+
+Cloudwerk sets these headers by default:
+
+| Header | Default | Purpose |
+|--------|---------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME type sniffing |
+| `X-Frame-Options` | `DENY` | Prevents clickjacking |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer information |
+| `X-XSS-Protection` | `0` | Disabled (obsolete, can cause issues) |
+
+## Making Secure API Requests
+
+Use the client helpers to automatically include security headers:
+
+<Tabs>
+<TabItem label="secureFetch">
+```typescript
+import { secureFetch } from '@cloudwerk/security/client'
+
+// Automatically adds X-CSRF-Token and X-Requested-With
+const response = await secureFetch('/api/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Alice' }),
+})
+```
+</TabItem>
+
+<TabItem label="Convenience Methods">
+```typescript
+import { securePost, secureDelete } from '@cloudwerk/security/client'
+
+// POST with auto JSON serialization
+const user = await securePost('/api/users', { name: 'Alice' })
+
+// DELETE
+await secureDelete(`/api/users/${userId}`)
+```
+</TabItem>
+
+<TabItem label="Manual">
+```typescript
+import { getCsrfToken } from '@cloudwerk/security/client'
+
+// If you need manual control
+const response = await fetch('/api/users', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': getCsrfToken() ?? '',
+    'X-Requested-With': 'XMLHttpRequest',
+  },
+  body: JSON.stringify({ name: 'Alice' }),
+})
+```
+</TabItem>
+</Tabs>
+
+## Working with Forms
+
+For traditional form submissions, include the CSRF token as a hidden field:
+
+```tsx
+import { getCsrfToken } from '@cloudwerk/security/client'
+
+function ContactForm() {
+  return (
+    <form method="POST" action="/api/contact">
+      <input type="hidden" name="csrf_token" value={getCsrfToken() ?? ''} />
+      <input type="email" name="email" />
+      <button type="submit">Submit</button>
+    </form>
+  )
+}
+```
+
+The `csrfInput()` helper returns an HTML string for use in templates:
+
+```typescript
+import { csrfInput } from '@cloudwerk/security/client'
+
+// Returns: '<input type="hidden" name="csrf_token" value="..." />'
+const inputHtml = csrfInput()
+```
+
+## Excluding Paths
+
+Some endpoints like webhooks need to bypass security checks:
+
+```typescript
+export const middleware = securityMiddleware({
+  csrf: {
+    excludePaths: ['/api/webhooks/stripe', '/api/webhooks/github'],
+  },
+  requestedWith: {
+    excludePaths: ['/api/webhooks'],
+  },
+})
+```
+
+<Aside type="caution" title="Webhook Security">
+When bypassing CSRF for webhooks, verify requests using the provider's signature mechanism (e.g., Stripe's webhook signatures).
+</Aside>
+
+## Adding Content Security Policy
+
+CSP is disabled by default because it requires app-specific configuration:
+
+```typescript
+export const middleware = securityMiddleware({
+  csp: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://cdn.example.com'],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://api.example.com'],
+    },
+    reportOnly: true,  // Test before enforcing
+  },
+})
+```
+
+<Aside type="tip" title="Testing CSP">
+Start with `reportOnly: true` to see what would be blocked without breaking your app. Check browser console for violations.
+</Aside>
+
+## Adding Origin Validation
+
+For additional cross-origin protection, validate the `Origin` header:
+
+```typescript
+export const middleware = securityMiddleware({
+  allowedOrigins: ['https://myapp.com'],
+  origin: {
+    allowSubdomains: true,  // Also allows api.myapp.com, admin.myapp.com
+    rejectMissingOrigin: false,  // Allow requests without Origin (needed for some webhooks)
+  },
+})
+```
+
+## CSRF Token Rotation
+
+After authentication state changes, rotate the CSRF token to prevent session fixation:
+
+```typescript
+import { rotateCsrfToken } from '@cloudwerk/security'
+
+export async function handleLogin(request: Request) {
+  const user = await validateCredentials(request)
+  const session = await createSession(user)
+
+  let response = createAuthResponse(user, session)
+  response = rotateCsrfToken(response)  // New token bound to session
+  return response
+}
+```
+
+<Aside type="note">
+Cloudwerk's auth handlers automatically rotate CSRF tokens after successful authentication.
+</Aside>
+
+## Disabling Protections
+
+You can disable specific protections if needed:
+
+```typescript
+export const middleware = securityMiddleware({
+  csrf: false,           // Disable CSRF (not recommended)
+  requestedWith: false,  // Disable X-Requested-With validation
+  headers: false,        // Disable security headers
+})
+```
+
+## Individual Middleware
+
+Use individual middleware functions for fine-grained control:
+
+```typescript
+import {
+  csrfMiddleware,
+  securityHeadersMiddleware,
+  cspMiddleware,
+  originValidationMiddleware,
+  requestedWithMiddleware,
+} from '@cloudwerk/security/middleware'
+
+// Apply only what you need
+export const middleware = csrfMiddleware({
+  excludePaths: ['/api/webhooks'],
+})
+```
+
+## Security Checklist
+
+<Steps>
+
+1. **Enable security middleware** on all routes that handle user data
+
+2. **Use secureFetch** for all API requests from the client
+
+3. **Rotate CSRF tokens** after login, logout, and password changes
+
+4. **Configure CSP** once your app is stable
+
+5. **Verify webhooks** using provider signatures, not just CSRF bypass
+
+6. **Set allowed origins** for production deployments
+
+7. **Test with report-only** before enforcing CSP
+
+</Steps>
+
+## Common Issues
+
+### 403 Forbidden on POST requests
+
+The request is missing required security headers. Use `secureFetch()` or manually add:
+- `X-CSRF-Token` header with the token from the cookie
+- `X-Requested-With: XMLHttpRequest` header
+
+### CSRF token mismatch after login
+
+The CSRF token rotates after authentication. Fetch a new token or reload the page to get the updated cookie.
+
+### CSP blocking inline scripts
+
+Either add the script source to `scriptSrc`, use nonces, or move the script to an external file.
+
+## Next Steps
+
+- **[Security API Reference](/api/security/)** - Complete API documentation
+- **[Authentication Guide](/guides/authentication/)** - Protect routes with auth
+- **[Auth API](/api/auth/)** - Authentication system reference
