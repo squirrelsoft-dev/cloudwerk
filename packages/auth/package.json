@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/auth",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Sessions, auth middleware, OAuth for Cloudwerk",
   "repository": {
     "type": "git",
