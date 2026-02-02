@@ -1,5 +1,15 @@
 # @cloudwerk/vite-plugin
 
+## 0.6.4
+
+### Patch Changes
+
+- [#233](https://github.com/squirrelsoft-dev/cloudwerk/pull/233) [`dbdf87a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/dbdf87af77cbedd9178defc96b733fa62c0fc74c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - fix(vite-plugin): prevent flash of unstyled content (FOUC) in dev mode
+  - Inject CSS links server-side during SSR in development mode
+  - Use `/@fs` prefix for Vite to serve CSS with HMR support
+  - Deduplicate CSS imports from multiple files
+  - Use content-hashed client entry path from asset manifest in production
+
 ## 0.6.3
 
 ### Patch Changes

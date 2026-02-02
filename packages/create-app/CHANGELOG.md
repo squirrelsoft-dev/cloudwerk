@@ -1,5 +1,15 @@
 # @cloudwerk/create-app
 
+## 0.2.2
+
+### Patch Changes
+
+- [#233](https://github.com/squirrelsoft-dev/cloudwerk/pull/233) [`dbdf87a`](https://github.com/squirrelsoft-dev/cloudwerk/commit/dbdf87af77cbedd9178defc96b733fa62c0fc74c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - fix(create-app): add tsconfig paths support to hono-jsx template
+  - Added `vite-tsconfig-paths` plugin for path alias resolution
+  - Moved components from `app/components/` to root `components/` directory
+  - Added `@/*` path alias pointing to project root
+  - Updated imports to use `@/components/counter` style
+
 ## 0.2.1
 
 ### Patch Changes
