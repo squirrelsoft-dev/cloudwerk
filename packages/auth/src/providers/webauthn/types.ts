@@ -87,6 +87,18 @@ export interface WebAuthnConfig {
    * @default ES256 (-7), RS256 (-257)
    */
   supportedAlgorithms?: COSEAlgorithmIdentifier[]
+
+  /**
+   * Name of the KV namespace binding for challenge storage.
+   * @example 'AUTH_SESSIONS'
+   */
+  kvBinding?: string
+
+  /**
+   * Name of the D1 database binding for credential/user storage.
+   * @example 'DB'
+   */
+  d1Binding?: string
 }
 
 // ============================================================================

@@ -3,6 +3,7 @@ import starlight from '@astrojs/starlight'
 import starlightThemeGalaxy from 'starlight-theme-galaxy'
 import starlightPageActions from 'starlight-page-actions'
 import starlightLlmsTxt from 'starlight-llms-txt'
+import starlightUtils from '@lorenzo_lewis/starlight-utils'
 
 export default defineConfig({
   site: 'https://cloudwerk.dev',
@@ -11,6 +12,11 @@ export default defineConfig({
       plugins: [
         starlightThemeGalaxy(),
         starlightPageActions(),
+        starlightUtils({
+          navLinks: {
+            leading: { useSidebarLabelled: 'navLinks' }
+          }
+        }),
         starlightLlmsTxt({
             projectName: 'cloudwerk',
             description: 'Cloudwerk is a full-stack framework for Cloudflare Workers',
@@ -80,6 +86,17 @@ export default defineConfig({
       ],
       customCss: ['./src/styles/custom.css'],
       sidebar: [
+        // Hidden sidebar group for navbar links (Starlight Utils consumes this)
+        {
+          label: 'navLinks',
+          items: [
+            { label: 'Getting Started', link: '/getting-started/' },
+            { label: 'Guides', link: '/guides/' },
+            { label: 'API Reference', link: '/api/' },
+            { label: 'Examples', link: '/examples/' },
+          ],
+        },
+        // Visible sidebar groups - autogenerate picks up index.mdx files
         {
           label: 'Getting Started',
           autogenerate: { directory: 'getting-started' },

@@ -129,6 +129,8 @@ export function passkey(config: WebAuthnConfig): PasskeyProvider {
     userVerification: config.userVerification ?? 'preferred',
     attestation: config.attestation ?? 'none',
     supportedAlgorithms: config.supportedAlgorithms,
+    kvBinding: config.kvBinding,
+    d1Binding: config.d1Binding,
   }
 }
 

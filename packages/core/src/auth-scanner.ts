@@ -242,8 +242,8 @@ export async function scanAuth(
         '**/*.test.*',
         '**/*.spec.*',
         '**/*.d.ts',
-        // Ignore deeply nested provider files
-        `${PROVIDERS_DIR}/**/**/*`,
+        // Ignore deeply nested provider files (more than one level deep)
+        `${PROVIDERS_DIR}/*/*/**`,
       ],
     })
   } catch {
@@ -293,7 +293,7 @@ export function scanAuthSync(
         '**/*.test.*',
         '**/*.spec.*',
         '**/*.d.ts',
-        `${PROVIDERS_DIR}/**/**/*`,
+        `${PROVIDERS_DIR}/*/*/**`,
       ],
     })
   } catch {

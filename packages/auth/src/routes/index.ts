@@ -71,3 +71,26 @@ export {
   handleSignOutGet,
   handleSignOutPost,
 } from './handlers/signout.js'
+
+// Passkey handlers
+export {
+  handlePasskeyRegisterOptions,
+  type PasskeyRegisterOptionsRequest,
+} from './handlers/passkey-register-options.js'
+
+export {
+  handlePasskeyRegisterVerify,
+  type PasskeyRegisterVerifyRequest,
+} from './handlers/passkey-register-verify.js'
+
+export {
+  handlePasskeyAuthenticateOptions,
+  type PasskeyAuthenticateOptionsRequest,
+} from './handlers/passkey-authenticate-options.js'
+
+export {
+  handlePasskeyAuthenticateVerify,
+  type PasskeyAuthenticateVerifyRequest,
+} from './handlers/passkey-authenticate-verify.js'
+
+export type { PasskeyAuthContext } from './handlers/passkey-register-options.js'

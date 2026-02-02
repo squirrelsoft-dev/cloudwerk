@@ -33,6 +33,10 @@ import {
   scanImages,
   buildImageManifest,
   IMAGES_DIR,
+  // Auth scanning
+  scanAuth,
+  buildAuthManifestWithModules,
+  AUTH_DIR,
   type CloudwerkConfig,
 } from '@cloudwerk/core/build'
 import type {
@@ -373,6 +377,59 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
   }
 
   /**
+   * Build or rebuild the auth manifest.
+   */
+  async function buildAuthManifestIfExists(root: string): Promise<void> {
+    if (!state) {
+      throw new Error('Plugin state not initialized')
+    }
+
+    // Check if auth directory exists
+    const authPath = path.resolve(root, state.options.appDir, AUTH_DIR)
+    try {
+      await fs.promises.access(authPath)
+    } catch {
+      // No auth directory, skip
+      state.authScanResult = null
+      state.authManifest = null
+      return
+    }
+
+    // Scan auth
+    state.authScanResult = await scanAuth(
+      path.resolve(root, state.options.appDir),
+      { extensions: state.options.config.extensions }
+    )
+
+    // Build auth manifest with modules loaded (to get provider types)
+    state.authManifest = await buildAuthManifestWithModules(state.authScanResult)
+
+    // Invalidate server entry cache since auth routes changed
+    state.serverEntryCache = null
+
+    if (state.options.verbose && state.authManifest.providers.length > 0) {
+      console.log(`[cloudwerk] Found ${state.authManifest.providers.length} auth provider(s)`)
+      for (const provider of state.authManifest.providers) {
+        console.log(`[cloudwerk]   - ${provider.id} (${provider.type})`)
+      }
+    }
+  }
+
+  /**
+   * Check if a file is an auth file that should trigger rebuild.
+   */
+  function isAuthFile(filePath: string): boolean {
+    if (!state) return false
+
+    const authDir = path.resolve(state.options.root, state.options.appDir, AUTH_DIR)
+    if (!filePath.startsWith(authDir)) return false
+
+    // Must be a supported extension
+    const ext = path.extname(filePath)
+    return state.options.config.extensions.includes(ext as '.ts' | '.tsx' | '.js' | '.jsx')
+  }
+
+  /**
    * Check if a file is a route file that should trigger rebuild.
    */
   function isRouteFile(filePath: string): boolean {
@@ -571,6 +628,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
         serviceScanResult: null,
         imageManifest: null,
         imageScanResult: null,
+        authManifest: null,
+        authScanResult: null,
         clientComponents: new Map(),
         cssImports: new Map(),
         serverEntryCache: null,
@@ -588,6 +647,9 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
       // Build image manifest if images directory exists
       await buildImageManifestIfExists(root)
+
+      // Build auth manifest if auth directory exists
+      await buildAuthManifestIfExists(root)
 
       // Pre-scan for client components (needed for production builds)
       await scanClientComponents(root, state)
@@ -647,6 +709,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildImageManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for auth file additions
+        if (isAuthFile(filePath)) {
+          const authDir = path.resolve(root, state!.options.appDir, AUTH_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Auth file added: ${path.relative(authDir, filePath)}`)
+          }
+          await buildAuthManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('unlink', async (filePath: string) => {
@@ -687,6 +759,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           await buildImageManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
+
+        // Watch for auth file removals
+        if (isAuthFile(filePath)) {
+          const authDir = path.resolve(root, state!.options.appDir, AUTH_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Auth file removed: ${path.relative(authDir, filePath)}`)
+          }
+          await buildAuthManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
       })
 
       devServer.watcher.on('change', async (filePath: string) => {
@@ -725,6 +807,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             console.log(`[cloudwerk] Image changed: ${path.relative(imagesDir, filePath)}`)
           }
           await buildImageManifestIfExists(state!.options.root)
+          invalidateVirtualModules()
+        }
+
+        // Watch for auth file changes
+        if (isAuthFile(filePath)) {
+          const authDir = path.resolve(root, state!.options.appDir, AUTH_DIR)
+          if (state?.options.verbose) {
+            console.log(`[cloudwerk] Auth file changed: ${path.relative(authDir, filePath)}`)
+          }
+          await buildAuthManifestIfExists(state!.options.root)
           invalidateVirtualModules()
         }
 
@@ -786,6 +878,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
             {
               queueManifest: state.queueManifest,
               serviceManifest: state.serviceManifest,
+              authManifest: state.authManifest,
+              cssImports: state.cssImports,
             }
           )
         }

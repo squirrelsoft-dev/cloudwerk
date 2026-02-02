@@ -1,6 +1,9 @@
 ---
 title: Authentication
 description: Implement authentication with providers, sessions, RBAC, and multi-tenancy using @cloudwerk/auth.
+sidebar:
+  order: 0
+  label: Overview
 ---
 
 import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
@@ -265,6 +268,8 @@ export default defineProvider(
   })
 )
 ```
+
+For a complete passkey implementation guide, see [Passkey Setup](/guides/authentication/passkey-setup/).
 
 ## Session Management
 
@@ -793,6 +798,7 @@ try {
 
 ## Next Steps
 
+- **[Passkey Setup](/guides/authentication/passkey-setup/)** - Implement passwordless passkey authentication
 - **[Auth API Reference](/api/auth/)** - Complete API documentation
 - **[Database Guide](/guides/database/)** - Store user data in D1
 - **[Middleware](/api/context/)** - Advanced middleware patterns

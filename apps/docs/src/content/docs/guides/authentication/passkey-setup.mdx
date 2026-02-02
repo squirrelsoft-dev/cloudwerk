@@ -1,0 +1,702 @@
+---
+title: Passkey Setup
+description: Complete guide to implementing passwordless passkey authentication in your Cloudwerk application.
+---
+
+import { Aside, Steps, Tabs, TabItem, FileTree } from '@astrojs/starlight/components';
+
+Passkeys provide a modern, passwordless authentication experience using WebAuthn. Users authenticate with biometrics (Face ID, Touch ID, Windows Hello) or security keys instead of passwords. This guide walks you through setting up passkey authentication in a Cloudwerk application.
+
+<Aside type="tip" title="Why Passkeys?">
+- **More secure** - Resistant to phishing, credential stuffing, and password breaches
+- **Better UX** - No passwords to remember or type
+- **Cross-device** - Synced across devices via iCloud Keychain, Google Password Manager, etc.
+- **Fast** - Authentication typically takes under 2 seconds
+</Aside>
+
+## Overview
+
+The passkey implementation uses:
+- **KV** for temporary challenge storage (with automatic TTL expiration)
+- **D1** for persistent user and credential storage
+- **Convention-based routing** for automatic endpoint registration
+
+## Project Structure
+
+After setup, your auth-related files will look like this:
+
+<FileTree>
+- app/
+  - auth/
+    - config.ts           # Auth configuration
+    - callbacks.ts        # Auth lifecycle hooks
+    - providers/
+      - passkey.ts        # Passkey provider config
+  - components/
+    - PasskeyLoginForm.tsx
+    - PasskeySignupForm.tsx
+  - login/
+    - page.tsx
+  - signup/
+    - page.tsx
+  - dashboard/
+    - middleware.ts       # Protected route
+    - page.tsx
+  - middleware.ts         # Root session middleware
+- migrations/
+  - 0001_auth_tables.sql  # Database schema
+- wrangler.toml           # Cloudflare bindings
+</FileTree>
+
+## Setup Steps
+
+<Steps>
+1. **Install the auth package**
+
+   ```bash
+   pnpm add @cloudwerk/auth
+   ```
+
+2. **Create Cloudflare bindings**
+
+   Add KV and D1 bindings to your `wrangler.toml`:
+
+   ```toml
+   # KV namespace for sessions and challenges
+   [[kv_namespaces]]
+   binding = "AUTH_SESSIONS"
+   id = "your-kv-namespace-id"
+
+   # D1 database for users and credentials
+   [[d1_databases]]
+   binding = "DB"
+   database_name = "my-app-db"
+   database_id = "your-database-id"
+   ```
+
+   Create these resources if you haven't already:
+
+   ```bash
+   # Create KV namespace
+   wrangler kv:namespace create AUTH_SESSIONS
+
+   # Create D1 database
+   wrangler d1 create my-app-db
+   ```
+
+3. **Create database migration**
+
+   Create `migrations/0001_auth_tables.sql`:
+
+   ```sql
+   -- Users table
+   CREATE TABLE IF NOT EXISTS users (
+     id TEXT PRIMARY KEY,
+     email TEXT UNIQUE,
+     email_verified TEXT,
+     name TEXT,
+     image TEXT,
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+   );
+
+   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+   -- WebAuthn credentials table
+   CREATE TABLE IF NOT EXISTS webauthn_credentials (
+     id TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL,
+     public_key TEXT NOT NULL,
+     counter INTEGER NOT NULL DEFAULT 0,
+     aaguid TEXT,
+     transports TEXT,
+     backed_up INTEGER NOT NULL DEFAULT 0,
+     device_type TEXT NOT NULL DEFAULT 'singleDevice',
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     last_used_at TEXT,
+     name TEXT,
+     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+   );
+
+   CREATE INDEX IF NOT EXISTS idx_credentials_user_id
+     ON webauthn_credentials(user_id);
+   ```
+
+   Run the migration:
+
+   ```bash
+   wrangler d1 migrations apply my-app-db
+   ```
+
+4. **Configure the passkey provider**
+
+   Create `app/auth/providers/passkey.ts`:
+
+   ```typescript
+   import { defineProvider, passkey } from '@cloudwerk/auth/convention'
+
+   export default defineProvider(
+     passkey({
+       rpName: 'My App',                    // Shown in browser prompts
+       rpId: 'localhost',                   // Your domain (localhost for dev)
+       origin: 'http://localhost:3000',     // Full origin URL
+       authenticatorAttachment: 'platform', // Use device biometrics
+       userVerification: 'preferred',       // Request biometric when available
+       kvBinding: 'AUTH_SESSIONS',          // KV binding name from wrangler.toml
+       d1Binding: 'DB',                     // D1 binding name from wrangler.toml
+     })
+   )
+   ```
+
+5. **Configure auth settings**
+
+   Create `app/auth/config.ts`:
+
+   ```typescript
+   import { defineAuthConfig } from '@cloudwerk/auth/convention'
+
+   export default defineAuthConfig({
+     basePath: '/auth',
+     session: {
+       strategy: 'database',
+       maxAge: 30 * 24 * 60 * 60, // 30 days
+       updateAge: 24 * 60 * 60,   // Refresh daily
+     },
+   })
+   ```
+
+6. **Add root middleware for session context**
+
+   Create `app/middleware.ts`:
+
+   ```typescript
+   import { createCoreAuthMiddleware } from '@cloudwerk/auth/middleware'
+
+   export const middleware = createCoreAuthMiddleware({
+     strategy: 'database',
+     kvBinding: 'AUTH_SESSIONS',
+     pages: {
+       signIn: '/login',
+     },
+   })
+   ```
+
+7. **Create the client-side components**
+
+   See the [Client Components](#client-components) section below.
+
+8. **Create login and signup pages**
+
+   See the [Pages](#pages) section below.
+
+9. **Protect routes with middleware**
+
+   Create `app/dashboard/middleware.ts`:
+
+   ```typescript
+   import { authMiddleware } from '@cloudwerk/auth/middleware'
+
+   export const middleware = authMiddleware({
+     unauthenticatedRedirect: '/login',
+   })
+   ```
+</Steps>
+
+## Provider Configuration
+
+The passkey provider accepts these options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `rpName` | `string` | **required** | Display name shown in browser prompts |
+| `rpId` | `string` | `window.location.hostname` | Your domain (no protocol/port) |
+| `origin` | `string \| string[]` | `window.location.origin` | Allowed origins |
+| `kvBinding` | `string` | — | KV binding name for challenges |
+| `d1Binding` | `string` | — | D1 binding name for credentials |
+| `authenticatorAttachment` | `'platform' \| 'cross-platform'` | — | Authenticator type preference |
+| `userVerification` | `'required' \| 'preferred' \| 'discouraged'` | `'preferred'` | Biometric requirement |
+| `residentKey` | `'required' \| 'preferred' \| 'discouraged'` | `'required'` | Discoverable credential requirement |
+| `timeout` | `number` | `60000` | Operation timeout (ms) |
+
+### Authenticator Attachment
+
+- **`platform`** - Built-in authenticators only (Touch ID, Face ID, Windows Hello)
+- **`cross-platform`** - External authenticators only (USB security keys, phones)
+- **`undefined`** - Allow both types
+
+### Production Configuration
+
+For production, update your passkey provider with your actual domain:
+
+```typescript
+export default defineProvider(
+  passkey({
+    rpName: 'My App',
+    rpId: 'myapp.com',                      // Your production domain
+    origin: 'https://myapp.com',            // HTTPS required in production
+    authenticatorAttachment: 'platform',
+    userVerification: 'preferred',
+    kvBinding: 'AUTH_SESSIONS',
+    d1Binding: 'DB',
+  })
+)
+```
+
+<Aside type="caution" title="Domain Configuration">
+The `rpId` must match your domain exactly. Once users register passkeys with a specific `rpId`, they can only use those passkeys on that domain. Changing `rpId` will invalidate all existing passkeys.
+</Aside>
+
+## Auto-Registered Routes
+
+The passkey provider automatically registers these API endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/auth/passkey/register/options` | POST | Get WebAuthn options for registration |
+| `/auth/passkey/register/verify` | POST | Verify registration and create credential |
+| `/auth/passkey/authenticate/options` | POST | Get WebAuthn options for authentication |
+| `/auth/passkey/authenticate/verify` | POST | Verify authentication and create session |
+
+You don't need to create route files for these - they're handled automatically.
+
+## Client Components
+
+The WebAuthn API requires client-side JavaScript. Here are complete, working components:
+
+### Base64URL Utilities
+
+Both components need these utilities for WebAuthn API compatibility:
+
+```typescript
+function base64UrlToBuffer(base64url: string): ArrayBuffer {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/') + padding
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes.buffer
+}
+
+function bufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  const base64 = btoa(binary)
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+```
+
+### Login Form
+
+```tsx
+// app/components/PasskeyLoginForm.tsx
+'use client'
+
+import { useState } from 'hono/jsx'
+
+export default function PasskeyLoginForm() {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    try {
+      // Step 1: Get authentication options from server
+      const optionsRes = await fetch('/auth/passkey/authenticate/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+        credentials: 'include',
+      })
+
+      if (!optionsRes.ok) {
+        const err = await optionsRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to get authentication options')
+      }
+
+      const options = await optionsRes.json()
+
+      // Step 2: Call WebAuthn API
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          ...options,
+          challenge: base64UrlToBuffer(options.challenge),
+          allowCredentials: options.allowCredentials?.map((c) => ({
+            ...c,
+            id: base64UrlToBuffer(c.id),
+          })),
+        },
+      }) as PublicKeyCredential | null
+
+      if (!credential) {
+        throw new Error('Authentication was cancelled')
+      }
+
+      const response = credential.response as AuthenticatorAssertionResponse
+
+      // Step 3: Verify with server
+      const verifyRes = await fetch('/auth/passkey/authenticate/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: {
+            id: credential.id,
+            rawId: bufferToBase64Url(credential.rawId),
+            response: {
+              clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+              authenticatorData: bufferToBase64Url(response.authenticatorData),
+              signature: bufferToBase64Url(response.signature),
+              userHandle: response.userHandle
+                ? bufferToBase64Url(response.userHandle)
+                : null,
+            },
+            type: credential.type,
+          },
+        }),
+        credentials: 'include',
+      })
+
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Authentication failed')
+      }
+
+      // Success - redirect to dashboard
+      window.location.href = '/dashboard'
+    } catch (err) {
+      setLoading(false)
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          setError('Authentication was cancelled or not allowed')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('An error occurred')
+      }
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <div className="error">{error}</div>}
+
+      <label htmlFor="email">Email address</label>
+      <input
+        type="email"
+        id="email"
+        required
+        value={email}
+        onInput={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+      />
+
+      <button type="submit" disabled={loading}>
+        {loading ? 'Authenticating...' : 'Sign in with Passkey'}
+      </button>
+    </form>
+  )
+}
+```
+
+### Signup Form
+
+```tsx
+// app/components/PasskeySignupForm.tsx
+'use client'
+
+import { useState } from 'hono/jsx'
+
+export default function PasskeySignupForm() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    try {
+      // Step 1: Get registration options from server
+      const optionsRes = await fetch('/auth/passkey/register/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          name: name.trim()
+        }),
+        credentials: 'include',
+      })
+
+      if (!optionsRes.ok) {
+        const err = await optionsRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to get registration options')
+      }
+
+      const options = await optionsRes.json()
+
+      // Step 2: Call WebAuthn API to create credential
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          ...options,
+          challenge: base64UrlToBuffer(options.challenge),
+          user: {
+            ...options.user,
+            id: base64UrlToBuffer(options.user.id),
+          },
+          excludeCredentials: options.excludeCredentials?.map((c) => ({
+            ...c,
+            id: base64UrlToBuffer(c.id),
+          })),
+        },
+      }) as PublicKeyCredential | null
+
+      if (!credential) {
+        throw new Error('Passkey creation was cancelled')
+      }
+
+      const response = credential.response as AuthenticatorAttestationResponse
+
+      // Step 3: Verify with server
+      const verifyRes = await fetch('/auth/passkey/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: {
+            id: credential.id,
+            rawId: bufferToBase64Url(credential.rawId),
+            response: {
+              clientDataJSON: bufferToBase64Url(response.clientDataJSON),
+              attestationObject: bufferToBase64Url(response.attestationObject),
+              transports: response.getTransports?.() ?? [],
+            },
+            type: credential.type,
+          },
+          userId: options.user.id,
+        }),
+        credentials: 'include',
+      })
+
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json().catch(() => ({}))
+        throw new Error(err.error || 'Registration failed')
+      }
+
+      // Success - redirect to dashboard
+      window.location.href = '/dashboard'
+    } catch (err) {
+      setLoading(false)
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError') {
+          setError('Passkey creation was cancelled or not allowed')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('An error occurred')
+      }
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {error && <div className="error">{error}</div>}
+
+      <label htmlFor="name">Full name</label>
+      <input
+        type="text"
+        id="name"
+        required
+        value={name}
+        onInput={(e) => setName(e.target.value)}
+        placeholder="Jane Smith"
+      />
+
+      <label htmlFor="email">Email address</label>
+      <input
+        type="email"
+        id="email"
+        required
+        value={email}
+        onInput={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+      />
+
+      <button type="submit" disabled={loading}>
+        {loading ? 'Creating account...' : 'Create account with Passkey'}
+      </button>
+    </form>
+  )
+}
+```
+
+## Pages
+
+### Login Page
+
+```tsx
+// app/login/page.tsx
+import { isAuthenticated, redirect } from '@cloudwerk/auth'
+import PasskeyLoginForm from '../components/PasskeyLoginForm'
+
+export async function loader() {
+  if (isAuthenticated()) {
+    throw redirect('/dashboard')
+  }
+  return {}
+}
+
+export default function LoginPage() {
+  return (
+    <div>
+      <h1>Sign in</h1>
+      <PasskeyLoginForm />
+      <p>
+        Don't have an account? <a href="/signup">Sign up</a>
+      </p>
+    </div>
+  )
+}
+```
+
+### Signup Page
+
+```tsx
+// app/signup/page.tsx
+import { isAuthenticated, redirect } from '@cloudwerk/auth'
+import PasskeySignupForm from '../components/PasskeySignupForm'
+
+export async function loader() {
+  if (isAuthenticated()) {
+    throw redirect('/dashboard')
+  }
+  return {}
+}
+
+export default function SignupPage() {
+  return (
+    <div>
+      <h1>Create account</h1>
+      <PasskeySignupForm />
+      <p>
+        Already have an account? <a href="/login">Sign in</a>
+      </p>
+    </div>
+  )
+}
+```
+
+## Auth Callbacks
+
+Customize the authentication flow with callbacks:
+
+```typescript
+// app/auth/callbacks.ts
+import { defineAuthCallbacks } from '@cloudwerk/auth/convention'
+
+export default defineAuthCallbacks({
+  async signIn({ user, account }) {
+    // Called on successful authentication
+    // Return false to deny sign-in
+    console.log(`User ${user.id} signed in via ${account.provider}`)
+    return true
+  },
+
+  async session({ session, user }) {
+    // Customize session data
+    return {
+      ...session,
+      data: {
+        ...session.data,
+        role: user.data?.role,
+      },
+    }
+  },
+})
+```
+
+## How It Works
+
+### Registration Flow
+
+1. User submits email and name
+2. Server generates WebAuthn options with a random challenge
+3. Challenge is stored in KV with 10-minute TTL
+4. Browser prompts user to create passkey (biometric verification)
+5. Browser returns attestation with public key
+6. Server verifies attestation, consumes challenge
+7. Server creates user in D1 and stores credential
+8. Server creates session and sets cookie
+
+### Authentication Flow
+
+1. User submits email
+2. Server looks up user's credentials in D1
+3. Server generates WebAuthn options with allowed credentials
+4. Challenge is stored in KV with 10-minute TTL
+5. Browser prompts user to authenticate (biometric verification)
+6. Browser returns assertion with signature
+7. Server verifies signature using stored public key
+8. Server validates and increments counter (clone detection)
+9. Server creates session and sets cookie
+
+## Security Features
+
+The passkey implementation includes:
+
+- **Single-use challenges** - Challenges are deleted after verification
+- **Challenge expiration** - 10-minute TTL prevents replay attacks
+- **Counter validation** - Detects cloned authenticators
+- **Origin verification** - Prevents phishing attacks
+- **RP ID validation** - Ensures correct domain
+- **Signature verification** - Cryptographic proof of possession
+
+## Troubleshooting
+
+### "Challenge storage not configured"
+
+Ensure your passkey provider has `kvBinding` set and the binding exists in `wrangler.toml`:
+
+```typescript
+passkey({
+  // ...
+  kvBinding: 'AUTH_SESSIONS', // Must match wrangler.toml
+})
+```
+
+### "User not found" during authentication
+
+The email must match an existing user with a registered passkey. Check that:
+1. User exists in the `users` table
+2. User has a credential in `webauthn_credentials` table
+
+### "NotAllowedError" in browser
+
+This usually means:
+- User cancelled the passkey prompt
+- No passkey exists for this site
+- Browser doesn't support passkeys
+- Site is not served over HTTPS (except localhost)
+
+### Passkeys not syncing across devices
+
+Ensure you're using `authenticatorAttachment: 'platform'` and:
+- iOS: iCloud Keychain is enabled
+- Android: Google Password Manager is enabled
+- macOS: iCloud Keychain or Chrome profile sync
+
+## Next Steps
+
+- **[Authentication Overview](/guides/authentication/)** - Other auth providers (OAuth, credentials)
+- **[Database Guide](/guides/database/)** - D1 database patterns
+- **[Middleware](/api/context/)** - Advanced middleware configuration

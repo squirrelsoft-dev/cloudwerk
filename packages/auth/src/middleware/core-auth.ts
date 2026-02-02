@@ -6,9 +6,11 @@
  */
 
 import type { Middleware } from '@cloudwerk/core'
+import { getBinding } from '@cloudwerk/core/bindings'
 import { setAuthConfig, setAuthContext } from '../context.js'
+import { createKVSessionAdapter } from '../session/kv-adapter.js'
 import { getSessionFromCookie } from '../session/cookie-utils.js'
-import type { AuthConfig, Session, User } from '../types.js'
+import type { AuthConfig, Session, SessionAdapter, User } from '../types.js'
 import type { CoreAuthMiddlewareConfig } from './types.js'
 
 // ============================================================================
@@ -54,6 +56,20 @@ const DEFAULT_SESSION_COOKIE_NAME = 'cloudwerk.session-token'
  *
  * @example
  * ```typescript
+ * // Database strategy with binding name (resolved at request time)
+ * import { createCoreAuthMiddleware } from '@cloudwerk/auth/middleware'
+ *
+ * export const middleware = createCoreAuthMiddleware({
+ *   strategy: 'database',
+ *   kvBinding: 'AUTH_SESSIONS', // Name of KV binding from wrangler.toml
+ *   pages: {
+ *     signIn: '/login',
+ *   },
+ * })
+ * ```
+ *
+ * @example
+ * ```typescript
  * // JWT strategy with cookie sessions
  * import { createCoreAuthMiddleware } from '@cloudwerk/auth/middleware'
  * import { createCookieSessionStore } from '@cloudwerk/auth/session'
@@ -69,10 +85,10 @@ const DEFAULT_SESSION_COOKIE_NAME = 'cloudwerk.session-token'
 export function createCoreAuthMiddleware(
   config: CoreAuthMiddlewareConfig
 ): Middleware {
-  // Validate configuration
-  if (config.strategy === 'database' && !config.sessionAdapter) {
+  // Validate configuration at construction time (where possible)
+  if (config.strategy === 'database' && !config.sessionAdapter && !config.kvBinding) {
     throw new Error(
-      'CoreAuthMiddleware: sessionAdapter is required for database strategy'
+      'CoreAuthMiddleware: sessionAdapter or kvBinding is required for database strategy'
     )
   }
   if (config.strategy === 'jwt' && !config.cookieStore) {
@@ -84,6 +100,7 @@ export function createCoreAuthMiddleware(
   const {
     strategy,
     sessionAdapter,
+    kvBinding,
     cookieStore,
     userAdapter,
     cookieName = DEFAULT_SESSION_COOKIE_NAME,
@@ -103,7 +120,26 @@ export function createCoreAuthMiddleware(
       if (strategy === 'jwt') {
         session = await cookieStore!.decode(token)
       } else {
-        session = await sessionAdapter!.getSession(token)
+        // Database strategy - get or create session adapter
+        let adapter: SessionAdapter | undefined = sessionAdapter
+
+        // If kvBinding is provided, resolve it at request time and create adapter
+        if (!adapter && kvBinding) {
+          try {
+            const kv = getBinding<{
+              get(key: string): Promise<string | null>
+              put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+              delete(key: string): Promise<void>
+            }>(kvBinding)
+            adapter = createKVSessionAdapter({ binding: kv })
+          } catch (error) {
+            console.error(`CoreAuthMiddleware: Failed to resolve KV binding '${kvBinding}':`, error)
+          }
+        }
+
+        if (adapter) {
+          session = await adapter.getSession(token)
+        }
       }
 
       // Check session validity

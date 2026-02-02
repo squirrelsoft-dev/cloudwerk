@@ -478,7 +478,7 @@ describe('scaffold with renderer selection', () => {
 
     // Verify counter component exists with hono/jsx import
     const counter = await fs.readFile(
-      path.join(targetDir, 'app', 'components', 'counter.tsx'),
+      path.join(targetDir, 'components', 'counter.tsx'),
       'utf-8'
     )
     expect(counter).toContain("from 'hono/jsx'")
@@ -512,7 +512,7 @@ describe('scaffold with renderer selection', () => {
 
     // Verify counter component exists with hono/jsx import
     const counter = await fs.readFile(
-      path.join(targetDir, 'app', 'components', 'counter.tsx'),
+      path.join(targetDir, 'components', 'counter.tsx'),
       'utf-8'
     )
     expect(counter).toContain("from 'hono/jsx'")

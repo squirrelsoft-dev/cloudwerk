@@ -57,7 +57,13 @@ export {
   getProviders,
   signIn,
   signOut,
+  registerPasskey,
+  authenticateWithPasskey,
   type AuthConfig,
+  type PasskeyRegisterOptions,
+  type PasskeyRegisterResult,
+  type PasskeyAuthenticateOptions,
+  type PasskeyAuthenticateResult,
 } from './actions.js'
 
 // ============================================================================

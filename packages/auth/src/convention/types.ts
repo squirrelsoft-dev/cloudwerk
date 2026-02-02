@@ -349,6 +349,11 @@ export interface AuthRouteEntry {
     | 'signout'
     | 'session'
     | 'csrf'
+    | 'providers'
+    | 'passkey-register-options'
+    | 'passkey-register-verify'
+    | 'passkey-authenticate-options'
+    | 'passkey-authenticate-verify'
 
   /**
    * Provider ID (for provider-specific routes).
