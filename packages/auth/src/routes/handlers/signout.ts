@@ -112,22 +112,19 @@ export async function handleSignOutPost(
 
   // Check if JSON response is expected
   const accept = request.headers.get('Accept') ?? ''
+
+  let response: Response
   if (accept.includes('application/json')) {
-    let response = new Response(JSON.stringify({ success: true }), {
+    response = new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Set-Cookie': headers.get('Set-Cookie')!,
       },
     })
-
-    // Rotate CSRF token after sign-out to prevent session fixation
-    response = rotateCsrfToken(response, { secure: ctx.url.protocol === 'https:' })
-
-    return response
+  } else {
+    response = new Response(null, { status: 302, headers })
   }
-
-  let response = new Response(null, { status: 302, headers })
 
   // Rotate CSRF token after sign-out to prevent session fixation
   response = rotateCsrfToken(response, { secure: ctx.url.protocol === 'https:' })

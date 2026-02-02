@@ -1043,7 +1043,7 @@ function buildAuthContext(c) {
   return {
     request: c.req.raw,
     env,
-    config: { basePath: '${basePath}', session: { strategy: 'database' } },
+    config: { basePath: '${basePath}', session: { strategy: '${authManifest.config?.sessionStrategy || 'database'}' } },
     sessionManager,
     providers,
     user: c.get?.('user') ?? null,
@@ -1075,9 +1075,7 @@ app.get('${basePath}/signin', async (c) => {
 app.get('${basePath}/signin/:provider', async (c) => {
   const ctx = buildAuthContext(c)
   const providerId = c.req.param('provider')
-  // For OAuth providers, this would initiate the OAuth flow
-  // For now, redirect to login page
-  return c.redirect('${authManifest.pages?.signIn || '/login'}')
+  return handleSignInProvider(ctx, providerId)
 })
 
 app.get('${basePath}/signout', async (c) => {
@@ -1174,7 +1172,7 @@ function buildPasskeyAuthContext(c, passkeyProvider) {
   return {
     request: c.req.raw,
     env,
-    config: { basePath: '${basePath}', session: { strategy: 'database' } },
+    config: { basePath: '${basePath}', session: { strategy: '${authManifest.config?.sessionStrategy || 'database'}' } },
     sessionManager,
     providers,
     user: null,
