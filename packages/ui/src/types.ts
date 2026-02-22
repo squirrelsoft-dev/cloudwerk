@@ -45,6 +45,19 @@ export interface Renderer {
    * @param root - DOM element to hydrate into
    */
   hydrate(element: unknown, root: Element): void
+
+  /**
+   * Create a JSX element using the renderer's element factory.
+   *
+   * This is used by the client component wrapper to create hydration wrapper
+   * elements at runtime without baking in a specific JSX runtime at compile time.
+   *
+   * @param type - Element type (e.g., 'div', 'span')
+   * @param props - Element properties
+   * @param children - Child elements
+   * @returns A JSX element compatible with this renderer
+   */
+  createElement(type: string, props: Record<string, unknown>, ...children: unknown[]): unknown
 }
 
 // ============================================================================

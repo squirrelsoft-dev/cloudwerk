@@ -7,7 +7,7 @@
  */
 
 import { renderToString, renderToReadableStream } from 'react-dom/server'
-import type { ReactElement } from 'react'
+import { createElement, type ReactElement, type ReactNode } from 'react'
 import type { Renderer, RenderOptions, HtmlOptions, RenderToStreamOptions } from '../types.js'
 
 /**
@@ -103,6 +103,10 @@ export const reactRenderer: Renderer = {
     }).catch((error) => {
       console.error('[Cloudwerk] Failed to hydrate React component:', error)
     })
+  },
+
+  createElement(type: string, props: Record<string, unknown>, ...children: unknown[]): unknown {
+    return createElement(type, props, ...(children as ReactNode[]))
   },
 }
 

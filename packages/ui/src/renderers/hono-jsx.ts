@@ -6,6 +6,7 @@
  */
 
 import { renderToReadableStream } from 'hono/jsx/streaming'
+import { jsx } from 'hono/jsx/jsx-runtime'
 import type { Renderer, RenderOptions, HtmlOptions, StreamRenderOptions, RenderToStreamOptions } from '../types.js'
 
 /**
@@ -104,6 +105,10 @@ export const honoJsxRenderer: Renderer = {
     }).catch((error) => {
       console.error('[Cloudwerk] Failed to hydrate component:', error)
     })
+  },
+
+  createElement(type: string, props: Record<string, unknown>, ...children: unknown[]): unknown {
+    return jsx(type, { ...props, children: children.length === 1 ? children[0] : children })
   },
 }
 
