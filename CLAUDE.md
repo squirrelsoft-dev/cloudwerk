@@ -116,13 +116,37 @@ export default function UserPage({ user }: PageProps & { user: User }) {
 
 ## Changesets
 
-Add a changeset for any PR that changes package behavior:
+**IMPORTANT: Every PR that changes package behavior MUST include a changeset file.** Do not forget this step — it is required for versioning and publishing. Create the changeset as part of the same PR, not as a follow-up.
+
+To create a changeset, add a markdown file to `.changeset/` with the following format:
+
+```markdown
+---
+"@cloudwerk/ui": patch
+---
+
+Description of the change.
+```
+
+Or use the interactive CLI:
 
 ```bash
 pnpm changeset
 ```
 
 Select affected packages (`@cloudwerk/core`, `@cloudwerk/cli`, `@cloudwerk/ui`), bump type (patch/minor/major), and write a summary. The packages are linked and should be bumped together.
+
+## Adding New Packages
+
+When creating a new package that will be published to npm, you MUST tell the user:
+
+> "This is a new package that needs to be published to npm. Before the automated release can work, you'll need to:
+> 1. Publish the initial version manually (or set up the package on npm)
+> 2. Set up the OAuth connection / npm access token for the package
+>
+> Please do this before merging the changeset release PR."
+
+The automated release pipeline cannot publish a package for the first time — it requires manual setup by the repo owner.
 
 ## Key Types
 
