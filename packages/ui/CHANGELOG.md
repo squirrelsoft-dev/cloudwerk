@@ -1,5 +1,11 @@
 # @cloudwerk/ui
 
+## 0.15.5
+
+### Patch Changes
+
+- [#254](https://github.com/squirrelsoft-dev/cloudwerk/pull/254) [`739bd0c`](https://github.com/squirrelsoft-dev/cloudwerk/commit/739bd0c2007c34a85cfc4d75c7328056fd48ea68) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix React renderer producing "Objects are not valid as a React child" error by making the client component wrapper renderer-agnostic. Added `createElement` to the `Renderer` interface so the hydration wrapper div is created using the active renderer's element factory at runtime, instead of compile-time Hono JSX.
+
 ## 0.15.3
 
 ### Patch Changes
