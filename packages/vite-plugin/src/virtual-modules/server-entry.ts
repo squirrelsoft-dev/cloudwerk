@@ -282,7 +282,7 @@ export function generateServerEntry(
 import { Hono } from 'hono'
 import { ssgParams } from 'hono/ssg'
 import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'
-import { setActiveRenderer } from '@cloudwerk/ui'
+import { setActiveRenderer${rendererName === 'react' ? ', initReactRenderer' : ''} } from '@cloudwerk/ui'
 
 // Page and Route Imports
 ${imports.join('\n')}
@@ -411,7 +411,7 @@ async function renderErrorPage(error, errorModule, layoutModules, layoutLoaderDa
     element = await Promise.resolve(Layout(layoutProps))
   }
 
-  return renderWithHydration(element, 500)
+  return await renderWithHydration(element, 500)
 }
 
 /**
@@ -438,7 +438,7 @@ async function renderNotFoundPage(notFoundModule, layoutModules, layoutLoaderDat
     element = await Promise.resolve(Layout(layoutProps))
   }
 
-  return renderWithHydration(element, 404)
+  return await renderWithHydration(element, 404)
 }
 
 // ============================================================================
@@ -512,7 +512,7 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
       }
 
       // Render the page with hydration script injection
-      return renderWithHydration(element)
+      return await renderWithHydration(element)
     } catch (error) {
       // Handle NotFoundError (check both instanceof and name for module duplication)
       if (error instanceof NotFoundError || error?.name === 'NotFoundError') {
@@ -544,9 +544,12 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
  * - CSS links are injected before </head>
  * - Vite client (dev) and hydration script are injected before </body>
  */
-function renderWithHydration(element, status = 200) {
-  // Hono JSX elements have toString() for synchronous rendering
-  let html = '<!DOCTYPE html>' + String(element)
+async function renderWithHydration(element, status = 200) {
+  // Render element to HTML string using the active renderer
+  ${rendererName === 'react' ? `// React: use renderToString from react-dom/server
+  const { renderToString } = await import('react-dom/server')
+  let html = '<!DOCTYPE html>' + renderToString(element)` : `// Hono JSX elements have toString() for synchronous rendering
+  let html = '<!DOCTYPE html>' + String(element)`}
 
   // Inject CSS links before </head> if present
   if (CSS_LINKS) {
@@ -612,7 +615,7 @@ function registerRoute(app, pattern, routeModule, middlewareModules) {
 // ============================================================================
 
 // Initialize renderer
-setActiveRenderer('${rendererName}')
+${rendererName === 'react' ? `await initReactRenderer()\n` : ''}setActiveRenderer('${rendererName}')
 
 // Create Hono app
 const app = new Hono({ strict: false })

@@ -81,6 +81,33 @@ describe('generateServerEntry', () => {
 
       expect(code).toContain("setActiveRenderer('hono-jsx')")
     })
+
+    it('should initialize React renderer when renderer is react', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ renderer: 'react' as 'hono-jsx' })
+      )
+
+      expect(code).toContain("import { setActiveRenderer, initReactRenderer } from '@cloudwerk/ui'")
+      expect(code).toContain('await initReactRenderer()')
+      expect(code).toContain("setActiveRenderer('react')")
+    })
+
+    it('should use renderToString for React renderer', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ renderer: 'react' as 'hono-jsx' })
+      )
+
+      expect(code).toContain("import('react-dom/server')")
+      expect(code).toContain('renderToString(element)')
+    })
   })
 
   describe('middleware imports', () => {
