@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.6.6
+
+### Patch Changes
+
+- [#245](https://github.com/squirrelsoft-dev/cloudwerk/pull/245) [`f3a29a9`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f3a29a9e28db457206f4ceb5304f8f1e371b1f54) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix React renderer support in server entry virtual module. Previously, the generated server entry was hard-coded for Hono JSX, causing React projects to fail at runtime. Now conditionally imports and initializes the React renderer, and uses renderToString from react-dom/server for HTML generation.
+
 ## 0.6.5
 
 ### Patch Changes
