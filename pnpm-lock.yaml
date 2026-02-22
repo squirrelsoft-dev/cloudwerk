@@ -215,6 +215,49 @@ importers:
         specifier: ^4.0.0
         version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
 
+  examples/react-renderer:
+    dependencies:
+      '@cloudwerk/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cloudwerk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
+    devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.1.18
+        version: 4.1.18(vite@6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2))
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.10
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.10)
+      tailwindcss:
+        specifier: ^4.1.18
+        version: 4.1.18
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
+
   packages/auth:
     dependencies:
       '@cloudwerk/core':

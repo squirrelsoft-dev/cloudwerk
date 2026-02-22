@@ -3,9 +3,18 @@
  *
  * Wraps client components with hydration metadata for server-side rendering.
  * This wrapper is used by the esbuild plugin to transform imports of client components.
+ *
+ * IMPORTANT: This file must NOT use JSX syntax. The @cloudwerk/ui package is
+ * compiled with jsxImportSource: "hono/jsx", so any JSX here would produce
+ * Hono JSX elements. When the active renderer is React, those Hono elements
+ * would be nested inside a React element tree, causing "Objects are not valid
+ * as a React child" errors. Instead, we use the active renderer's createElement
+ * method at runtime to produce elements compatible with whichever JSX runtime
+ * is in use.
  */
 
 import { serializeProps } from '@cloudwerk/utils'
+import { getActiveRenderer } from './renderer.js'
 
 /**
  * Metadata for a wrapped client component.
@@ -59,19 +68,19 @@ export function createClientComponentWrapper<P extends Record<string, unknown>>(
     const rendered = Component(props)
 
     // Serialize props for client-side hydration
-    // Note: JSX automatically escapes attribute values, so we pass the raw JSON
     const serializedProps = serializeProps(props as Record<string, unknown>)
 
-    // Return JSX with hydration wrapper
-    // Note: We use raw JSX here which will be transformed by the JSX runtime
-    return (
-      <div
-        data-hydrate-id={componentId}
-        data-hydrate-props={serializedProps}
-        data-hydrate-bundle={bundlePath}
-      >
-        {rendered}
-      </div>
+    // Use the active renderer's createElement to produce elements compatible
+    // with whichever JSX runtime is in use (React or Hono JSX)
+    const renderer = getActiveRenderer()
+    return renderer.createElement(
+      'div',
+      {
+        'data-hydrate-id': componentId,
+        'data-hydrate-props': serializedProps,
+        'data-hydrate-bundle': bundlePath,
+      },
+      rendered
     )
   }
 }
