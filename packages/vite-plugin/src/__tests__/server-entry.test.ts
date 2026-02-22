@@ -24,7 +24,7 @@ function createScanResult(overrides: Partial<ScanResult> = {}): ScanResult {
 
 // Helper to create resolved options
 interface TestOptions {
-  renderer: 'hono-jsx'
+  renderer: 'hono-jsx' | 'react'
   routesDir: string
   appDir: string
   publicDir: string
@@ -88,7 +88,7 @@ describe('generateServerEntry', () => {
       const code = generateServerEntry(
         manifest,
         createScanResult(),
-        createOptions({ renderer: 'react' as 'hono-jsx' })
+        createOptions({ renderer: 'react' })
       )
 
       expect(code).toContain("import { setActiveRenderer, initReactRenderer } from '@cloudwerk/ui'")
@@ -102,7 +102,7 @@ describe('generateServerEntry', () => {
       const code = generateServerEntry(
         manifest,
         createScanResult(),
-        createOptions({ renderer: 'react' as 'hono-jsx' })
+        createOptions({ renderer: 'react' })
       )
 
       expect(code).toContain("import('react-dom/server')")
