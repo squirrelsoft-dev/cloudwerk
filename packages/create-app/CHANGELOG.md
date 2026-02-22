@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.2.3
+
+### Patch Changes
+
+- [#240](https://github.com/squirrelsoft-dev/cloudwerk/pull/240) [`23beeb7`](https://github.com/squirrelsoft-dev/cloudwerk/commit/23beeb713927a4ee591b892df5877ea657ec460e) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add minimatch override to project templates to resolve npm audit vulnerability (GHSA-3ppc-4f35-3m26)
+
 ## 0.2.2
 
 ### Patch Changes
