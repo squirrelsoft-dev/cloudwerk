@@ -1,5 +1,11 @@
 # @cloudwerk/core
 
+## 0.15.3
+
+### Patch Changes
+
+- [#244](https://github.com/squirrelsoft-dev/cloudwerk/pull/244) [`00cc9c5`](https://github.com/squirrelsoft-dev/cloudwerk/commit/00cc9c509f0f19ab42a1cb7f8fcaec33fd4ff354) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Export IMAGES_DIR from build entry point, required by @cloudwerk/vite-plugin@0.6.5
+
 ## 0.15.1
 
 ### Patch Changes
