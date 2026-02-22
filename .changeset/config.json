@@ -6,7 +6,7 @@
   ],
   "commit": false,
   "fixed": [],
-  "linked": [["@cloudwerk/core", "@cloudwerk/cli", "@cloudwerk/ui"]],
+  "linked": [["@cloudwerk/core", "@cloudwerk/cli", "@cloudwerk/ui", "@cloudwerk/create-app"]],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
