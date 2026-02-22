@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.6.7
+
+### Patch Changes
+
+- [#249](https://github.com/squirrelsoft-dev/cloudwerk/pull/249) [`903e5c2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/903e5c264158b9dfdb08d2ab6774769b7719f79e) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix React renderer by configuring esbuild jsxImportSource to 'react' when the renderer is set to 'react', so JSX produces React elements instead of Hono JSX objects.
+
 ## 0.6.6
 
 ### Patch Changes
