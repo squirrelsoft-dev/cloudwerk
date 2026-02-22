@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0",
+  "organization": "Squirrelsoft",
+  "date": "February 2026",
+  "abstract": "Handler, middleware, and component patterns for Cloudwerk applications. Covers CloudwerkHandler signatures, response helpers, Cloudflare binding access, middleware composition, page and layout component props, and client-side component directives.",
+  "references": [
+    "https://github.com/squirrelsoft-dev/cloudwerk"
+  ]
+}
