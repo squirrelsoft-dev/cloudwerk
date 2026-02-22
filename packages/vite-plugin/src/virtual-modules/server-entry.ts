@@ -593,7 +593,7 @@ function registerRoute(app, pattern, routeModule, middlewareModules) {
   for (const method of HTTP_METHODS) {
     const handler = routeModule[method]
     if (handler && typeof handler === 'function') {
-      const h = handler.length === 2 ? createHandlerAdapter(handler) : handler
+      const h = createHandlerAdapter(handler)
       switch (method) {
         case 'GET': app.get(pattern, h); break
         case 'POST': app.post(pattern, h); break

@@ -2,23 +2,23 @@
  * Users route for testing.
  */
 
-import type { Context } from 'hono'
+import { json } from '@cloudwerk/core/runtime'
 
 const users = [
   { id: 1, name: 'Alice' },
   { id: 2, name: 'Bob' },
 ]
 
-export const GET = (c: Context) => {
-  return c.json({ users })
+export function GET() {
+  return json({ users })
 }
 
-export const POST = async (c: Context) => {
-  const body = await c.req.json()
+export async function POST(request: Request) {
+  const body = await request.json()
   const newUser = {
     id: users.length + 1,
     ...body,
   }
   users.push(newUser)
-  return c.json(newUser, 201)
+  return json(newUser, 201)
 }

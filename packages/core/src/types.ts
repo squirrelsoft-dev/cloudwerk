@@ -401,10 +401,7 @@ export interface CloudwerkHandlerContext<TParams = Record<string, string>> {
 }
 
 /**
- * Cloudwerk-native route handler signature.
- *
- * **Important**: Both parameters must be declared for automatic detection.
- * Use `_context` if the context parameter is unused.
+ * Cloudwerk route handler signature.
  *
  * @example
  * // With params
@@ -413,8 +410,8 @@ export interface CloudwerkHandlerContext<TParams = Record<string, string>> {
  * }
  *
  * @example
- * // Without params (still need second parameter for detection)
- * export function GET(request: Request, _context: CloudwerkHandlerContext) {
+ * // Without params (second parameter is optional)
+ * export function GET(request: Request) {
  *   return new Response('Hello Cloudwerk')
  * }
  *

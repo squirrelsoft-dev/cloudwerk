@@ -8,11 +8,12 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": "./app",
+    "rootDir": "./",
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
     "baseUrl": ".",
     "paths": {
+      "@/*": ["./*"],
       "@cloudwerk/core/bindings": [
         "./.cloudwerk/types/bindings.d.ts"
       ],

@@ -191,13 +191,10 @@ export interface LoadedRouteModule {
  * 3. User-facing type safety is provided by `CloudwerkHandler<T>` in route files
  * 4. The actual typing happens in `createHandlerAdapter` from `@cloudwerk/core`
  *
- * Supports both handler signatures:
- * - Hono style: (c: HonoContext) => Response
- * - Cloudwerk style: (request: Request, context: CloudwerkHandlerContext) => Response
+ * All handlers use the Cloudwerk signature:
+ * - (request: Request, context?: CloudwerkHandlerContext) => Response
  *
- * Detection is based on function arity (fn.length):
- * - Arity 1: Hono handler
- * - Arity 2: Cloudwerk handler (wrapped via `createHandlerAdapter`)
+ * The second parameter is optional if the handler doesn't need params.
  *
  * @internal
  */

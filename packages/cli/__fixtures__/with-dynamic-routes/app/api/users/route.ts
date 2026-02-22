@@ -2,7 +2,7 @@
  * Users list route for testing dynamic routes.
  */
 
-import type { Context } from 'hono'
+import { json } from '@cloudwerk/core/runtime'
 
 const users = [
   { id: '1', name: 'Alice' },
@@ -10,6 +10,6 @@ const users = [
   { id: '3', name: 'Charlie' },
 ]
 
-export const GET = (c: Context) => {
-  return c.json({ users })
+export function GET() {
+  return json({ users })
 }

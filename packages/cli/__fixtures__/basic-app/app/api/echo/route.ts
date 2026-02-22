@@ -2,14 +2,14 @@
  * Echo route for testing request/response.
  */
 
-import type { Context } from 'hono'
+import { json } from '@cloudwerk/core/runtime'
 
-export const POST = async (c: Context) => {
-  const body = await c.req.json()
-  return c.json({
+export async function POST(request: Request) {
+  const body = await request.json()
+  return json({
     echo: body,
-    method: c.req.method,
-    path: c.req.path,
+    method: request.method,
+    path: new URL(request.url).pathname,
     timestamp: new Date().toISOString(),
   })
 }

@@ -76,19 +76,21 @@ The CLI takes the manifest and registers routes with Hono:
 - `loadHandler.ts` - Load API route handlers
 - `loadMiddleware.ts` - Load middleware functions
 
-### Handler Signatures
+### Handler Signature
 
-Two handler signatures are supported:
+Route handlers use the Cloudwerk signature:
 
 ```typescript
-// Cloudwerk-native (preferred) - detected by arity === 2
 export function GET(request: Request, { params }: CloudwerkHandlerContext) {
   return json({ id: params.id })
 }
+```
 
-// Legacy Hono-style - detected by arity === 1
-export function GET(c: Context) {
-  return c.json({ id: c.req.param('id') })
+The second parameter is optional if you don't need params:
+
+```typescript
+export function GET(request: Request) {
+  return json({ hello: 'world' })
 }
 ```
 
