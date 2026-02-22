@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0",
+  "organization": "Squirrelsoft",
+  "date": "February 2026",
+  "abstract": "File-based routing conventions for Cloudwerk, a full-stack framework for Cloudflare Workers. Covers page components, API routes, layouts, middleware, error boundaries, dynamic segments, data loading with loaders and actions, and the context API.",
+  "references": [
+    "https://github.com/squirrelsoft-dev/cloudwerk"
+  ]
+}
