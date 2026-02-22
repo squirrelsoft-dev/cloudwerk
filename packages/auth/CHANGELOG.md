@@ -1,5 +1,11 @@
 # @cloudwerk/auth
 
+## 0.3.0
+
+### Minor Changes
+
+- [#242](https://github.com/squirrelsoft-dev/cloudwerk/pull/242) [`adb6698`](https://github.com/squirrelsoft-dev/cloudwerk/commit/adb6698860957a36cb30c48a74012e94cdf67ca3) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add D1 user adapter with RBAC support for database-backed authentication
+
 ## 0.2.3
 
 ### Patch Changes
