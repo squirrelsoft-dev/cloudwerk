@@ -1,0 +1,34 @@
+{
+    "name": "feature-flags",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "cloudwerk dev",
+        "build": "cloudwerk build",
+        "preview": "cloudwerk deploy --env preview",
+        "preview:teardown": "wrangler delete --env preview",
+        "deploy": "cloudwerk deploy",
+        "bindings": "cloudwerk bindings",
+        "cloudwerk": "cloudwerk"
+    },
+    "dependencies": {
+        "@cloudwerk/auth": "workspace:*",
+        "@cloudwerk/cli": "workspace:*",
+        "@cloudwerk/core": "workspace:*",
+        "@cloudwerk/security": "workspace:*",
+        "@cloudwerk/ui": "workspace:*",
+        "hono": "^4.0.0"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.1.18",
+        "tailwindcss": "^4.1.18",
+        "typescript": "^5.0.0",
+        "vite": "^6.0.0",
+        "vite-tsconfig-paths": "^5.1.4",
+        "wrangler": "^4.0.0"
+    },
+    "engines": {
+        "node": ">=20"
+    }
+}

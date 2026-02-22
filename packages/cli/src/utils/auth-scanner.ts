@@ -364,3 +364,21 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
 `
 }
+
+/**
+ * Generate user_roles table SQL schema for RBAC.
+ */
+export function generateUserRolesTableSQL(): string {
+  return `-- User roles junction table for RBAC
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, role_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
+`
+}

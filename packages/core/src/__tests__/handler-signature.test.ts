@@ -2,7 +2,7 @@
  * Tests for Cloudwerk-native handler signature types and detection.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { CloudwerkHandler, CloudwerkHandlerContext } from '../types.js'
 import { getContext, runWithContext, createContext } from '../context.js'
 
@@ -45,23 +45,6 @@ function createMockHonoContext(overrides: {
 // ============================================================================
 
 describe('CloudwerkHandler type', () => {
-  describe('handler signature detection', () => {
-    it('detects Cloudwerk handler by arity 2', () => {
-      const cloudwerkHandler: CloudwerkHandler = (request, context) => {
-        return new Response('ok')
-      }
-
-      expect(cloudwerkHandler.length).toBe(2)
-    })
-
-    it('detects legacy Hono handler by arity 1', () => {
-      const honoHandler = (c: unknown) => {
-        return new Response('ok')
-      }
-
-      expect(honoHandler.length).toBe(1)
-    })
-  })
 
   describe('params flow', () => {
     it('context.params contains route parameters', () => {

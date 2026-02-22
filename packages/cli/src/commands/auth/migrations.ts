@@ -7,7 +7,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import pc from 'picocolors'
-import { loadConfig } from '@cloudwerk/core/build'
+import { loadConfig, scanAuth } from '@cloudwerk/core/build'
 import { createLogger } from '../../utils/logger.js'
 import { handleCommandError } from '../../utils/command-error-handler.js'
 import {
@@ -18,6 +18,7 @@ import {
   generateSessionsTableSQL,
   generateWebAuthnCredentialsTableSQL,
   generateVerificationTokensTableSQL,
+  generateUserRolesTableSQL,
 } from '../../utils/auth-scanner.js'
 
 // ============================================================================
@@ -139,6 +140,18 @@ export async function authMigrations(
       })
     }
 
+    // Check for RBAC configuration
+    const authScanResult = await scanAuth(appDir, { extensions: config.extensions })
+    const hasRBAC = authScanResult.rbacFile !== undefined
+
+    if (hasRBAC) {
+      tables.push({
+        name: 'user_roles',
+        reason: 'Required for role-based access control',
+        sql: generateUserRolesTableSQL(),
+      })
+    }
+
     // Display detected config
     console.log(pc.dim('  Detected configuration:'))
     console.log(
@@ -146,6 +159,9 @@ export async function authMigrations(
     )
     console.log(
       `    ${pc.cyan('Session')}: ${sessionStrategy === 'database' ? pc.yellow('database') : pc.green('jwt')}`
+    )
+    console.log(
+      `    ${pc.cyan('RBAC')}: ${hasRBAC ? pc.green('enabled') : pc.dim('(none)')}`
     )
     console.log()
 

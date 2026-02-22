@@ -2,8 +2,8 @@
  * Health check route for testing.
  */
 
-import type { Context } from 'hono'
+import { json } from '@cloudwerk/core/runtime'
 
-export const GET = (c: Context) => {
-  return c.json({ status: 'ok', timestamp: new Date().toISOString() })
+export function GET() {
+  return json({ status: 'ok', timestamp: new Date().toISOString() })
 }

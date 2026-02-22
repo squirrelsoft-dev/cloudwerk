@@ -1,0 +1,23 @@
+name = "feature-flags"
+main = "dist/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+account_id = "aff07dce0c5a9de6a4b70905ccfea21c"
+
+[assets]
+directory = "./dist/static"
+binding = "ASSETS"
+
+[build]
+command = "npm run build"
+
+# KV namespace for auth sessions
+[[kv_namespaces]]
+binding = "FLAGSHIP_AUTH_SESSIONS"
+id = "4c39e6ac7a404670af016b3f20512911"
+
+# D1 database for users and flags
+[[d1_databases]]
+binding = "DB"
+database_name = "feature-flags-db"
+database_id = "f4989ea0-5781-4433-8f2f-6fbb4782e180"

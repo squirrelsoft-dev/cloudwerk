@@ -14,6 +14,7 @@ export default defineConfig({
     'rate-limit': 'src/rate-limit/index.ts',
     tenant: 'src/tenant/index.ts',
     client: 'src/client/index.ts',
+    'adapters/index': 'src/adapters/index.ts',
   },
   format: ['esm'],
   dts: true,
