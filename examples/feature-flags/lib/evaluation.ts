@@ -11,6 +11,8 @@ import type {
 } from './types'
 import { hashToPercentage } from './hash'
 
+const regexCache = new Map<string, RegExp>()
+
 /**
  * Evaluate a feature flag for a given context
  */
@@ -100,19 +102,29 @@ export function matchesRule(
 export function matchesCondition(
   condition: Condition,
   context: EvaluationContext,
-  segments: Map<string, Segment>
+  segments: Map<string, Segment>,
+  visitedSegments: Set<string> = new Set()
 ): boolean {
   // Handle segment references
   if (condition.attribute === '$segment') {
     const segmentKey = String(condition.value)
+
+    // Detect circular segment references
+    if (visitedSegments.has(segmentKey)) {
+      return false
+    }
+
     const segment = segments.get(segmentKey)
     if (!segment) {
       return false
     }
 
+    const visited = new Set(visitedSegments)
+    visited.add(segmentKey)
+
     // Evaluate segment conditions
     const inSegment = segment.conditions.every((c) =>
-      matchesCondition(c, context, segments)
+      matchesCondition(c, context, segments, visited)
     )
 
     return condition.operator === 'in' ? inSegment : !inSegment
@@ -132,10 +144,20 @@ export function evaluateOperator(
 ): boolean {
   // Handle undefined/null attribute values
   if (attributeValue === undefined || attributeValue === null) {
-    if (operator === 'neq' || operator === 'not_in' || operator === 'not_contains') {
-      return true
+    switch (operator) {
+      case 'eq':
+        return attributeValue === conditionValue
+      case 'neq':
+        return attributeValue !== conditionValue
+      case 'in':
+        return Array.isArray(conditionValue) && conditionValue.includes(attributeValue)
+      case 'not_in':
+        return !Array.isArray(conditionValue) || !conditionValue.includes(attributeValue)
+      case 'not_contains':
+        return true
+      default:
+        return false
     }
-    return false
   }
 
   switch (operator) {
@@ -183,7 +205,12 @@ export function evaluateOperator(
 
     case 'matches':
       try {
-        const regex = new RegExp(String(conditionValue))
+        const pattern = String(conditionValue)
+        let regex = regexCache.get(pattern)
+        if (!regex) {
+          regex = new RegExp(pattern)
+          regexCache.set(pattern, regex)
+        }
         return regex.test(String(attributeValue))
       } catch {
         return false

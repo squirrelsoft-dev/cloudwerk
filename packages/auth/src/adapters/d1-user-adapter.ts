@@ -188,11 +188,19 @@ export function createD1UserAdapter(config: D1UserAdapterConfig): UserAdapter {
     debug = false,
   } = config
 
+  const validIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+  function quoteIdentifier(name: string): string {
+    if (!validIdentifier.test(name)) {
+      throw new Error(`Invalid table name: ${name}`)
+    }
+    return `"${name}"`
+  }
+
   const t = {
-    users: tables.users ?? 'users',
-    accounts: tables.accounts ?? 'accounts',
-    userRoles: tables.userRoles ?? 'user_roles',
-    verificationTokens: tables.verificationTokens ?? 'verification_tokens',
+    users: quoteIdentifier(tables.users ?? 'users'),
+    accounts: quoteIdentifier(tables.accounts ?? 'accounts'),
+    userRoles: quoteIdentifier(tables.userRoles ?? 'user_roles'),
+    verificationTokens: quoteIdentifier(tables.verificationTokens ?? 'verification_tokens'),
   }
 
   function log(...args: unknown[]): void {

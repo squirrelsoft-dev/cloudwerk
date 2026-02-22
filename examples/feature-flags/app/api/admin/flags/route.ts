@@ -48,8 +48,12 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
 
-    // Handle unique constraint violation
-    if (message.includes('UNIQUE') || message.includes('unique')) {
+    // Handle unique constraint violation (D1/SQLite error code 19 = SQLITE_CONSTRAINT)
+    const isConstraintError =
+      (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 'SQLITE_CONSTRAINT') ||
+      message.includes('UNIQUE constraint failed') ||
+      message.includes('SQLITE_CONSTRAINT')
+    if (isConstraintError) {
       return json({ error: 'A flag with this key already exists' }, 409)
     }
 
