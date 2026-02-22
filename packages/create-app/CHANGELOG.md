@@ -1,5 +1,11 @@
 # @cloudwerk/create-app
 
+## 0.15.4
+
+### Patch Changes
+
+- [#251](https://github.com/squirrelsoft-dev/cloudwerk/pull/251) [`efb4e0f`](https://github.com/squirrelsoft-dev/cloudwerk/commit/efb4e0faad728b494c06079da91f4e4ddb1f6a77) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Update template dependency versions to match latest published packages.
+
 ## 0.2.3
 
 ### Patch Changes
