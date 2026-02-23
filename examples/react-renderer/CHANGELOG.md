@@ -1,5 +1,12 @@
 # react-renderer
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [[`f9a3682`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f9a36823c1260cf33e6d0f632099238c71849d49)]:
+  - @cloudwerk/cli@0.15.12
+
 ## 0.0.8
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.12
+
+### Patch Changes
+
+- [#271](https://github.com/squirrelsoft-dev/cloudwerk/pull/271) [`f9a3682`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f9a36823c1260cf33e6d0f632099238c71849d49) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump @cloudwerk/vite-plugin dependency to pick up the unused import stripping fix, which prevents browser errors in Vite dev mode when server-only imports reference Node.js APIs.
+
 ## 0.15.11
 
 ### Patch Changes
