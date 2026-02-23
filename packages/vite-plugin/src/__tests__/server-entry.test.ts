@@ -91,8 +91,9 @@ describe('generateServerEntry', () => {
         createOptions({ renderer: 'react' })
       )
 
-      expect(code).toContain("import { setActiveRenderer, getActiveRenderer, initReactRenderer } from '@cloudwerk/ui'")
-      expect(code).toContain('await initReactRenderer()')
+      expect(code).toContain("import { setActiveRenderer, getActiveRenderer, registerRenderer } from '@cloudwerk/ui'")
+      expect(code).toContain("import { reactRenderer } from '@cloudwerk/ui/renderers/react'")
+      expect(code).toContain("registerRenderer('react', reactRenderer)")
       expect(code).toContain("setActiveRenderer('react')")
     })
 
