@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.6.9
+
+### Patch Changes
+
+- [#259](https://github.com/squirrelsoft-dev/cloudwerk/pull/259) [`6420c5e`](https://github.com/squirrelsoft-dev/cloudwerk/commit/6420c5ee7be0f3494e2f55311636ac2e40b56fab) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix XSS vulnerability in React hydration data script injection, scope MISSING_EXPORT warning suppression to known-optional exports, and use JSON.stringify for route pattern keys in client entry.
+
 ## 0.6.8
 
 ### Patch Changes
