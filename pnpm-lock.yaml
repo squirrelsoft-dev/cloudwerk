@@ -304,6 +304,31 @@ importers:
         specifier: ^4.0.0
         version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
 
+  examples/ssg:
+    dependencies:
+      '@cloudwerk/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@cloudwerk/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cloudwerk/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.5
+    devDependencies:
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.61.1(@cloudflare/workers-types@4.20260130.0)
+
   packages/auth:
     dependencies:
       '@cloudwerk/core':

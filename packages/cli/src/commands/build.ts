@@ -598,7 +598,7 @@ async function generateStaticPages(
     }
   } catch (error) {
     if (verbose) {
-      logger.debug(`SSG error: ${error instanceof Error ? error.message : String(error)}`)
+      logger.debug(`SSG error: ${error instanceof Error ? error.stack : String(error)}`)
     }
     // Don't fail the build, just warn
     logger.warn(`Static generation failed: ${error instanceof Error ? error.message : String(error)}`)
