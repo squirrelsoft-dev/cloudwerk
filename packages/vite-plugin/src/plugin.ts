@@ -53,6 +53,7 @@ import {
 import { generateServerEntry } from './virtual-modules/server-entry.js'
 import { generateClientEntry } from './virtual-modules/client-entry.js'
 import { transformClientComponent } from './transform-client-component.js'
+import { stripServerExports } from './strip-server-exports.js'
 import {
   regenerateCloudwerkTypes,
   findWranglerTomlPath,
@@ -933,7 +934,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
      * Transform hook to detect and wrap client components,
      * and rewrite binding imports to use the bindings proxy.
      */
-    transform(code: string, id: string) {
+    transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (!state) return null
 
       // Skip node_modules
@@ -1032,6 +1033,16 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           if (state.options.verbose) {
             console.log(`[cloudwerk] Detected ${cssInfos.length} CSS import(s) in ${path.relative(state.options.root, id)}`)
           }
+        }
+      }
+
+      // Strip server-only exports from page/layout modules in client builds.
+      // This prevents loaders, config, etc. from being bundled into the client.
+      if ((isLayout || isPage) && !options?.ssr) {
+        const stripResult = stripServerExports(transformedCode)
+        if (stripResult.stripped.length > 0) {
+          transformedCode = stripResult.code
+          wasTransformed = true
         }
       }
 
