@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.15
+
+### Patch Changes
+
+- [#279](https://github.com/squirrelsoft-dev/cloudwerk/pull/279) [`6f5f201`](https://github.com/squirrelsoft-dev/cloudwerk/commit/6f5f201e6f19394249d0fc3f5a3bbaa753974d8b) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix client bundle externalizing @cloudwerk/ui/client, which caused "Failed to resolve module specifier" errors in SSG output. The hydration code must be bundled, not externalized.
+
 ## 0.15.14
 
 ### Patch Changes

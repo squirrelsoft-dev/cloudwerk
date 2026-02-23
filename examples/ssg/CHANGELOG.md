@@ -1,5 +1,12 @@
 # ssg-example
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [[`6f5f201`](https://github.com/squirrelsoft-dev/cloudwerk/commit/6f5f201e6f19394249d0fc3f5a3bbaa753974d8b)]:
+  - @cloudwerk/cli@0.15.15
+
 ## 0.0.3
 
 ### Patch Changes
