@@ -139,5 +139,151 @@ export function stripServerExports(code: string): StripResult {
     result = result.slice(0, start) + replacement + result.slice(end)
   }
 
+  // Remove imports that became unused after stripping server exports
+  result = removeUnusedImports(result)
+
   return { code: result, stripped }
+}
+
+/**
+ * Remove import declarations whose specifiers are no longer referenced
+ * in the remaining code. Side-effect imports (no specifiers) are preserved.
+ */
+function removeUnusedImports(code: string): string {
+  const ast = parseSync(code, {
+    syntax: 'typescript',
+    tsx: true,
+    comments: true,
+  })
+
+  const offset = ast.span.start
+
+  // Gather import declarations and their spans
+  interface ImportInfo {
+    node: typeof ast.body[number]
+    start: number
+    end: number
+    specifiers: Array<{ localName: string }>
+  }
+
+  const imports: ImportInfo[] = []
+
+  for (const node of ast.body) {
+    if (node.type !== 'ImportDeclaration') continue
+    // Skip side-effect imports (e.g. import './styles.css')
+    if (node.specifiers.length === 0) continue
+
+    const specifiers: Array<{ localName: string }> = []
+    for (const spec of node.specifiers) {
+      if (spec.type === 'ImportSpecifier') {
+        specifiers.push({ localName: spec.local.value })
+      } else if (spec.type === 'ImportDefaultSpecifier') {
+        specifiers.push({ localName: spec.local.value })
+      } else if (spec.type === 'ImportNamespaceSpecifier') {
+        specifiers.push({ localName: spec.local.value })
+      }
+    }
+
+    if (specifiers.length > 0) {
+      imports.push({
+        node,
+        start: node.span.start,
+        end: node.span.end,
+        specifiers,
+      })
+    }
+  }
+
+  if (imports.length === 0) return code
+
+  // Build remaining code (everything except import declarations) for usage scanning
+  const importRanges = imports.map((i) => ({ start: i.start - offset, end: i.end - offset }))
+  let remaining = ''
+  let pos = 0
+  for (const range of importRanges.sort((a, b) => a.start - b.start)) {
+    remaining += code.slice(pos, range.start)
+    pos = range.end
+  }
+  remaining += code.slice(pos)
+
+  const removals: Array<{ start: number; end: number; replacement?: string }> = []
+
+  for (const imp of imports) {
+    const unusedSpecs: string[] = []
+    const usedSpecs: Array<{ localName: string }> = []
+
+    for (const spec of imp.specifiers) {
+      const regex = new RegExp(`\\b${escapeRegExp(spec.localName)}\\b`)
+      if (regex.test(remaining)) {
+        usedSpecs.push(spec)
+      } else {
+        unusedSpecs.push(spec.localName)
+      }
+    }
+
+    if (unusedSpecs.length === 0) continue
+
+    if (usedSpecs.length === 0) {
+      // Remove entire import
+      removals.push({ start: imp.start, end: imp.end })
+    } else {
+      // Reconstruct with only the kept specifiers
+      const importNode = imp.node as Extract<typeof ast.body[number], { type: 'ImportDeclaration' }>
+      const source = code.slice(
+        importNode.source.span.start - offset,
+        importNode.source.span.end - offset,
+      )
+      const typeOnly = importNode.typeOnly ? 'type ' : ''
+
+      // Separate default/namespace from named specifiers
+      const keptNamed: string[] = []
+      let keptDefault: string | null = null
+      let keptNamespace: string | null = null
+
+      for (const spec of importNode.specifiers) {
+        const localName = spec.local.value
+        if (!usedSpecs.some((u) => u.localName === localName)) continue
+
+        if (spec.type === 'ImportDefaultSpecifier') {
+          keptDefault = localName
+        } else if (spec.type === 'ImportNamespaceSpecifier') {
+          keptNamespace = localName
+        } else if (spec.type === 'ImportSpecifier') {
+          const imported = spec.imported
+          if (imported && imported.type === 'Identifier' && imported.value !== localName) {
+            keptNamed.push(`${imported.value} as ${localName}`)
+          } else {
+            keptNamed.push(localName)
+          }
+        }
+      }
+
+      const parts: string[] = []
+      if (keptDefault) parts.push(keptDefault)
+      if (keptNamespace) parts.push(`* as ${keptNamespace}`)
+      if (keptNamed.length > 0) parts.push(`{ ${keptNamed.join(', ')} }`)
+
+      const replacement = `import ${typeOnly}${parts.join(', ')} from ${source}`
+      removals.push({ start: imp.start, end: imp.end, replacement })
+    }
+  }
+
+  if (removals.length === 0) return code
+
+  // Apply removals in reverse order
+  let result = code
+  removals.sort((a, b) => b.start - a.start)
+
+  for (const removal of removals) {
+    const start = removal.start - offset
+    const end = removal.end - offset
+    const replacement = removal.replacement ?? ''
+    result = result.slice(0, start) + replacement + result.slice(end)
+  }
+
+  return result
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
