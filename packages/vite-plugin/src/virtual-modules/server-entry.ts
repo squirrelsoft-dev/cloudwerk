@@ -640,6 +640,13 @@ app.use('*', async (c, next) => {
     return
   }
 
+  // Skip static asset serving during SSG — the ASSETS binding from getPlatformProxy
+  // is not a real Workers Static Assets binding and does not support fetch(Request)
+  if (c.env?.HONO_SSG_CONTEXT) {
+    await next()
+    return
+  }
+
   // Only serve static assets for GET/HEAD requests
   // Other methods (POST, PUT, etc.) should go directly to route handlers
   // to avoid consuming the request body
@@ -650,7 +657,15 @@ app.use('*', async (c, next) => {
   }
 
   // Try to serve the request as a static asset
-  const response = await c.env.ASSETS.fetch(c.req.raw)
+  let response
+  try {
+    response = await c.env.ASSETS.fetch(c.req.raw)
+  } catch {
+    // ASSETS.fetch can fail during SSG or when the binding is a proxy
+    // that doesn't support fetch(Request) — fall through to routes
+    await next()
+    return
+  }
 
   // If asset found (not 404), return it with cache headers
   if (response.status !== 404) {

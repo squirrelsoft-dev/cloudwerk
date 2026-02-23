@@ -1,0 +1,25 @@
+{
+  "name": "ssg-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cloudwerk dev",
+    "build": "cloudwerk build",
+    "build:ssg": "cloudwerk build --ssg --verbose"
+  },
+  "dependencies": {
+    "@cloudwerk/cli": "workspace:*",
+    "@cloudwerk/core": "workspace:*",
+    "@cloudwerk/ui": "workspace:*",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0",
+    "wrangler": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
