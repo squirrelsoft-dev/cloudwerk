@@ -4,5 +4,5 @@
  */
 
 export const CORE_VERSION = '0.15.3'
-export const CLI_VERSION = '0.15.2'
-export const UI_VERSION = '0.15.3'
+export const CLI_VERSION = '0.15.8'
+export const UI_VERSION = '0.15.6'
