@@ -1,5 +1,11 @@
 # @cloudwerk/ui
 
+## 0.15.18
+
+### Patch Changes
+
+- [#286](https://github.com/squirrelsoft-dev/cloudwerk/pull/286) [`c6c35d6`](https://github.com/squirrelsoft-dev/cloudwerk/commit/c6c35d6804dd6a64736860834385abc6ffa0ecd5) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix React renderer initialization failure on Cloudflare Workers by replacing dynamic import in initReactRenderer with static import and registerRenderer. The dynamic import caused a TDZ error when Vite inlined the module into a single chunk.
+
 ## 0.15.17
 
 ### Patch Changes
