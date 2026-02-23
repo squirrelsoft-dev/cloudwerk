@@ -1,5 +1,12 @@
 # react-renderer-motion
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudwerk/cli@0.15.8
+
 ## 0.0.3
 
 ### Patch Changes

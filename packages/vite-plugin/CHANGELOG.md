@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.7.0
+
+### Minor Changes
+
+- [#261](https://github.com/squirrelsoft-dev/cloudwerk/pull/261) [`71e6f92`](https://github.com/squirrelsoft-dev/cloudwerk/commit/71e6f9276d93b333dfdf8d739e6e26a6a780b390) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Strip server-only exports (loader, config, generateStaticParams) from page/layout modules in client bundles to prevent leaking server code and avoid runtime errors from server-only imports.
+
 ## 0.6.9
 
 ### Patch Changes
