@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.8.2
+
+### Patch Changes
+
+- [#275](https://github.com/squirrelsoft-dev/cloudwerk/pull/275) [`c48747e`](https://github.com/squirrelsoft-dev/cloudwerk/commit/c48747e96f91b2bffaf5e80b8170487fa82d5913) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump to publish SSG fix: skip ASSETS middleware during static generation and add try/catch fallback for ASSETS.fetch to prevent "Failed to parse URL from [object Request]" error
+
 ## 0.8.1
 
 ### Patch Changes
