@@ -1,5 +1,12 @@
 # react-renderer
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudwerk/cli@0.15.9
+
 ## 0.0.5
 
 ### Patch Changes
