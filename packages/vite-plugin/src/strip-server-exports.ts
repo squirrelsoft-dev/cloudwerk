@@ -39,7 +39,7 @@ export function stripServerExports(code: string): StripResult {
 
   const stripped: string[] = []
   // Collect ranges to remove (in reverse order to preserve indices)
-  const removals: Array<{ start: number; end: number }> = []
+  const removals: Array<{ start: number; end: number; replacement?: string }> = []
 
   for (const node of ast.body) {
     // export function loader() {} / export async function loader() {}
@@ -79,27 +79,21 @@ export function stripServerExports(code: string): StripResult {
 
       for (const spec of specifiers) {
         if (spec.type === 'ExportSpecifier') {
-          const exportedName = spec.exported
-            ? (spec.exported.type === 'Identifier' ? spec.exported.value : spec.exported.value)
-            : (spec.orig.type === 'Identifier' ? spec.orig.value : null)
-
+          const exportedName = spec.exported?.type === 'Identifier' ? spec.exported.value : null
           const origName = spec.orig.type === 'Identifier' ? spec.orig.value : null
+          // The effective export name: explicit alias, or the original name
+          const effectiveName = exportedName ?? origName
 
-          if (exportedName && SERVER_ONLY_EXPORTS.has(exportedName)) {
-            serverSpecifiers.push(exportedName)
-          } else if (origName && SERVER_ONLY_EXPORTS.has(origName) && !exportedName) {
-            serverSpecifiers.push(origName)
+          if (effectiveName && SERVER_ONLY_EXPORTS.has(effectiveName)) {
+            serverSpecifiers.push(effectiveName)
           } else {
             // Reconstruct the kept specifier text
-            if (spec.exported && spec.orig.type === 'Identifier') {
-              const exportedVal = spec.exported.type === 'Identifier' ? spec.exported.value : spec.exported.value
-              if (exportedVal !== spec.orig.value) {
-                keptSpecifiers.push(`${spec.orig.value} as ${exportedVal}`)
+            if (origName) {
+              if (exportedName && exportedName !== origName) {
+                keptSpecifiers.push(`${origName} as ${exportedName}`)
               } else {
-                keptSpecifiers.push(spec.orig.value)
+                keptSpecifiers.push(origName)
               }
-            } else if (spec.orig.type === 'Identifier') {
-              keptSpecifiers.push(spec.orig.value)
             }
           }
         }
@@ -121,7 +115,6 @@ export function stripServerExports(code: string): StripResult {
         removals.push({
           start: node.span.start,
           end: node.span.end,
-          // @ts-expect-error - extending the type for replacement text
           replacement,
         })
       }
@@ -142,7 +135,7 @@ export function stripServerExports(code: string): StripResult {
   for (const removal of removals) {
     const start = removal.start - offset
     const end = removal.end - offset
-    const replacement = (removal as { replacement?: string }).replacement ?? ''
+    const replacement = removal.replacement ?? ''
     result = result.slice(0, start) + replacement + result.slice(end)
   }
 
