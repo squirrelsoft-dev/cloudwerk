@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.13
+
+### Patch Changes
+
+- [#273](https://github.com/squirrelsoft-dev/cloudwerk/pull/273) [`c8d8f13`](https://github.com/squirrelsoft-dev/cloudwerk/commit/c8d8f132ebf6bc1024043fefc2376188a1f2750e) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix SSG "Failed to parse URL from [object Request]" error by skipping ASSETS middleware during static generation and adding a try/catch fallback for ASSETS.fetch
+
 ## 0.15.12
 
 ### Patch Changes
