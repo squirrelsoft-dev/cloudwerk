@@ -24,7 +24,8 @@ export default function UserPage({ user }) {
       expect(result.stripped).toEqual(['loader'])
       expect(result.code).not.toContain('export async function loader')
       expect(result.code).toContain('export default function UserPage')
-      expect(result.code).toContain("import { db } from '@cloudwerk/data'")
+      // db is only used in the loader, so its import is also removed
+      expect(result.code).not.toContain("import { db } from '@cloudwerk/data'")
     })
 
     it('should strip export function loader()', () => {
@@ -189,6 +190,171 @@ export default function Page() {
 
       expect(result.stripped).toEqual([])
       expect(result.code).toBe(code)
+    })
+  })
+
+  describe('unused import removal', () => {
+    it('should remove import used only by loader', () => {
+      const code = `import { getUser } from '../lib/users'
+
+export async function loader({ params }) {
+  return { user: await getUser(params.id) }
+}
+
+export default function UserPage({ user }) {
+  return <h1>{user.name}</h1>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).not.toContain("import { getUser }")
+      expect(result.code).toContain('export default function UserPage')
+    })
+
+    it('should keep import used by both loader and component', () => {
+      const code = `import { formatName } from '../lib/format'
+
+export async function loader({ params }) {
+  return { name: formatName('test') }
+}
+
+export default function Page({ name }) {
+  return <h1>{formatName(name)}</h1>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).toContain("import { formatName } from '../lib/format'")
+    })
+
+    it('should partially remove multi-specifier import', () => {
+      const code = `import { getUser, formatName } from '../lib/utils'
+
+export async function loader({ params }) {
+  return { user: await getUser(params.id) }
+}
+
+export default function Page({ user }) {
+  return <h1>{formatName(user.name)}</h1>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).toContain("import { formatName } from '../lib/utils'")
+      expect(result.code).not.toContain('getUser')
+    })
+
+    it('should remove type-only import used only by config', () => {
+      const code = `import type { RouteConfig } from '@cloudwerk/core'
+
+export const config: RouteConfig = {
+  auth: { required: true },
+}
+
+export default function Page() {
+  return <div>Page</div>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['config'])
+      expect(result.code).not.toContain('import type')
+      expect(result.code).not.toContain('RouteConfig')
+    })
+
+    it('should preserve side-effect imports after loader stripping', () => {
+      const code = `import './styles.css'
+import { getUser } from '../lib/users'
+
+export async function loader({ params }) {
+  return { user: await getUser(params.id) }
+}
+
+export default function Page({ user }) {
+  return <h1>{user.name}</h1>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).toContain("import './styles.css'")
+      expect(result.code).not.toContain('getUser')
+    })
+
+    it('should remove namespace import used only by loader', () => {
+      const code = `import * as blog from '../lib/blog'
+
+export async function loader() {
+  return { posts: await blog.getAllPosts() }
+}
+
+export default function Page({ posts }) {
+  return <ul>{posts.map(p => <li>{p.title}</li>)}</ul>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).not.toContain("import * as blog")
+    })
+
+    it('should remove default import used only by loader', () => {
+      const code = `import db from '../lib/database'
+
+export async function loader({ params }) {
+  return { user: await db.get(params.id) }
+}
+
+export default function Page({ user }) {
+  return <h1>{user.name}</h1>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      expect(result.code).not.toContain("import db from")
+    })
+
+    it('should not change imports when no server exports are stripped', () => {
+      const code = `import { useState } from 'react'
+
+export default function Counter() {
+  const [count, setCount] = useState(0)
+  return <button onClick={() => setCount(c => c + 1)}>{count}</button>
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual([])
+      expect(result.code).toBe(code)
+    })
+
+    it('should handle full motivating example with multiple server-only imports', () => {
+      const code = `import { getAllPosts, getAllTags } from '../lib/blog'
+import { formatDate } from '../lib/format'
+
+export async function loader() {
+  const posts = await getAllPosts()
+  const tags = await getAllTags()
+  return { posts, tags }
+}
+
+export default function BlogPage({ posts, tags }) {
+  return (
+    <div>
+      {posts.map(p => (
+        <article key={p.slug}>
+          <h2>{p.title}</h2>
+          <time>{formatDate(p.date)}</time>
+        </article>
+      ))}
+    </div>
+  )
+}`
+      const result = stripServerExports(code)
+
+      expect(result.stripped).toEqual(['loader'])
+      // getAllPosts and getAllTags are only used in loader
+      expect(result.code).not.toContain('getAllPosts')
+      expect(result.code).not.toContain('getAllTags')
+      // formatDate is used in the component
+      expect(result.code).toContain("import { formatDate } from '../lib/format'")
+      expect(result.code).toContain('export default function BlogPage')
     })
   })
 
