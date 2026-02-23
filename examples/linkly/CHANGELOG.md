@@ -1,5 +1,12 @@
 # linkly
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [[`f9a3682`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f9a36823c1260cf33e6d0f632099238c71849d49)]:
+  - @cloudwerk/cli@0.15.12
+
 ## 0.0.11
 
 ### Patch Changes
