@@ -27,6 +27,8 @@ export interface TransformResult {
   error?: string
   /** Named exports that were wrapped (empty/undefined means only default) */
   wrappedExports?: string[]
+  /** Whether the file has a default export */
+  hasDefaultExport?: boolean
 }
 
 // ============================================================================
@@ -162,28 +164,27 @@ function findNamedExports(ast: Module): NamedExportInfo[] {
     const node = ast.body[i]
 
     if (node.type === 'ExportDeclaration') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const decl = (node as any).declaration
+      const decl = node.declaration
 
       // export function Foo() {}
-      if (decl.type === 'FunctionDeclaration') {
-        const name = (decl.identifier as { value: string })?.value
-        if (name && /^[A-Z]/.test(name)) {
+      if (decl.type === 'FunctionDeclaration' && decl.identifier) {
+        const name = decl.identifier.value
+        if (/^[A-Z]/.test(name)) {
           results.push({
             name,
             type: 'function',
             index: i,
             spanStart: node.span.start,
             spanEnd: node.span.end,
-            isAsync: decl.async as boolean,
+            isAsync: decl.async,
           })
         }
       }
 
       // export class Foo {}
-      if (decl.type === 'ClassDeclaration') {
-        const name = (decl.identifier as { value: string })?.value
-        if (name && /^[A-Z]/.test(name)) {
+      if (decl.type === 'ClassDeclaration' && decl.identifier) {
+        const name = decl.identifier.value
+        if (/^[A-Z]/.test(name)) {
           results.push({
             name,
             type: 'class',
@@ -196,17 +197,18 @@ function findNamedExports(ast: Module): NamedExportInfo[] {
 
       // export const Foo = ...
       if (decl.type === 'VariableDeclaration') {
-        const declarations = decl.declarations as Array<{ id: { value: string }; span: { start: number; end: number } }>
-        for (const declarator of declarations) {
-          const name = declarator.id?.value
-          if (name && /^[A-Z]/.test(name)) {
-            results.push({
-              name,
-              type: 'const',
-              index: i,
-              spanStart: node.span.start,
-              spanEnd: node.span.end,
-            })
+        for (const declarator of decl.declarations) {
+          if (declarator.id.type === 'Identifier') {
+            const name = declarator.id.value
+            if (/^[A-Z]/.test(name)) {
+              results.push({
+                name,
+                type: 'const',
+                index: i,
+                spanStart: node.span.start,
+                spanEnd: node.span.end,
+              })
+            }
           }
         }
       }
@@ -397,6 +399,7 @@ export function transformClientComponent(
       code: transformed,
       success: true,
       wrappedExports: wrappedExports.length > 0 ? wrappedExports : undefined,
+      hasDefaultExport: exportInfo.type !== null,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

@@ -1103,7 +1103,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
 
           // If there's no default export, remove the pre-scan default entry
           // (pre-scan always creates one keyed by file path)
-          if (!result.code.includes('export default')) {
+          if (!result.hasDefaultExport) {
             state.clientComponents.delete(id)
           }
         }
