@@ -245,13 +245,132 @@ export default function Counter() {
     })
   })
 
-  describe('error handling', () => {
-    it('should return error for code without default export', () => {
+  describe('named exports', () => {
+    it('should wrap a single named export function', () => {
       const code = `'use client'
 
 export function Counter() {
   return <button>Count</button>
 }`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toEqual(['Counter'])
+      expect(result.code).toContain('function __Counter_original(')
+      expect(result.code).toContain('export const Counter = __createWrapper(__Counter_original,')
+      expect(result.code).toContain('"componentId":"test_Component__Counter"')
+      expect(result.code).not.toContain("'use client'")
+    })
+
+    it('should wrap multiple named exports', () => {
+      const code = `'use client'
+
+export function Counter() {
+  return <button>Count</button>
+}
+
+export function Toggle() {
+  return <button>Toggle</button>
+}`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toContain('Counter')
+      expect(result.wrappedExports).toContain('Toggle')
+      expect(result.code).toContain('function __Counter_original(')
+      expect(result.code).toContain('export const Counter = __createWrapper(__Counter_original,')
+      expect(result.code).toContain('function __Toggle_original(')
+      expect(result.code).toContain('export const Toggle = __createWrapper(__Toggle_original,')
+    })
+
+    it('should wrap const arrow function exports', () => {
+      const code = `'use client'
+
+export const Counter = () => {
+  return <button>Count</button>
+}`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toEqual(['Counter'])
+      expect(result.code).toContain('const __Counter_original =')
+      expect(result.code).toContain('export const Counter = __createWrapper(__Counter_original,')
+    })
+
+    it('should wrap exported class components', () => {
+      const code = `'use client'
+
+export class Counter {
+  render() { return <button>Count</button> }
+}`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toEqual(['Counter'])
+      expect(result.code).toContain('class __Counter_original')
+      expect(result.code).toContain('export const Counter = __createWrapper(__Counter_original,')
+    })
+
+    it('should skip lowercase named exports (not components)', () => {
+      const code = `'use client'
+
+export function helper() {
+  return 'not a component'
+}
+
+export function Counter() {
+  return <button>Count</button>
+}`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toEqual(['Counter'])
+      // helper should NOT be wrapped
+      expect(result.code).toContain('export function helper(')
+      expect(result.code).not.toContain('__helper_original')
+    })
+
+    it('should handle mixed default + named exports', () => {
+      const code = `'use client'
+
+export function Counter() {
+  return <button>Count</button>
+}
+
+export default function App() {
+  return <div><Counter /></div>
+}`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(true)
+      expect(result.wrappedExports).toEqual(['Counter'])
+      // Default export should also be wrapped
+      expect(result.code).toContain('__createWrapper(App,')
+      expect(result.code).toContain('export default __WrappedComponent')
+      // Named export should be wrapped
+      expect(result.code).toContain('export const Counter = __createWrapper(__Counter_original,')
+    })
+  })
+
+  describe('error handling', () => {
+    it('should return error for code without any component exports', () => {
+      const code = `'use client'
+
+export function helper() {
+  return 'not a component'
+}
+
+export const value = 42`
+      const result = transformClientComponent(code, DEFAULT_OPTIONS)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Could not find default export')
+    })
+
+    it('should return error for empty module', () => {
+      const code = `'use client'
+
+const x = 1`
       const result = transformClientComponent(code, DEFAULT_OPTIONS)
 
       expect(result.success).toBe(false)

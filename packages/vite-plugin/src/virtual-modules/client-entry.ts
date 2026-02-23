@@ -87,9 +87,12 @@ function generateStaticImportsAndMap(
 ): { imports: string; componentMapEntries: string } {
   const components = Array.from(clientComponents.values())
 
-  const imports = components.map((info, index) =>
-    `import Component${index} from '${info.absolutePath}'`
-  ).join('\n')
+  const imports = components.map((info, index) => {
+    if (info.exportName) {
+      return `import { ${info.exportName} as Component${index} } from '${info.absolutePath}'`
+    }
+    return `import Component${index} from '${info.absolutePath}'`
+  }).join('\n')
 
   const componentMapEntries = components.map((info, index) =>
     `  '${info.componentId}': Component${index}`
@@ -204,7 +207,10 @@ import { jsx } from 'hono/jsx/jsx-runtime'`,
   }
 
   const bundleMap = Object.fromEntries(
-    Array.from(clientComponents.values()).map((info) => [info.componentId, `/@fs${info.absolutePath}`])
+    Array.from(clientComponents.values()).map((info) => [
+      info.componentId,
+      { path: `/@fs${info.absolutePath}`, exportName: info.exportName ?? null },
+    ])
   )
 
   return `/**
@@ -254,19 +260,19 @@ async function hydrate() {
       continue
     }
 
-    const bundlePath = bundles[componentId]
-    if (!bundlePath) {
+    const bundle = bundles[componentId]
+    if (!bundle) {
       console.warn('[Cloudwerk] Unknown client component:', componentId)
       continue
     }
 
     try {
       const props = propsJson ? JSON.parse(propsJson) : {}
-      const module = await loadComponent(bundlePath)
-      const Component = module.default
+      const module = await loadComponent(bundle.path)
+      const Component = bundle.exportName ? module[bundle.exportName] : module.default
 
       if (!Component) {
-        console.error('[Cloudwerk] No default export in component:', componentId)
+        console.error('[Cloudwerk] No export found in component:', componentId)
         continue
       }
 
