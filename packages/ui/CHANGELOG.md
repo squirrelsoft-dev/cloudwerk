@@ -1,5 +1,11 @@
 # @cloudwerk/ui
 
+## 0.15.17
+
+### Patch Changes
+
+- [#283](https://github.com/squirrelsoft-dev/cloudwerk/pull/283) [`e2e9c02`](https://github.com/squirrelsoft-dev/cloudwerk/commit/e2e9c02dc8f3d98252c90ccb3be81e86edd9e426) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix react-dom/server causing deployment failure on Cloudflare Workers due to MessageChannel not being available during upload validation. Lazy-load react-dom/server in the React renderer and add a MessageChannel polyfill to the generated server entry for React apps.
+
 ## 0.15.6
 
 ### Patch Changes

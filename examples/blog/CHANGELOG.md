@@ -1,5 +1,12 @@
 # blog
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [[`e2e9c02`](https://github.com/squirrelsoft-dev/cloudwerk/commit/e2e9c02dc8f3d98252c90ccb3be81e86edd9e426)]:
+  - @cloudwerk/ui@0.15.17
+
 ## 0.0.18
 
 ### Patch Changes
