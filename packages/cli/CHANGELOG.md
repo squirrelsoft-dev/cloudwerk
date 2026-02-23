@@ -1,5 +1,12 @@
 # @cloudwerk/cli
 
+## 0.15.8
+
+### Patch Changes
+
+- Updated dependencies [[`71e6f92`](https://github.com/squirrelsoft-dev/cloudwerk/commit/71e6f9276d93b333dfdf8d739e6e26a6a780b390)]:
+  - @cloudwerk/vite-plugin@0.7.0
+
 ## 0.15.7
 
 ### Patch Changes
