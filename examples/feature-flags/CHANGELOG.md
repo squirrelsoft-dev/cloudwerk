@@ -1,5 +1,12 @@
 # feature-flags
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudwerk/cli@0.15.11
+
 ## 0.0.9
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.11
+
+### Patch Changes
+
+- Externalize @cloudwerk/\* packages from the client build to prevent AsyncLocalStorage (node:async_hooks) from leaking into the browser bundle.
+
 ## 0.15.10
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # blog
 
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudwerk/cli@0.15.11
+
 ## 0.0.12
 
 ### Patch Changes
