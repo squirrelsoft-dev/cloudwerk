@@ -1,5 +1,12 @@
 # linkly
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @cloudwerk/cli@0.15.11
+
 ## 0.0.10
 
 ### Patch Changes
