@@ -70,7 +70,7 @@ describe('generateServerEntry', () => {
 
       expect(code).toContain("import { Hono } from 'hono'")
       expect(code).toContain("import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'")
-      expect(code).toContain("import { setActiveRenderer } from '@cloudwerk/ui'")
+      expect(code).toContain("import { setActiveRenderer, getActiveRenderer } from '@cloudwerk/ui'")
       expect(code).toContain('export default app')
     })
 
@@ -91,12 +91,12 @@ describe('generateServerEntry', () => {
         createOptions({ renderer: 'react' })
       )
 
-      expect(code).toContain("import { setActiveRenderer, initReactRenderer } from '@cloudwerk/ui'")
+      expect(code).toContain("import { setActiveRenderer, getActiveRenderer, initReactRenderer } from '@cloudwerk/ui'")
       expect(code).toContain('await initReactRenderer()')
       expect(code).toContain("setActiveRenderer('react')")
     })
 
-    it('should use renderToString for React renderer', () => {
+    it('should use active renderer for React rendering', () => {
       const manifest = createManifest()
 
       const code = generateServerEntry(
@@ -105,8 +105,34 @@ describe('generateServerEntry', () => {
         createOptions({ renderer: 'react' })
       )
 
-      expect(code).toContain("import('react-dom/server')")
-      expect(code).toContain('renderToString(element)')
+      // Should NOT directly import react-dom/server — goes through the renderer
+      expect(code).not.toContain("import('react-dom/server')")
+      expect(code).toContain('getActiveRenderer().render(element')
+    })
+
+    it('should include MessageChannel polyfill for React renderer', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ renderer: 'react' })
+      )
+
+      expect(code).toContain('globalThis.MessageChannel')
+      expect(code).toContain("typeof globalThis.MessageChannel === 'undefined'")
+    })
+
+    it('should not include MessageChannel polyfill for hono-jsx renderer', () => {
+      const manifest = createManifest()
+
+      const code = generateServerEntry(
+        manifest,
+        createScanResult(),
+        createOptions({ renderer: 'hono-jsx' })
+      )
+
+      expect(code).not.toContain('globalThis.MessageChannel')
     })
   })
 
