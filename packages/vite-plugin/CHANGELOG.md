@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.8.1
+
+### Patch Changes
+
+- [#269](https://github.com/squirrelsoft-dev/cloudwerk/pull/269) [`6689396`](https://github.com/squirrelsoft-dev/cloudwerk/commit/66893964eaf166e92f918a09a80499bd4b132706) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Strip unused imports after removing server exports. When `stripServerExports` removes server-only exports (loader, config, generateStaticParams), imports that were only used by those exports are now also removed. This prevents browser errors in Vite dev mode when server-only imports reference Node.js APIs.
+
 ## 0.8.0
 
 ### Minor Changes
