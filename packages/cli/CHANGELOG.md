@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.16
+
+### Patch Changes
+
+- [#281](https://github.com/squirrelsoft-dev/cloudwerk/pull/281) [`57a9230`](https://github.com/squirrelsoft-dev/cloudwerk/commit/57a923096884be75bdc0d76b4d51889ab380d1a0) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Use allowlist for client-safe @cloudwerk packages instead of individual exceptions. Fixes "Failed to resolve module specifier @cloudwerk/utils" in SSG output by ensuring the full hydration dependency chain is bundled.
+
 ## 0.15.15
 
 ### Patch Changes
