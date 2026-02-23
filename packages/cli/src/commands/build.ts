@@ -180,6 +180,15 @@ export async function build(
         manifest: true, // Generate manifest.json for asset mapping
         rollupOptions: {
           input: 'virtual:cloudwerk/client-entry',
+          onwarn(warning, defaultHandler) {
+            // Suppress "use client" directive warnings from node_modules
+            // These are expected when bundling React ecosystem packages
+            if (warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
+                warning.message.includes('"use client"')) {
+              return
+            }
+            defaultHandler(warning)
+          },
           output: {
             entryFileNames: '__cloudwerk/client-[hash].js',
             chunkFileNames: '__cloudwerk/[name]-[hash].js',
@@ -273,6 +282,8 @@ export async function build(
         emptyOutDir: false, // Don't clear - client assets are already there
         minify: minify ? 'esbuild' : false,
         sourcemap,
+        // Use esnext target to support top-level await (used by React renderer init)
+        target: 'esnext',
         ssr: true,
         // Emit CSS and other assets from SSR build (CSS imported in layouts, etc.)
         ssrEmitAssets: true,
@@ -280,6 +291,20 @@ export async function build(
           input: tempEntryPath,
           // Externalize Node.js builtins (polyfilled by nodejs_compat in Workers)
           external: [...builtinModules, /^node:/],
+          onwarn(warning, defaultHandler) {
+            // Suppress "use client" directive warnings from node_modules
+            // These are expected when bundling React ecosystem packages
+            if (warning.code === 'MODULE_LEVEL_DIRECTIVE' &&
+                warning.message.includes('"use client"')) {
+              return
+            }
+            // Suppress warnings about optional exports (e.g., config, loader)
+            // that page/layout modules may not export — these are checked at runtime
+            if (warning.code === 'MISSING_EXPORT') {
+              return
+            }
+            defaultHandler(warning)
+          },
           output: {
             entryFileNames: 'index.js',
             // Put assets in static directory to be served by Cloudflare

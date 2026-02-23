@@ -14,7 +14,7 @@
  */
 
 import { serializeProps } from '@cloudwerk/utils'
-import { getActiveRenderer } from './renderer.js'
+import { getActiveRenderer, getActiveRendererName } from './renderer.js'
 
 /**
  * Metadata for a wrapped client component.
@@ -64,6 +64,13 @@ export function createClientComponentWrapper<P extends Record<string, unknown>>(
   const { componentId, bundlePath } = meta
 
   return function WrappedClientComponent(props: P): unknown {
+    // For React renderer, skip island wrapping — full-tree hydration handles everything.
+    // This check must be at render time (not import time) because setActiveRenderer()
+    // runs after module imports are hoisted.
+    if (getActiveRendererName() === 'react') {
+      return Component(props)
+    }
+
     // Server-render the original component
     const rendered = Component(props)
 
