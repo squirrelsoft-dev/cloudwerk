@@ -6,9 +6,18 @@
  * that prefer React's rendering pipeline.
  */
 
-import { renderToString, renderToReadableStream } from 'react-dom/server'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import type { Renderer, RenderOptions, HtmlOptions, RenderToStreamOptions } from '../types.js'
+
+// Lazy-load react-dom/server to avoid top-level MessageChannel access
+// during Cloudflare Workers upload validation phase
+let _reactDomServer: typeof import('react-dom/server') | null = null
+async function getReactDomServer() {
+  if (!_reactDomServer) {
+    _reactDomServer = await import('react-dom/server')
+  }
+  return _reactDomServer
+}
 
 /**
  * React renderer implementation.
@@ -35,10 +44,11 @@ export const reactRenderer: Renderer = {
    * @param options - Render options
    * @returns Response object with HTML content
    */
-  render(element: unknown, options: RenderOptions = {}): Response {
+  async render(element: unknown, options: RenderOptions = {}): Promise<Response> {
     const { status = 200, headers = {}, doctype = true } = options
 
-    // Use React's renderToString for synchronous rendering
+    // Lazy-load react-dom/server to avoid top-level MessageChannel access
+    const { renderToString } = await getReactDomServer()
     const htmlString = renderToString(element as ReactElement)
     const body = doctype ? `<!DOCTYPE html>${htmlString}` : htmlString
 
@@ -184,6 +194,9 @@ export async function reactRenderToStream(
   options: RenderToStreamOptions = {}
 ): Promise<Response> {
   const { status = 200, headers = {}, doctype = true } = options
+
+  // Lazy-load react-dom/server to avoid top-level MessageChannel access
+  const { renderToReadableStream } = await getReactDomServer()
 
   // React 19's renderToReadableStream returns a Promise<ReadableStream>
   const contentStream = await renderToReadableStream(element as ReactElement)
