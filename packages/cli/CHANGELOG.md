@@ -1,5 +1,18 @@
 # @cloudwerk/cli
 
+## 0.15.10
+
+### Patch Changes
+
+- [#265](https://github.com/squirrelsoft-dev/cloudwerk/pull/265) [`f2b2331`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f2b233144d4f14ea07a56853930f76cb87d791ef) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Surface client build failures as visible warnings instead of silently swallowing them. Fix Rollup onwarn regex to properly suppress expected MISSING_EXPORT warnings for optional page exports.
+
+## 0.15.9
+
+### Patch Changes
+
+- Updated dependencies [[`f0be91e`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f0be91e06f8d0b83fbd3790c1d388d117cd8e88c)]:
+  - @cloudwerk/vite-plugin@0.8.0
+
 ## 0.15.8
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @cloudwerk/vite-plugin
 
+## 0.8.0
+
+### Minor Changes
+
+- [#263](https://github.com/squirrelsoft-dev/cloudwerk/pull/263) [`f0be91e`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f0be91e06f8d0b83fbd3790c1d388d117cd8e88c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Support named exports in `'use client'` components. Files with only named exports are now correctly wrapped for hydration.
+
 ## 0.7.0
 
 ### Minor Changes
