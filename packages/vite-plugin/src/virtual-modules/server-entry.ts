@@ -198,12 +198,12 @@ export function generateServerEntry(
         // Base path (without the catch-all segment)
         const basePath = route.urlPattern.replace(/\/:[^/]+\{\.\*\}$/, '') || '/'
         pageRegistrations.push(
-          `  registerPage(app, '${basePath}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'})`
+          `  registerPage(app, '${basePath}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'}, '${route.urlPattern}')`
         )
       }
 
       pageRegistrations.push(
-        `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'})`
+        `  registerPage(app, '${route.urlPattern}', ${varName}, [${layoutChain}], [${middlewareChain}], ${errorModule || 'null'}, ${notFoundModule || 'null'}, '${route.urlPattern}')`
       )
     } else if (route.fileType === 'route') {
       // API route - import route module and register HTTP handlers
@@ -447,7 +447,7 @@ async function renderNotFoundPage(notFoundModule, layoutModules, layoutLoaderDat
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
 
-function registerPage(app, pattern, pageModule, layoutModules, middlewareModules, errorModule, notFoundModule) {
+function registerPage(app, pattern, pageModule, layoutModules, middlewareModules, errorModule, notFoundModule, routeId) {
   // Apply middleware (wrap with adapter to convert Cloudwerk middleware to Hono middleware)
   for (const mw of middlewareModules) {
     app.use(pattern, createMiddlewareAdapter(mw))
@@ -512,7 +512,7 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
       }
 
       // Render the page with hydration script injection
-      return await renderWithHydration(element)
+      return await renderWithHydration(element, 200, routeId, pageProps, layoutLoaderData)
     } catch (error) {
       // Handle NotFoundError (check both instanceof and name for module duplication)
       if (error instanceof NotFoundError || error?.name === 'NotFoundError') {
@@ -544,7 +544,7 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
  * - CSS links are injected before </head>
  * - Vite client (dev) and hydration script are injected before </body>
  */
-async function renderWithHydration(element, status = 200) {
+async function renderWithHydration(element, status = 200, routeId, pageProps, layoutData) {
   // Render element to HTML string using the active renderer
   ${rendererName === 'react' ? `// React: use renderToString from react-dom/server
   const { renderToString } = await import('react-dom/server')
@@ -562,7 +562,13 @@ async function renderWithHydration(element, status = 200) {
   // Inject scripts before </body>
   // - Vite client for HMR (dev only)
   // - Hydration script for client components
-  const scripts = VITE_CLIENT + '<script type="module" src="${clientEntryPath}"></script>'
+  let scripts = VITE_CLIENT
+  ${rendererName === 'react' ? `// React: embed serialized page data for full-tree hydration
+  if (routeId) {
+    const pageData = JSON.stringify({ routeId, pageProps: pageProps || {}, layoutData: layoutData || [] })
+    scripts += '<script id="__CLOUDWERK_DATA__" type="application/json">' + pageData + '</script>'
+  }` : ''}
+  scripts += '<script type="module" src="${clientEntryPath}"></script>'
   const bodyCloseRegex = /<\\/body>/i
   if (bodyCloseRegex.test(html)) {
     html = html.replace(bodyCloseRegex, scripts + '</body>')

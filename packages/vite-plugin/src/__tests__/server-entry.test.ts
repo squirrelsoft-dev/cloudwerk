@@ -181,7 +181,7 @@ describe('generateServerEntry', () => {
 
       expect(code).toContain("import * as page_0 from '/project/app/users/page.tsx'")
       expect(code).toContain("import * as layout_0 from '/project/app/layout.tsx'")
-      expect(code).toContain("registerPage(app, '/users', page_0, [layout_0], [], null, null)")
+      expect(code).toContain("registerPage(app, '/users', page_0, [layout_0], [], null, null, '/users')")
     })
 
     it('should handle dynamic routes with :param syntax', () => {
@@ -205,7 +205,7 @@ describe('generateServerEntry', () => {
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/users/:id', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/users/:id', page_0, [], [], null, null, '/users/:id')")
     })
   })
 
@@ -231,7 +231,7 @@ describe('generateServerEntry', () => {
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/docs/:slug{.+}', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/docs/:slug{.+}', page_0, [], [], null, null, '/docs/:slug{.+}')")
     })
   })
 
@@ -258,9 +258,9 @@ describe('generateServerEntry', () => {
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       // Should register base path (without catch-all) first
-      expect(code).toContain("registerPage(app, '/shop', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/shop', page_0, [], [], null, null, '/shop/:cat{.*}')")
       // Then register the full pattern
-      expect(code).toContain("registerPage(app, '/shop/:cat{.*}', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/shop/:cat{.*}', page_0, [], [], null, null, '/shop/:cat{.*}')")
     })
 
     it('should handle optional catch-all at root level', () => {
@@ -282,8 +282,8 @@ describe('generateServerEntry', () => {
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
       // Base path should be '/'
-      expect(code).toContain("registerPage(app, '/', page_0, [], [], null, null)")
-      expect(code).toContain("registerPage(app, '/:slug{.*}', page_0, [], [], null, null)")
+      expect(code).toContain("registerPage(app, '/', page_0, [], [], null, null, '/:slug{.*}')")
+      expect(code).toContain("registerPage(app, '/:slug{.*}', page_0, [], [], null, null, '/:slug{.*}')")
     })
   })
 
@@ -360,7 +360,7 @@ describe('generateServerEntry', () => {
 
       const code = generateServerEntry(manifest, createScanResult(), createOptions())
 
-      expect(code).toContain("registerPage(app, '/admin/users', page_0, [layout_0, layout_1], [], null, null)")
+      expect(code).toContain("registerPage(app, '/admin/users', page_0, [layout_0, layout_1], [], null, null, '/admin/users')")
     })
   })
 
@@ -392,7 +392,7 @@ describe('generateServerEntry', () => {
 
       expect(code).toContain("import { middleware as middleware_0 } from '/project/app/middleware.ts'")
       expect(code).toContain("import { middleware as middleware_1 } from '/project/app/admin/middleware.ts'")
-      expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1], null, null)")
+      expect(code).toContain("registerPage(app, '/admin/settings', page_0, [], [middleware_0, middleware_1], null, null, '/admin/settings')")
     })
   })
 

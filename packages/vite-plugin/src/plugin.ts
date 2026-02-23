@@ -903,7 +903,8 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           state.clientEntryCache = generateClientEntry(
             state.clientComponents,
             state.cssImports,
-            state.options
+            state.options,
+            state.manifest
           )
         }
         return state.clientEntryCache
@@ -1062,8 +1063,13 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           bundlePath: id, // Use file path for Vite to resolve in dev mode
         })
 
-        if (!result.success && state.options.verbose) {
-          console.warn(`[cloudwerk] ${result.error}`)
+        if (!result.success) {
+          console.warn(`[cloudwerk] Warning: Failed to wrap client component ${componentId}: ${result.error}`)
+          // Still strip the directive even if wrapping failed to avoid Rollup warnings
+          return {
+            code: transformedCode.replace(/['"]use client['"]\s*;?\s*\n?/g, ''),
+            map: null,
+          }
         }
 
         return {
