@@ -111,7 +111,7 @@ describe('generateServerEntry', () => {
       expect(code).toContain('getActiveRenderer().render(element')
     })
 
-    it('should include MessageChannel polyfill for React renderer', () => {
+    it('should not include inline polyfills (polyfills are injected via Rollup banner)', () => {
       const manifest = createManifest()
 
       const code = generateServerEntry(
@@ -120,20 +120,10 @@ describe('generateServerEntry', () => {
         createOptions({ renderer: 'react' })
       )
 
-      expect(code).toContain('globalThis.MessageChannel')
-      expect(code).toContain("typeof globalThis.MessageChannel === 'undefined'")
-    })
-
-    it('should not include MessageChannel polyfill for hono-jsx renderer', () => {
-      const manifest = createManifest()
-
-      const code = generateServerEntry(
-        manifest,
-        createScanResult(),
-        createOptions({ renderer: 'hono-jsx' })
-      )
-
+      // Polyfills are now injected via Rollup's banner option in the build command,
+      // not inline in the server entry source code
       expect(code).not.toContain('globalThis.MessageChannel')
+      expect(code).not.toContain('globalThis.document')
     })
   })
 

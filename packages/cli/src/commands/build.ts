@@ -66,6 +66,7 @@ export async function build(
   const verbose = options.verbose ?? false
   const minify = options.minify ?? true
   const sourcemap = options.sourcemap ?? false
+  const ssg = options.ssg ?? true
   const logger = createLogger(verbose)
 
   // Track temp files for cleanup
@@ -334,6 +335,10 @@ export async function build(
             entryFileNames: 'index.js',
             // Put assets in static directory to be served by Cloudflare
             assetFileNames: 'static/assets/[name]-[hash][extname]',
+            // Inject Worker polyfills before any module code executes.
+            // Rollup hoists imports above inline code, so polyfills in source
+            // files run too late. The banner runs before all imports.
+            ...(renderer === 'react' ? { banner: getReactWorkerPolyfills() } : {}),
           },
         },
       },
@@ -379,7 +384,7 @@ export async function build(
     // Phase 3: Static Site Generation (optional)
     // ========================================================================
     let ssgPaths: string[] = []
-    if (options.ssg) {
+    if (ssg) {
       logger.info(`Generating static pages...`)
       ssgPaths = await generateStaticPages(
         manifest,
@@ -495,6 +500,60 @@ function printBuildSummary(
 }
 
 /**
+ * Get Worker runtime polyfills needed for the React renderer.
+ *
+ * These must be injected via Rollup's `banner` option so they execute
+ * before any module code. Libraries like react-markdown/micromark call
+ * `document.createElement` at module load time, which fails in Workers.
+ * Rollup hoists imports above inline code, so polyfills placed in source
+ * files would run too late.
+ */
+function getReactWorkerPolyfills(): string {
+  return `
+// Polyfill MessageChannel for Cloudflare Workers upload validation phase.
+// Workers provide MessageChannel at request time, but not during script validation.
+if (typeof globalThis.MessageChannel === 'undefined') {
+  globalThis.MessageChannel = class MessageChannel {
+    constructor() {
+      this.port1 = { onmessage: null, postMessage() {}, close() {}, start() {} };
+      this.port2 = { onmessage: null, postMessage() {}, close() {}, start() {} };
+    }
+  };
+}
+
+// Polyfill document for libraries like react-markdown/micromark that use
+// document.createElement at module load time to decode HTML entities.
+if (typeof globalThis.document === 'undefined') {
+  globalThis.document = {
+    createElement() {
+      let _text = '';
+      return {
+        set innerHTML(v) {
+          _text = v
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+            .replace(/&#(\\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)));
+        },
+        get textContent() { return _text; }
+      };
+    },
+    createTextNode(t) { return { textContent: t }; },
+    createElementNS() { return { setAttribute() {} }; },
+    head: { insertBefore() {}, firstChild: null },
+    querySelectorAll() { return []; },
+    getElementById() { return null; },
+    documentElement: { scrollLeft: 0, scrollTop: 0 },
+    body: { scrollLeft: 0, scrollTop: 0 },
+  };
+}
+`
+}
+
+/**
  * Format a byte size for human-readable display.
  */
 function formatSize(bytes: number): string {
@@ -581,13 +640,61 @@ async function generateStaticPages(
         return originalFetch(request, mergedEnv, executionCtx)
       }
 
+      // Query the /__ssg/routes endpoint to get the list of explicitly static routes
+      // Only these routes should be statically generated — not dynamic pages or API routes
+      const ssgRoutesResponse = await app.fetch(new Request('http://localhost/__ssg/routes'), env)
+      const ssgRoutesData = await ssgRoutesResponse.json() as { routes: string[] }
+      const allowedRoutes = new Set(ssgRoutesData.routes || [])
+
+      if (allowedRoutes.size === 0) {
+        logger.debug('No static routes found, skipping SSG')
+        return generatedPaths
+      }
+
+      if (verbose) {
+        logger.debug(`Static routes: ${[...allowedRoutes].join(', ')}`)
+      }
+
+      // Collect all unique Hono route patterns that correspond to static routes
+      // by matching the resolved URLs against registered Hono routes
+      const allowedHonoPatterns = new Set<string>()
+      for (const honoRoute of (app.routes || [])) {
+        if (!honoRoute.path) continue
+        // Check if any allowed route could match this Hono pattern
+        const patternRegex = new RegExp(
+          '^' + honoRoute.path.replace(/:[^/]+/g, '[^/]+') + '$'
+        )
+        for (const route of allowedRoutes) {
+          if (patternRegex.test(route)) {
+            allowedHonoPatterns.add(honoRoute.path)
+            break
+          }
+        }
+      }
+
+      if (verbose) {
+        logger.debug(`Allowed Hono patterns: ${[...allowedHonoPatterns].join(', ')}`)
+      }
+
       // Use Hono's toSSG helper to generate static files
       const staticDir = path.join(outputDir, 'static')
 
       const result = await toSSG(app, fsPromises, {
         dir: staticDir,
-        // Only generate pages that have ssgParams middleware
-        // (pages with generateStaticParams export)
+        beforeRequestHook: (req: Request) => {
+          const url = new URL(req.url)
+          const pathname = url.pathname
+          // Allow exact matches (resolved URLs like /blog/hello-world)
+          if (allowedRoutes.has(pathname)) {
+            return req
+          }
+          // Allow Hono pattern matches (e.g., /blog/:slug for info-fetch)
+          if (allowedHonoPatterns.has(pathname)) {
+            return req
+          }
+          // Skip routes not explicitly marked as static
+          return false as unknown as Request
+        },
       })
 
       // Track generated paths
