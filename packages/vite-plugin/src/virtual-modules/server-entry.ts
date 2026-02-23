@@ -565,7 +565,7 @@ async function renderWithHydration(element, status = 200, routeId, pageProps, la
   let scripts = VITE_CLIENT
   ${rendererName === 'react' ? `// React: embed serialized page data for full-tree hydration
   if (routeId) {
-    const pageData = JSON.stringify({ routeId, pageProps: pageProps || {}, layoutData: layoutData || [] })
+    const pageData = JSON.stringify({ routeId, pageProps: pageProps || {}, layoutData: layoutData || [] }).replace(/</g, '\\\\u003c')
     scripts += '<script id="__CLOUDWERK_DATA__" type="application/json">' + pageData + '</script>'
   }` : ''}
   scripts += '<script type="module" src="${clientEntryPath}"></script>'

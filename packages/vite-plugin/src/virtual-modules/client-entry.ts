@@ -355,7 +355,7 @@ ${cssImportStatements}console.debug('[Cloudwerk] No route manifest available for
     }
 
     routeMapEntries.push(
-      `  '${route.urlPattern}': { page: ${pageVar}.default, layouts: [${layoutVars.map(v => `${v}.default`).join(', ')}] }`
+      `  ${JSON.stringify(route.urlPattern)}: { page: ${pageVar}.default, layouts: [${layoutVars.map(v => `${v}.default`).join(', ')}] }`
     )
   }
 
