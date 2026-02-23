@@ -560,8 +560,8 @@ function registerPage(app, pattern, pageModule, layoutModules, middlewareModules
 async function renderWithHydration(element, status = 200, routeId, pageProps, layoutData) {
   // Render element to HTML string using the active renderer
   ${rendererName === 'react' ? `// React: use the active renderer to render to HTML
-  const rendererResponse = await getActiveRenderer().render(element, { doctype: true })
-  let html = await rendererResponse.text()` : `// Hono JSX elements have toString() for synchronous rendering
+  const rendererResponse = await getActiveRenderer().render(element, { doctype: false })
+  let html = '<!DOCTYPE html>' + await rendererResponse.text()` : `// Hono JSX elements have toString() for synchronous rendering
   let html = '<!DOCTYPE html>' + String(element)`}
 
   // Inject CSS links before </head> if present
