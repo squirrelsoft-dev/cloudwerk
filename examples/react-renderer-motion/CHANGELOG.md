@@ -1,5 +1,12 @@
 # react-renderer-motion
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`f2b2331`](https://github.com/squirrelsoft-dev/cloudwerk/commit/f2b233144d4f14ea07a56853930f76cb87d791ef)]:
+  - @cloudwerk/cli@0.15.10
+
 ## 0.0.5
 
 ### Patch Changes
