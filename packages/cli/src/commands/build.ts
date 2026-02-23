@@ -180,16 +180,24 @@ export async function build(
         manifest: true, // Generate manifest.json for asset mapping
         rollupOptions: {
           input: 'virtual:cloudwerk/client-entry',
-          // Externalize most @cloudwerk/* packages from client bundle — they are server-only.
-          // stripServerExports removes loader/config, but residual imports (e.g., types)
-          // can pull in node:async_hooks via the runtime context chain.
-          // Exception: @cloudwerk/ui/client is the browser hydration code and MUST be bundled.
-          external: (id: string) => {
-            if (id === '@cloudwerk/ui/client' || id.startsWith('@cloudwerk/ui/client/')) {
-              return false
+          // Externalize server-only @cloudwerk/* packages from the client bundle.
+          // These depend on Node.js APIs (e.g., node:async_hooks) that can't run
+          // in the browser. Uses an allowlist of client-safe packages so that
+          // @cloudwerk/ui/client, @cloudwerk/utils, and their dependencies are
+          // bundled correctly for hydration.
+          external: (() => {
+            const clientSafePackages = new Set([
+              '@cloudwerk/ui',
+              '@cloudwerk/utils',
+              '@cloudwerk/images',
+              '@cloudwerk/security',
+            ])
+            return (id: string) => {
+              if (!id.startsWith('@cloudwerk/')) return false
+              const pkg = id.match(/^@cloudwerk\/[^/]+/)?.[0]
+              return !clientSafePackages.has(pkg!)
             }
-            return /^@cloudwerk\//.test(id)
-          },
+          })(),
           onwarn(warning, defaultHandler) {
             // Suppress "use client" directive warnings from node_modules
             // These are expected when bundling React ecosystem packages
