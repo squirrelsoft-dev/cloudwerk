@@ -187,6 +187,13 @@ export async function build(
                 warning.message.includes('"use client"')) {
               return
             }
+            // Suppress warnings about optional exports (e.g., config, loader)
+            // that page/layout modules may not export — these are checked at runtime
+            if (warning.code === 'MISSING_EXPORT' &&
+                warning.message &&
+                /"(config|loader|default|generateStaticParams)" is not exported/.test(warning.message)) {
+              return
+            }
             defaultHandler(warning)
           },
           output: {
@@ -229,10 +236,8 @@ export async function build(
       }
     } catch (error) {
       // Client build might fail if there are no client components
-      // That's ok - we'll continue with server build
-      if (verbose) {
-        logger.debug(`Client build skipped or failed: ${error instanceof Error ? error.message : String(error)}`)
-      }
+      // Server-only apps can continue without client JS, so we warn and continue
+      logger.warn(`Client build failed: ${error instanceof Error ? error.message : String(error)}`)
     }
 
     // ========================================================================
@@ -302,7 +307,7 @@ export async function build(
             // that page/layout modules may not export — these are checked at runtime
             if (warning.code === 'MISSING_EXPORT' &&
                 warning.message &&
-                /export '(config|loader|default)'/.test(warning.message)) {
+                /"(config|loader|default|generateStaticParams)" is not exported/.test(warning.message)) {
               return
             }
             defaultHandler(warning)
