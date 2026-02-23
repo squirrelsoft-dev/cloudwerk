@@ -37,7 +37,7 @@ export interface DevCommandOptions {
 export interface BuildCommandOptions {
   /** Output directory for static files (default: ./dist) */
   output?: string
-  /** Enable static site generation for routes with rendering: 'static' */
+  /** Enable static site generation for routes with rendering: 'static' (default: true) */
   ssg?: boolean
   /** Enable minification (default: true) */
   minify?: boolean
