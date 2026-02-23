@@ -300,7 +300,9 @@ export async function build(
             }
             // Suppress warnings about optional exports (e.g., config, loader)
             // that page/layout modules may not export — these are checked at runtime
-            if (warning.code === 'MISSING_EXPORT') {
+            if (warning.code === 'MISSING_EXPORT' &&
+                warning.message &&
+                /export '(config|loader|default)'/.test(warning.message)) {
               return
             }
             defaultHandler(warning)
