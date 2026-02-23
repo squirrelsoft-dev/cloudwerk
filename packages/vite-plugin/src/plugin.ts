@@ -1066,7 +1066,7 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           console.log(`[cloudwerk] Detected client component: ${componentId}`)
         }
 
-        // Transform the client component to wrap its default export
+        // Transform the client component to wrap its exports
         // This adds the hydration wrapper for server-side rendering
         // Use the actual file path for Vite to resolve in dev mode
         const result = transformClientComponent(transformedCode, {
@@ -1080,6 +1080,31 @@ export function cloudwerkPlugin(options: CloudwerkVitePluginOptions = {}): Plugi
           return {
             code: transformedCode.replace(/['"]use client['"]\s*;?\s*\n?/g, ''),
             map: null,
+          }
+        }
+
+        // Register per-export ClientComponentInfo entries for named exports
+        if (result.wrappedExports && result.wrappedExports.length > 0) {
+          for (const exportName of result.wrappedExports) {
+            const namedComponentId = `${componentId}__${exportName}`
+            const namedBundlePath = `${state.options.hydrationEndpoint}/${namedComponentId}.js`
+            const namedInfo: ClientComponentInfo = {
+              componentId: namedComponentId,
+              bundlePath: namedBundlePath,
+              absolutePath: id,
+              exportName,
+            }
+            state.clientComponents.set(`${id}::${exportName}`, namedInfo)
+
+            if (state.options.verbose) {
+              console.log(`[cloudwerk] Detected named client component: ${namedComponentId}`)
+            }
+          }
+
+          // If there's no default export, remove the pre-scan default entry
+          // (pre-scan always creates one keyed by file path)
+          if (!result.code.includes('export default')) {
+            state.clientComponents.delete(id)
           }
         }
 

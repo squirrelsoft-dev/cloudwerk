@@ -25,6 +25,8 @@ export interface TransformResult {
   success: boolean
   /** Error message if transformation failed */
   error?: string
+  /** Named exports that were wrapped (empty/undefined means only default) */
+  wrappedExports?: string[]
 }
 
 // ============================================================================
@@ -131,6 +133,89 @@ function findDefaultExport(ast: Module): {
   return { type: null, name: null, index: -1 }
 }
 
+/**
+ * Information about a named export found in the AST.
+ */
+interface NamedExportInfo {
+  /** Export name (e.g., 'Counter') */
+  name: string
+  /** Type of export declaration */
+  type: 'function' | 'class' | 'const'
+  /** Index in the AST body */
+  index: number
+  /** Span start offset in the source */
+  spanStart: number
+  /** Span end offset in the source */
+  spanEnd: number
+  /** Whether this is an async function */
+  isAsync?: boolean
+}
+
+/**
+ * Find all named exports that look like React components (capitalized names).
+ * Matches: export function Foo() {}, export const Foo = ..., export class Foo {}
+ */
+function findNamedExports(ast: Module): NamedExportInfo[] {
+  const results: NamedExportInfo[] = []
+
+  for (let i = 0; i < ast.body.length; i++) {
+    const node = ast.body[i]
+
+    if (node.type === 'ExportDeclaration') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const decl = (node as any).declaration
+
+      // export function Foo() {}
+      if (decl.type === 'FunctionDeclaration') {
+        const name = (decl.identifier as { value: string })?.value
+        if (name && /^[A-Z]/.test(name)) {
+          results.push({
+            name,
+            type: 'function',
+            index: i,
+            spanStart: node.span.start,
+            spanEnd: node.span.end,
+            isAsync: decl.async as boolean,
+          })
+        }
+      }
+
+      // export class Foo {}
+      if (decl.type === 'ClassDeclaration') {
+        const name = (decl.identifier as { value: string })?.value
+        if (name && /^[A-Z]/.test(name)) {
+          results.push({
+            name,
+            type: 'class',
+            index: i,
+            spanStart: node.span.start,
+            spanEnd: node.span.end,
+          })
+        }
+      }
+
+      // export const Foo = ...
+      if (decl.type === 'VariableDeclaration') {
+        const declarations = decl.declarations as Array<{ id: { value: string }; span: { start: number; end: number } }>
+        for (const declarator of declarations) {
+          const name = declarator.id?.value
+          if (name && /^[A-Z]/.test(name)) {
+            results.push({
+              name,
+              type: 'const',
+              index: i,
+              spanStart: node.span.start,
+              spanEnd: node.span.end,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  return results
+}
+
 // ============================================================================
 // Transform Functions
 // ============================================================================
@@ -168,7 +253,10 @@ export function transformClientComponent(
     // Find the default export
     const exportInfo = findDefaultExport(ast)
 
-    if (exportInfo.type === null) {
+    // Find named exports (capitalized names = React components)
+    const namedExports = findNamedExports(ast)
+
+    if (exportInfo.type === null && namedExports.length === 0) {
       return {
         code,
         success: false,
@@ -182,96 +270,133 @@ export function transformClientComponent(
     // Add the wrapper import at the top
     const wrapperImport = `import { createClientComponentWrapper as __createWrapper } from '@cloudwerk/ui/client'\n`
 
-    // Meta object for the wrapper
+    // Meta object for the wrapper (default export)
     const metaObj = JSON.stringify({ componentId, bundlePath })
 
-    // Transform based on export type
-    switch (exportInfo.type) {
-      case 'function': {
-        if (exportInfo.name) {
-          // export default function Name() {} or export default async function Name() {}
-          // Transform: remove "export default", keep function, add wrapper
-          const asyncPrefix = exportInfo.isAsync ? 'async ' : ''
-          transformed = transformed.replace(
-            new RegExp(`export\\s+default\\s+${asyncPrefix}function\\s+${exportInfo.name}`),
-            `${asyncPrefix}function ${exportInfo.name}`
-          )
-          transformed = wrapperImport + transformed
-          transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
-        } else {
-          // export default function() {} (anonymous)
-          // Assign to a variable first
-          const asyncPrefix = exportInfo.isAsync ? 'async ' : ''
-          transformed = transformed.replace(
-            new RegExp(`export\\s+default\\s+${asyncPrefix}function\\s*\\(`),
-            `const __OriginalComponent = ${asyncPrefix}function(`
-          )
-          transformed = wrapperImport + transformed
-          transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
+    // Track which named exports were wrapped
+    const wrappedExports: string[] = []
+
+    // --- Wrap named exports (process in reverse order to avoid offset corruption) ---
+    if (namedExports.length > 0) {
+      // Sort in reverse source order so replacements don't shift later offsets
+      const sorted = [...namedExports].sort((a, b) => b.spanStart - a.spanStart)
+
+      for (const namedExport of sorted) {
+        const namedMetaObj = JSON.stringify({
+          componentId: `${componentId}__${namedExport.name}`,
+          bundlePath,
+        })
+
+        const originalName = `__${namedExport.name}_original`
+
+        switch (namedExport.type) {
+          case 'function': {
+            const asyncPrefix = namedExport.isAsync ? 'async ' : ''
+            // Replace: export function Foo() { ... }
+            // With:    function __Foo_original() { ... }
+            transformed = transformed.replace(
+              new RegExp(`export\\s+${asyncPrefix}function\\s+${namedExport.name}\\s*\\(`),
+              `${asyncPrefix}function ${originalName}(`
+            )
+            break
+          }
+          case 'class': {
+            transformed = transformed.replace(
+              new RegExp(`export\\s+class\\s+${namedExport.name}\\s`),
+              `class ${originalName} `
+            )
+            break
+          }
+          case 'const': {
+            transformed = transformed.replace(
+              new RegExp(`export\\s+(const|let|var)\\s+${namedExport.name}\\s*=`),
+              `const ${originalName} =`
+            )
+            break
+          }
         }
-        break
-      }
 
-      case 'arrow': {
-        // export default () => {} or export default async () => {}
-        // Replace the export default with a variable assignment
-        // Since AST already confirmed this is an arrow function, we can use a simple replacement
-        transformed = transformed.replace(
-          /export\s+default/,
-          'const __OriginalComponent ='
-        )
-        transformed = wrapperImport + transformed
-        transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
-        break
-      }
-
-      case 'class': {
-        if (exportInfo.name) {
-          // export default class Name {}
-          transformed = transformed.replace(
-            new RegExp(`export\\s+default\\s+class\\s+${exportInfo.name}`),
-            `class ${exportInfo.name}`
-          )
-          transformed = wrapperImport + transformed
-          transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
-        } else {
-          // export default class {} (anonymous)
-          transformed = transformed.replace(
-            /export\s+default\s+class\s*\{/,
-            'const __OriginalComponent = class {'
-          )
-          transformed = wrapperImport + transformed
-          transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
-        }
-        break
-      }
-
-      case 'identifier': {
-        // export default Name (where Name is defined elsewhere)
-        transformed = transformed.replace(
-          /export\s+default\s+\w+\s*;?\s*$/m,
-          ''
-        )
-        transformed = wrapperImport + transformed
-        transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
-        break
-      }
-
-      case 'named-export': {
-        // export { Name as default }
-        transformed = transformed.replace(
-          /export\s*\{\s*\w+\s+as\s+default\s*\}\s*;?/,
-          ''
-        )
-        transformed = wrapperImport + transformed
-        transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
-        break
+        // Append re-export with wrapper
+        transformed += `\nexport const ${namedExport.name} = __createWrapper(${originalName}, ${namedMetaObj})\n`
+        wrappedExports.push(namedExport.name)
       }
     }
+
+    // --- Wrap default export ---
+    if (exportInfo.type !== null) {
+      switch (exportInfo.type) {
+        case 'function': {
+          if (exportInfo.name) {
+            const asyncPrefix = exportInfo.isAsync ? 'async ' : ''
+            transformed = transformed.replace(
+              new RegExp(`export\\s+default\\s+${asyncPrefix}function\\s+${exportInfo.name}`),
+              `${asyncPrefix}function ${exportInfo.name}`
+            )
+            transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
+          } else {
+            const asyncPrefix = exportInfo.isAsync ? 'async ' : ''
+            transformed = transformed.replace(
+              new RegExp(`export\\s+default\\s+${asyncPrefix}function\\s*\\(`),
+              `const __OriginalComponent = ${asyncPrefix}function(`
+            )
+            transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
+          }
+          break
+        }
+
+        case 'arrow': {
+          transformed = transformed.replace(
+            /export\s+default/,
+            'const __OriginalComponent ='
+          )
+          transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
+          break
+        }
+
+        case 'class': {
+          if (exportInfo.name) {
+            transformed = transformed.replace(
+              new RegExp(`export\\s+default\\s+class\\s+${exportInfo.name}`),
+              `class ${exportInfo.name}`
+            )
+            transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
+          } else {
+            transformed = transformed.replace(
+              /export\s+default\s+class\s*\{/,
+              'const __OriginalComponent = class {'
+            )
+            transformed += `\nconst __WrappedComponent = __createWrapper(__OriginalComponent, ${metaObj})\nexport default __WrappedComponent\n`
+          }
+          break
+        }
+
+        case 'identifier': {
+          transformed = transformed.replace(
+            /export\s+default\s+\w+\s*;?\s*$/m,
+            ''
+          )
+          transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
+          break
+        }
+
+        case 'named-export': {
+          transformed = transformed.replace(
+            /export\s*\{\s*\w+\s+as\s+default\s*\}\s*;?/,
+            ''
+          )
+          transformed += `\nconst __WrappedComponent = __createWrapper(${exportInfo.name}, ${metaObj})\nexport default __WrappedComponent\n`
+          break
+        }
+      }
+    }
+
+    // Prepend wrapper import
+    transformed = wrapperImport + transformed
 
     return {
       code: transformed,
       success: true,
+      wrappedExports: wrappedExports.length > 0 ? wrappedExports : undefined,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

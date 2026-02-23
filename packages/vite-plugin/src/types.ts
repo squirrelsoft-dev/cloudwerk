@@ -152,6 +152,8 @@ export interface ClientComponentInfo {
   bundlePath: string
   /** Absolute file path */
   absolutePath: string
+  /** Named export name (undefined means default export) */
+  exportName?: string
 }
 
 /**
