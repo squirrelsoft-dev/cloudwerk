@@ -1,5 +1,19 @@
 # @cloudwerk/cli
 
+## 0.16.0
+
+### Minor Changes
+
+- [#288](https://github.com/squirrelsoft-dev/cloudwerk/pull/288) [`979c5a0`](https://github.com/squirrelsoft-dev/cloudwerk/commit/979c5a04933d0254794309027526d3d6651e77ee) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Auto-SSG and Worker polyfills for React renderer
+  - **Auto-SSG**: Static page generation now runs automatically during `cloudwerk build` for routes with `rendering: 'static'` or `generateStaticParams`. The `--ssg` flag is no longer needed (use `--no-ssg` to opt out).
+  - **SSG route filtering**: Only routes explicitly marked as static are generated. Dynamic pages and API routes are no longer captured by SSG.
+  - **Worker polyfills**: `MessageChannel` and `document` polyfills are now automatically injected via Rollup banner for React renderer builds, fixing crashes from libraries like `react-markdown`/`micromark` that use `document.createElement` at module load time.
+
+### Patch Changes
+
+- Updated dependencies [[`979c5a0`](https://github.com/squirrelsoft-dev/cloudwerk/commit/979c5a04933d0254794309027526d3d6651e77ee)]:
+  - @cloudwerk/vite-plugin@0.16.0
+
 ## 0.15.16
 
 ### Patch Changes
