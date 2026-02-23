@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.15.14
+
+### Patch Changes
+
+- [#277](https://github.com/squirrelsoft-dev/cloudwerk/pull/277) [`217e829`](https://github.com/squirrelsoft-dev/cloudwerk/commit/217e829202f9513d58f7e642c38d505916cb7bfb) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump to pick up @cloudwerk/vite-plugin 0.8.2 which fixes SSG "Failed to parse URL from [object Request]" error
+
 ## 0.15.13
 
 ### Patch Changes

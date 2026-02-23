@@ -1,6 +1,6 @@
 {
   "name": "@cloudwerk/cli",
-  "version": "0.15.13",
+  "version": "0.15.14",
   "description": "Dev server, build, deploy commands for Cloudwerk",
   "repository": {
     "type": "git",
