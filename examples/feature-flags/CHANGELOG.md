@@ -1,5 +1,12 @@
 # feature-flags
 
+## 0.0.18
+
+### Patch Changes
+
+- Updated dependencies [[`979c5a0`](https://github.com/squirrelsoft-dev/cloudwerk/commit/979c5a04933d0254794309027526d3d6651e77ee)]:
+  - @cloudwerk/cli@0.16.0
+
 ## 0.0.17
 
 ### Patch Changes
