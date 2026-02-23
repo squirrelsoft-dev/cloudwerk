@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/client.ts'],
+  entry: ['src/index.ts', 'src/client.ts', 'src/renderers/react.ts'],
   format: ['esm'],
   dts: true,
   external: ['@cloudwerk/core', '@cloudwerk/utils', 'hono', 'hono/jsx', 'hono/jsx/dom', 'hono/jsx/streaming', 'hono/jsx/jsx-runtime', 'react', 'react-dom', 'react-dom/server', 'react-dom/client'],

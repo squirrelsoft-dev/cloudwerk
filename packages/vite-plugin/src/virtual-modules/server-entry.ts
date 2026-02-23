@@ -295,7 +295,8 @@ if (typeof globalThis.MessageChannel === 'undefined') {
 ${messageChannelPolyfill}import { Hono } from 'hono'
 import { ssgParams } from 'hono/ssg'
 import { contextMiddleware, createHandlerAdapter, createMiddlewareAdapter, setRouteConfig, NotFoundError, RedirectError } from '@cloudwerk/core/runtime'
-import { setActiveRenderer, getActiveRenderer${rendererName === 'react' ? ', initReactRenderer' : ''} } from '@cloudwerk/ui'
+import { setActiveRenderer, getActiveRenderer${rendererName === 'react' ? ', registerRenderer' : ''} } from '@cloudwerk/ui'${rendererName === 'react' ? `
+import { reactRenderer } from '@cloudwerk/ui/renderers/react'` : ''}
 
 // Page and Route Imports
 ${imports.join('\n')}
@@ -634,7 +635,7 @@ function registerRoute(app, pattern, routeModule, middlewareModules) {
 // ============================================================================
 
 // Initialize renderer
-${rendererName === 'react' ? `await initReactRenderer()\n` : ''}setActiveRenderer('${rendererName}')
+${rendererName === 'react' ? `registerRenderer('react', reactRenderer)\n` : ''}setActiveRenderer('${rendererName}')
 
 // Create Hono app
 const app = new Hono({ strict: false })
