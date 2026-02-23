@@ -362,7 +362,7 @@ importers:
         specifier: ^1.1.0
         version: 1.1.1
       vite:
-        specifier: ^6.0.0
+        specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 6.4.1(@types/node@20.19.30)(jiti@2.6.1)(lightningcss@1.30.2)
       wrangler:
         specifier: ^4.0.0
