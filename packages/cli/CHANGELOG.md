@@ -1,5 +1,11 @@
 # @cloudwerk/cli
 
+## 0.16.2
+
+### Patch Changes
+
+- [#291](https://github.com/squirrelsoft-dev/cloudwerk/pull/291) [`d404535`](https://github.com/squirrelsoft-dev/cloudwerk/commit/d404535098ee9b1d1c240f77fa4e77c30dfc1923) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Add Turborepo for cached build orchestration. Add Bun engine support to scaffolded project templates. Show runtime info in dev server startup banner.
+
 ## 0.16.0
 
 ### Minor Changes
