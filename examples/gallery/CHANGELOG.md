@@ -1,5 +1,12 @@
 # gallery
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [[`b8a9676`](https://github.com/squirrelsoft-dev/cloudwerk/commit/b8a96761a62fd4cf4eab107a5949901cbeb13c3c)]:
+  - @cloudwerk/ui@0.16.1
+
 ## 0.0.18
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @cloudwerk/ui
 
+## 0.16.1
+
+### Patch Changes
+
+- [#290](https://github.com/squirrelsoft-dev/cloudwerk/pull/290) [`b8a9676`](https://github.com/squirrelsoft-dev/cloudwerk/commit/b8a96761a62fd4cf4eab107a5949901cbeb13c3c) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Fix production build failure in hono-jsx projects caused by Rollup statically analyzing the dynamic import of the React renderer. The import path is now constructed at runtime to prevent Rollup from following it into the React module graph.
+
 ## 0.15.18
 
 ### Patch Changes
