@@ -1,5 +1,12 @@
 # blog
 
+## 0.0.23
+
+### Patch Changes
+
+- Updated dependencies [[`d404535`](https://github.com/squirrelsoft-dev/cloudwerk/commit/d404535098ee9b1d1c240f77fa4e77c30dfc1923)]:
+  - @cloudwerk/cli@0.16.2
+
 ## 0.0.22
 
 ### Patch Changes
