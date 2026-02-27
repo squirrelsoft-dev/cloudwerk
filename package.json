@@ -4,16 +4,16 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @cloudwerk/cli dev",
-    "build": "pnpm -r --filter '!./examples/**' build",
-    "test": "pnpm -r test",
+    "build": "turbo run build --filter='!./examples/*'",
+    "test": "turbo run test --filter='!./examples/*'",
     "test:e2e": "vitest --config e2e/vitest.config.ts --run",
     "validate:spike": "./scripts/validate-spike.sh",
     "lint": "eslint . --ignore-pattern 'examples/**'",
     "format": "prettier --write .",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm -r build && changeset publish --no-git-tag",
-    "release:provenance": "pnpm -r build && pnpm -r publish --access public --provenance --no-git-checks"
+    "release": "turbo run build --filter='!./examples/*' && changeset publish --no-git-tag",
+    "release:provenance": "turbo run build --filter='!./examples/*' && pnpm -r publish --access public --provenance --no-git-checks"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.5.0",
@@ -24,6 +24,7 @@
     "prettier": "^3",
     "typescript": "^5",
     "typescript-eslint": "^7.0.0",
+    "turbo": "^2.0.0",
     "vitest": "^1.0.0"
   },
   "packageManager": "pnpm@9.0.0",

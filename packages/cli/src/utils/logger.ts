@@ -65,7 +65,8 @@ export function printStartupBanner(
   localUrl: string,
   networkUrl: string | undefined,
   routes: Array<{ method: string; pattern: string }>,
-  startupTime: number
+  startupTime: number,
+  runtime?: string
 ): void {
   console.log()
   console.log(pc.bold(pc.cyan('  Cloudwerk')) + pc.dim(` v${version}`))
@@ -74,6 +75,10 @@ export function printStartupBanner(
 
   if (networkUrl) {
     console.log(pc.dim('  > ') + pc.bold('Network:') + '  ' + pc.cyan(networkUrl))
+  }
+
+  if (runtime) {
+    console.log(pc.dim('  > ') + pc.bold('Runtime:') + '  ' + runtime)
   }
 
   console.log()

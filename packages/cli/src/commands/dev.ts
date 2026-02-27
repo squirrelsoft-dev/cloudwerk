@@ -16,6 +16,7 @@ import { loadConfig } from '@cloudwerk/core'
 import type { DevCommandOptions, Logger } from '../types.js'
 import { CliError } from '../types.js'
 import { createLogger, printStartupBanner, printError } from '../utils/logger.js'
+import { getRuntimeVersion } from '../utils/runtime.js'
 import { VERSION } from '../version.js'
 import { SHUTDOWN_TIMEOUT_MS } from '../constants.js'
 
@@ -156,7 +157,8 @@ export async function dev(
       localUrl,
       networkUrl,
       routes,
-      startupTime
+      startupTime,
+      getRuntimeVersion()
     )
 
     // Handle graceful shutdown
