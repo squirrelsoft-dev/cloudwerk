@@ -98,7 +98,11 @@ export async function initReactRenderer(): Promise<void> {
   }
 
   try {
-    const { reactRenderer } = await import('./renderers/react.js')
+    // Use a variable to construct the path so Rollup/Vite cannot statically
+    // analyze this dynamic import and pull react.js into the module graph.
+    // This is intentional — React is an optional peer dependency.
+    const rendererPath = './renderers/' + 'react.js'
+    const { reactRenderer } = await import(/* @vite-ignore */ rendererPath)
     renderers['react'] = reactRenderer
   } catch (error) {
     throw new Error(
