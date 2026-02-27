@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 .cloudwerk/
+.cloudwerk-build/
 .wrangler/
 
 # Generated files
