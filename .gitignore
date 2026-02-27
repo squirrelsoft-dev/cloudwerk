@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 .cloudwerk/
+.cloudwerk-build/
 .wrangler/
 
 # Generated files
@@ -36,3 +37,6 @@ pnpm-debug.log*
 # Package manager locks (keep pnpm-lock.yaml)
 package-lock.json
 yarn.lock
+.devenv/
+.direnv/
+.turbo
