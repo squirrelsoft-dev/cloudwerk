@@ -1,11 +1,15 @@
 export type Runtime = 'bun' | 'node'
 
+const isBun = typeof globalThis.Bun !== 'undefined';
+
 export function detectRuntime(): Runtime {
-  if (typeof globalThis.Bun !== 'undefined') return 'bun'
-  return 'node'
+  return isBun ? 'bun' : 'node';
 }
 
 export function getRuntimeVersion(): string {
-  if (typeof globalThis.Bun !== 'undefined') return `Bun ${(globalThis.Bun as any).version}`
-  return `Node ${process.versions.node}`
+  if (isBun) {
+    const version = (globalThis.Bun as { version?: string })?.version;
+    return `Bun ${version ?? 'unknown'}`;
+  }
+  return `Node ${process.versions.node}`;
 }
