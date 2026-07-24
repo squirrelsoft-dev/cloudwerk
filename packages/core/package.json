@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@cloudwerk/utils": "workspace:*",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.0",
     "fast-glob": "^3.3.0",
     "hono": "^4.12.32"
   },
