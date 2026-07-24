@@ -73,7 +73,7 @@
   "dependencies": {
     "@cloudwerk/core": "workspace:*",
     "@cloudwerk/security": "workspace:*",
-    "jose": "^5.2.0"
+    "jose": "^6.0.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
