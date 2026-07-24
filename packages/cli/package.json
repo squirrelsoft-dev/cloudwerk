@@ -32,10 +32,10 @@
     "@cloudwerk/ui": "workspace:^",
     "@cloudwerk/vite-plugin": "workspace:^",
     "@hono/node-server": "^1.13.0",
-    "@hono/vite-build": "^1.3.0",
+    "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.18.0",
     "@iarna/toml": "^2.2.5",
-    "@inquirer/prompts": "^8.2.0",
+    "@inquirer/prompts": "^8.5.2",
     "commander": "^12.1.0",
     "esbuild": "^0.25.0",
     "picocolors": "^1.1.0",
@@ -45,7 +45,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.0.0",
-    "hono": "^4.0.0",
+    "hono": "^4.12.32",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"
