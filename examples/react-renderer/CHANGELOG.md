@@ -1,5 +1,14 @@
 # react-renderer
 
+## 0.0.19
+
+### Patch Changes
+
+- Updated dependencies [[`fea241d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/fea241db0bf53c6c1c586abf66d7064cd7b9d685), [`be8b381`](https://github.com/squirrelsoft-dev/cloudwerk/commit/be8b381726429cb8a1a847364a67abf2adcfc690), [`53f62e4`](https://github.com/squirrelsoft-dev/cloudwerk/commit/53f62e4cc626f5f57477a921e18eeedcaccc3f55), [`edc45f3`](https://github.com/squirrelsoft-dev/cloudwerk/commit/edc45f34587debae205815c6ca94f98cb217d817), [`bf8ddb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bf8ddb2a74f26fd83e269eaa04d318aa68d055de), [`ef6af28`](https://github.com/squirrelsoft-dev/cloudwerk/commit/ef6af28c13821bda64908279a4bcd10733a3fee6)]:
+  - @cloudwerk/core@0.17.0
+  - @cloudwerk/cli@0.17.0
+  - @cloudwerk/ui@0.17.0
+
 ## 0.0.18
 
 ### Patch Changes

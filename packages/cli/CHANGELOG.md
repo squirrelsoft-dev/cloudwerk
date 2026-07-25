@@ -1,5 +1,96 @@
 # @cloudwerk/cli
 
+## 0.17.0
+
+### Minor Changes
+
+- [#298](https://github.com/squirrelsoft-dev/cloudwerk/pull/298) [`53f62e4`](https://github.com/squirrelsoft-dev/cloudwerk/commit/53f62e4cc626f5f57477a921e18eeedcaccc3f55) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump `vitest` from ^1.0.0 to ^4.0.0 and `@vitest/coverage-v8` from ^1.0.0 to ^4.0.0 across the root and every workspace package with a test script. This clears the critical advisory GHSA-5xrq-8626-4rwp (arbitrary file read/execute via the Vitest UI server, fixed in ≥3.2.6) and collapses the duplicate `vite@5.4.21` that vitest 1's vite-node pulled in — the lockfile now resolves a single `vite@6.4.3`. Vitest 4 requires Vite ≥6 and Node ≥20, both already satisfied. No `vitest.config.*`/`vite.config.*` migration was needed: no config used the removed `coverage.all`/`coverage.extensions` options (all already use `coverage.include`), no constructor `vi.spyOn` usage, no snapshots to re-baseline. All 1605 tests pass on vitest 4.1.10.
+
+- [#300](https://github.com/squirrelsoft-dev/cloudwerk/pull/300) [`edc45f3`](https://github.com/squirrelsoft-dev/cloudwerk/commit/edc45f34587debae205815c6ca94f98cb217d817) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Group K — Node 22.12 engine floor (linchpin). Bump `engines.node` from `>=20` to `>=22.12` (Node 20 is EOL) across root, `@cloudwerk/create-app`, and all examples. Bump `wrangler` ^4.0.0 → ^4.114.0 in `@cloudwerk/cli` and examples (pulls undici 7.18.2 → 7.28.0, clearing 11 undici advisories; peers `@cloudflare/workers-types ^5`). Bump `@cloudflare/workers-types` ^4 → ^5 in `@cloudwerk/durable-object`. Bump `commander` ^12.1.0 → ^15.0.0 in `@cloudwerk/cli` and `@cloudwerk/create-app` (v15 requires Node ≥22.12, now unblocked). Bump root `@types/node` ^20 → ^22 to align to the new engine floor. Bump root `packageManager` pnpm@9.0.0 → pnpm@10.15.1 (pnpm 11 deferred — see PR body). This unblocks Groups J (docs stack: astro 7 / starlight / sharp / satori / linkinator), L (typescript 7), and M (vite 8).
+
+- [#301](https://github.com/squirrelsoft-dev/cloudwerk/pull/301) [`bf8ddb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bf8ddb2a74f26fd83e269eaa04d318aa68d055de) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump `vite` from `^6.4.3` to `^7.0.0` — stage 1 of the 6→8 migration (Group M1 from the
+  dependency audit). Vite 7 is the Rolldown/Oxc preview stage: dep optimization, JS
+  transforms, and minification move toward Rolldown internals while the `vite` package
+  itself still ships the stable esbuild/Rollup pipeline (Rolldown is opt-in via the
+  separate `rolldown-vite` package, not required here). Security is already handled
+  in-range (6.4.3, Group A); this bump is currency only.
+
+  - `@cloudwerk/cli`: `dependencies.vite` narrowed from `^5.0.0 || ^6.0.0 || ^7.0.0` to
+    `^7.0.0` so the bundled dev server actually resolves and runs on vite 7 (the old range
+    let pnpm keep 6.4.3 since it still satisfied the range).
+  - `@cloudwerk/vite-plugin`: `devDependencies.vite` bumped to `^7.0.0`; its
+    `peerDependencies.vite` range (`^5.0.0 || ^6.0.0 || ^7.0.0`) already covered 7 and is
+    unchanged, so downstream consumers can stay on vite 5/6 or move to 7.
+  - `@cloudwerk/core`: `devDependencies.vite` bumped to `^7.0.0`; `peerDependencies.vite`
+    widened from `^5.0.0 || ^6.0.0` to include `^7.0.0`.
+  - All `examples/*` that depend on vite bumped to `^7.0.0`.
+  - `pnpm.overrides.esbuild` (`^0.28.0`) is unchanged — esbuild is still used by vite 7
+    and only becomes optional in vite 8 (Group M2).
+
+  No `optimizeDeps.esbuildOptions`/`esbuild.*` config migration was needed: a repo-wide
+  search found no `esbuildOptions`/`optimizeDeps` usage, and the one place a top-level
+  `esbuild` key is set (`@cloudwerk/vite-plugin`'s JSX transform config) is the
+  non-deprecated `esbuild.jsx*` transform option, not the deprecated
+  `optimizeDeps.esbuildOptions`. No `vite.config.*` files exist in this repo — cli/
+  vite-plugin construct Vite's `InlineConfig` programmatically and already pin explicit
+  `build.target`/`ssr.target` values (`esnext`/`webworker`) and `minify: 'esbuild'`, so
+  Vite 7's new default `build.target` (bumped from the old `modules` baseline) doesn't
+  affect the Workers server bundle. The client bundle build target is left at Vite's
+  default (as before); an `examples/blog` build (client + server) completes successfully
+  under vite 7.3.6.
+
+  Verified: `pnpm install`, `pnpm build` (14/14), `pnpm test` (27/27 tasks, 0 failures —
+  vite-plugin 123/123, cli 48/48), `pnpm lint` (0 errors, pre-existing unrelated
+  `no-explicit-any` warnings only). `pnpm audit` shows no new advisories tied to vite or
+  Rolldown; the 6.4.3 security fix from Group A holds.
+
+### Patch Changes
+
+- [#294](https://github.com/squirrelsoft-dev/cloudwerk/pull/294) [`fea241d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/fea241db0bf53c6c1c586abf66d7064cd7b9d685) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Security/patch in-range dependency batch (Group A from the dependency audit).
+
+  Bumps resolved versions within existing ranges — no major bumps, no engine-floor
+  change, no `packageManager` change, no `wrangler` bump, no `esbuild` override change:
+
+  - hono ^4.0.0 → 4.12.32 (clears 31 security advisories)
+  - vite → 6.4.3 (clears the direct vite advisories; transitive vite via
+    astro/vitest is out of scope for this batch)
+  - turbo ^2.0.0 → 2.10.6 (clears 2 advisories, ≥2.9.14)
+  - @hono/vite-build → 1.11.1, @inquirer/prompts → 8.5.2, fs-extra → 11.4.0,
+    motion → 12.42.2, prettier → 3.9.6, @changesets/cli → 2.31.1,
+    @swc/core → 1.15.46, react/react-dom → 19.2.8, @types/react → 19.2.17,
+    @tailwindcss/vite → 4.3.3, tailwindcss → 4.3.3
+
+  The `@cloudwerk/cli` `vite` range is unchanged (`^5.0.0 || ^6.0.0 || ^7.0.0`);
+  its resolved version is pinned to 6.4.3 to avoid an unintended 6→7 major jump.
+
+- [#296](https://github.com/squirrelsoft-dev/cloudwerk/pull/296) [`be8b381`](https://github.com/squirrelsoft-dev/cloudwerk/commit/be8b381726429cb8a1a847364a67abf2adcfc690) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump esbuild from ^0.25.0 to ^0.28.0 and update pnpm.overrides.esbuild pin from ^0.25.0 to ^0.28.0. esbuild 0.28.1 fixes a Windows path-traversal in the dev server (GHSA-g7r4-m6w7-qqqr); cloudwerk uses the build/transform API, not serve().
+
+- [#297](https://github.com/squirrelsoft-dev/cloudwerk/pull/297) [`ef6af28`](https://github.com/squirrelsoft-dev/cloudwerk/commit/ef6af28c13821bda64908279a4bcd10733a3fee6) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Leaf dependency batch (Groups C/D/G/H/I from the dependency audit):
+
+  - **Group C:** `jose` 5 → 6 (`@cloudwerk/auth`). cloudwerk only uses `SignJWT`,
+    `jwtVerify`, and `jose.errors.*` (cookie-store.ts) — none removed in v6.
+  - **Group D:** `@hono/node-server` 1 → 2, `@hono/vite-dev-server` 0.18 → 0.26,
+    `@hono/vite-build` 1.11 (already in range) in `@cloudwerk/cli`; `@hono/vite-dev-server`
+    0.18 → 0.26 (dev + peer) in `@cloudwerk/vite-plugin`. Both 0.26 and 2.0 are ESM-only
+    (cli/vite-plugin are ESM); `@hono/node-server` v2 keeps the public API.
+  - **Group G:** `@clack/prompts` 0.8 → 1 (`@cloudwerk/create-app`, ESM-only).
+    `commander` unchanged (its 15 bump is deferred to the Node 22 floor).
+  - **Group H:** `vite-tsconfig-paths` 5 → 6 (`examples/feature-flags`, private — no
+    published change, included for completeness).
+  - **Group I:** `@changesets/changelog-github` 0.5 → 0.7 (root devDep, additive
+    `disableThanks` option).
+
+  Verified: `pnpm install`, `pnpm build` (14/14), `pnpm test` (27/27 tasks, 0 failures —
+  auth 331, cli 48, vite-plugin 123, create-app 55), `pnpm lint` (0 errors). The
+  `examples/feature-flags` build completes successfully; a pre-existing static-generation
+  warning about the `@/services/flags/service` alias is reproducible on `main` with the
+  prior `vite-tsconfig-paths` 5.x and is unrelated to this bump.
+
+- Updated dependencies [[`fea241d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/fea241db0bf53c6c1c586abf66d7064cd7b9d685), [`be8b381`](https://github.com/squirrelsoft-dev/cloudwerk/commit/be8b381726429cb8a1a847364a67abf2adcfc690), [`53f62e4`](https://github.com/squirrelsoft-dev/cloudwerk/commit/53f62e4cc626f5f57477a921e18eeedcaccc3f55), [`bf8ddb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bf8ddb2a74f26fd83e269eaa04d318aa68d055de), [`ef6af28`](https://github.com/squirrelsoft-dev/cloudwerk/commit/ef6af28c13821bda64908279a4bcd10733a3fee6)]:
+  - @cloudwerk/core@0.17.0
+  - @cloudwerk/ui@0.17.0
+  - @cloudwerk/vite-plugin@0.17.0
+
 ## 0.16.2
 
 ### Patch Changes
