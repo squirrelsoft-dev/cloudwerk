@@ -1,5 +1,38 @@
 # @cloudwerk/auth
 
+## 0.4.0
+
+### Minor Changes
+
+- [#298](https://github.com/squirrelsoft-dev/cloudwerk/pull/298) [`53f62e4`](https://github.com/squirrelsoft-dev/cloudwerk/commit/53f62e4cc626f5f57477a921e18eeedcaccc3f55) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Bump `vitest` from ^1.0.0 to ^4.0.0 and `@vitest/coverage-v8` from ^1.0.0 to ^4.0.0 across the root and every workspace package with a test script. This clears the critical advisory GHSA-5xrq-8626-4rwp (arbitrary file read/execute via the Vitest UI server, fixed in ≥3.2.6) and collapses the duplicate `vite@5.4.21` that vitest 1's vite-node pulled in — the lockfile now resolves a single `vite@6.4.3`. Vitest 4 requires Vite ≥6 and Node ≥20, both already satisfied. No `vitest.config.*`/`vite.config.*` migration was needed: no config used the removed `coverage.all`/`coverage.extensions` options (all already use `coverage.include`), no constructor `vi.spyOn` usage, no snapshots to re-baseline. All 1605 tests pass on vitest 4.1.10.
+
+### Patch Changes
+
+- [#297](https://github.com/squirrelsoft-dev/cloudwerk/pull/297) [`ef6af28`](https://github.com/squirrelsoft-dev/cloudwerk/commit/ef6af28c13821bda64908279a4bcd10733a3fee6) Thanks [@sbeardsley](https://github.com/sbeardsley)! - Leaf dependency batch (Groups C/D/G/H/I from the dependency audit):
+
+  - **Group C:** `jose` 5 → 6 (`@cloudwerk/auth`). cloudwerk only uses `SignJWT`,
+    `jwtVerify`, and `jose.errors.*` (cookie-store.ts) — none removed in v6.
+  - **Group D:** `@hono/node-server` 1 → 2, `@hono/vite-dev-server` 0.18 → 0.26,
+    `@hono/vite-build` 1.11 (already in range) in `@cloudwerk/cli`; `@hono/vite-dev-server`
+    0.18 → 0.26 (dev + peer) in `@cloudwerk/vite-plugin`. Both 0.26 and 2.0 are ESM-only
+    (cli/vite-plugin are ESM); `@hono/node-server` v2 keeps the public API.
+  - **Group G:** `@clack/prompts` 0.8 → 1 (`@cloudwerk/create-app`, ESM-only).
+    `commander` unchanged (its 15 bump is deferred to the Node 22 floor).
+  - **Group H:** `vite-tsconfig-paths` 5 → 6 (`examples/feature-flags`, private — no
+    published change, included for completeness).
+  - **Group I:** `@changesets/changelog-github` 0.5 → 0.7 (root devDep, additive
+    `disableThanks` option).
+
+  Verified: `pnpm install`, `pnpm build` (14/14), `pnpm test` (27/27 tasks, 0 failures —
+  auth 331, cli 48, vite-plugin 123, create-app 55), `pnpm lint` (0 errors). The
+  `examples/feature-flags` build completes successfully; a pre-existing static-generation
+  warning about the `@/services/flags/service` alias is reproducible on `main` with the
+  prior `vite-tsconfig-paths` 5.x and is unrelated to this bump.
+
+- Updated dependencies [[`fea241d`](https://github.com/squirrelsoft-dev/cloudwerk/commit/fea241db0bf53c6c1c586abf66d7064cd7b9d685), [`be8b381`](https://github.com/squirrelsoft-dev/cloudwerk/commit/be8b381726429cb8a1a847364a67abf2adcfc690), [`53f62e4`](https://github.com/squirrelsoft-dev/cloudwerk/commit/53f62e4cc626f5f57477a921e18eeedcaccc3f55), [`bf8ddb2`](https://github.com/squirrelsoft-dev/cloudwerk/commit/bf8ddb2a74f26fd83e269eaa04d318aa68d055de)]:
+  - @cloudwerk/core@0.17.0
+  - @cloudwerk/security@0.3.0
+
 ## 0.3.1
 
 ### Patch Changes
