@@ -1214,6 +1214,7 @@ export interface HydrationManifest {
  *   }
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- intentionally empty, reserved for future features (e.g., parentParams for nested dynamic routes)
 export interface GenerateStaticParamsArgs {
   // Reserved for future features (e.g., parentParams for nested dynamic routes)
 }

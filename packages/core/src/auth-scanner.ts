@@ -5,6 +5,7 @@
  */
 
 import * as path from 'node:path'
+import { statSync } from 'node:fs'
 import fg from 'fast-glob'
 import type { SupportedExtension, CloudwerkConfig } from './types.js'
 import { SUPPORTED_EXTENSIONS } from './types.js'
@@ -368,7 +369,7 @@ function createEmptyResult(): AuthScanResult {
 export function hasAuthDirectory(rootDir: string): boolean {
   const authDir = path.resolve(rootDir, AUTH_DIR)
   try {
-    const stats = require('node:fs').statSync(authDir)
+    const stats = statSync(authDir)
     return stats.isDirectory()
   } catch {
     return false
